@@ -1,0 +1,6 @@
+discord.py>=2.3
+ollama
+pydantic
+requests
+python-dotenv
+pytest
