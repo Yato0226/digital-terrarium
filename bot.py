@@ -66,6 +66,19 @@ def resolve_pawn_id(s):
     return None, f"no pawn named `{s}`"
 
 
+def resolve_animal_id(s):
+    """Match a wildlife entity by `wild_N` id or by species name (case-insensitive)."""
+    wildlife = state.world_state["wildlife"]
+    if any(w["id"] == s for w in wildlife):
+        return s, None
+    hits = [w["id"] for w in wildlife if w["species"].lower() == s.lower()]
+    if len(hits) == 1:
+        return hits[0], None
+    if len(hits) > 1:
+        return None, f"several **{s}**s are around; target one by id instead"
+    return None, f"no animal named `{s}` is around right now"
+
+
 def _pawn_line(pid, pawn):
     v = pawn["vitals"]
     title = f" {pawn['title']}" if pawn.get("title") else ""
@@ -74,6 +87,17 @@ def _pawn_line(pid, pawn):
     preg = " 🤰" if pawn.get("pregnant_ticks", 0) > 0 else ""
     child = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
     elder = " 👴" if engine.is_elder(pawn) else ""
+    traits = (
+        " " + " ".join(state.TRAIT_EMOJI.get(t, t) for t in pawn["traits"])
+        if pawn.get("traits")
+        else ""
+    )
+    mood_txt = ""
+    if pawn.get("moodlets"):
+        moods = ", ".join(
+            f"{m['name']} ({m['delta']:+d})" for m in pawn["moodlets"]
+        )
+        mood_txt = f" | 😔 {moods}"
     age = f" | {engine.age_of(pawn) // engine.TICKS_PER_DAY} days old"
     kin = engine.lineage_label(pawn)
     kin_txt = f" | {kin}" if kin else ""
@@ -86,14 +110,18 @@ def _pawn_line(pid, pawn):
     sk = pawn["skills"]
     x, y = pawn["pos"]
     tile = engine._tile_at(x, y) or "?"
+    heirlooms = [
+        h["name"] for h in state.world_state["heirlooms"] if h.get("owner") == pid
+    ]
+    heir_txt = f" | 🏆 {', '.join(heirlooms)}" if heirlooms else ""
     return (
-        f"**{pawn['name']}**{sex}{job}{title}{preg}{child}{elder} (`{pid}`): "
+        f"**{pawn['name']}**{sex}{job}{title}{preg}{child}{elder}{traits} (`{pid}`): "
         f"HP {v['hp']} | Energy {v['energy']} | "
         f"Hunger {v['hunger']} | Warmth {v['warmth']} | Morale {v['morale']} | "
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
         f"{gear} | Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}"
-        f"{age} | 📍 {tile} ({x},{y}){kin_txt}{break_txt}{goal_txt} | {pawn['status']}"
+        f"{age} | 📍 {tile} ({x},{y}){kin_txt}{break_txt}{goal_txt}{mood_txt}{heir_txt} | {pawn['status']}"
     )
 
 
@@ -238,11 +266,16 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
             if not target:
                 await ctx.send("❌ Attacks, shares, and mates require a valid target (not self).")
                 return
-            target, t_err = resolve_pawn_id(target)
+            if action == "Attack":
+                target, t_err = resolve_pawn_id(target)
+                if t_err:
+                    target, t_err = resolve_animal_id(target)
+            else:
+                target, t_err = resolve_pawn_id(target)
             if t_err:
                 await ctx.send(f"❌ {t_err}")
                 return
-            if target == pawn_id:
+            if target and not target.startswith("wild_") and target == pawn_id:
                 await ctx.send("❌ Can't target a pawn with itself.")
                 return
         else:
@@ -313,7 +346,8 @@ async def status(ctx):
         f"🌿 **Terrarium** — Tick #{state.world_state['tick']}",
         f"🌍 {biome['season']}, {biome['weather']}, {day_txt} | "
         f"🔥 Campfire {biome['campfire']} | 🏠 Shelter {biome['shelter']} | "
-        f"🌲 Wood {biome['wood_stock']} | 🍎 Food {biome['food_stock']}",
+        f"🌲 Wood {biome['wood_stock']} | 🍎 Food {biome['food_stock']}"
+        + core._biome_infra_txt(biome),
     ]
     for pid, pawn in state.world_state["pawns"].items():
         lines.append(f"- {_pawn_line(pid, pawn)}")
@@ -330,6 +364,100 @@ async def status(ctx):
 async def family_tree(ctx):
     """!tree — show couples, kinship, and rivalries."""
     await ctx.send(engine.render_family_tree())
+
+
+@bot.command(name="wildlife")
+@is_god_channel()
+async def wildlife_cmd(ctx):
+    """!wildlife — list the fauna roaming the terrarium."""
+    ws = state.world_state["wildlife"]
+    if not ws:
+        await ctx.send("🌿 The terrarium is quiet — no animals are about.")
+        return
+    lines = ["🐾 **Wildlife:**"]
+    for w in ws:
+        spec = engine.WILDLIFE[w["species"]]
+        if w["state"] == "tamed":
+            tamer = state.world_state["pawns"].get(w["tamed_by"])
+            who = f" (tamed by {tamer['name']})" if tamer else " (tamed)"
+            lines.append(f"- {spec['emoji']} **{w['species']}** (`{w['id']}`) HP {w['hp']}{who}")
+        else:
+            lines.append(f"- {spec['emoji']} **{w['species']}** (`{w['id']}`) HP {w['hp']} @ {w['pos']}")
+    await ctx.send("\n".join(lines))
+
+
+@bot.command(name="heirlooms")
+@is_god_channel()
+async def heirlooms_cmd(ctx):
+    """!heirlooms — list the relics of the fallen."""
+    hs = state.world_state["heirlooms"]
+    if not hs:
+        await ctx.send("🏆 No heirlooms yet — a titled pawn must die holding a tool.")
+        return
+    lines = ["🏆 **Heirlooms:**"]
+    for h in hs:
+        owner = state.world_state["pawns"].get(h.get("owner"))
+        who = f"held by {owner['name']}" if owner else "unclaimed"
+        lines.append(f"- **{h['name']}** — {who} ({h['source']})")
+    await ctx.send("\n".join(lines))
+
+
+@bot.command(name="chronicle")
+@is_god_channel()
+async def chronicle_cmd(ctx):
+    """!chronicle — read the seasonal chronicle of the terrarium."""
+    cs = state.world_state["chronicle"]
+    if not cs:
+        await ctx.send("📜 The chronicle is still blank — no season has turned yet.")
+        return
+    lines = ["📜 **The Chronicle**"]
+    for entry in cs[-6:]:
+        lines.append(f"*{entry['season']}* — **{entry['title']}** (tick {entry['tick']})")
+        lines.append(f"> {entry['text'][:300]}")
+    await ctx.send("\n".join(lines))
+
+
+@bot.command(name="adopt")
+async def adopt(ctx, pawn_id: str):
+    """!adopt <name|pawn_id> — bond with a pawn; you'll be DM'd about its milestones (any channel)."""
+    async with core.tick_lock:
+        pid, err = resolve_pawn_id(pawn_id)
+        if err:
+            await ctx.send(f"❌ {err}")
+            return
+        uid = str(ctx.author.id)
+        state.world_state["adoptions"][uid] = pid
+        state.save_state()
+        name = state.world_state["pawns"][pid]["name"]
+    await ctx.send(f"🐾 **{name}** is now your adopted pawn. You'll be DM'd about its milestones.")
+
+
+@bot.command(name="unadopt")
+async def unadopt(ctx):
+    """!unadopt — release your adopted pawn."""
+    uid = str(ctx.author.id)
+    async with core.tick_lock:
+        pid = state.world_state["adoptions"].pop(uid, None)
+        state.save_state()
+    if pid:
+        name = state.world_state["pawns"].get(pid, {}).get("name", pid)
+        await ctx.send(f"🐾 You released **{name}**.")
+    else:
+        await ctx.send("❌ You haven't adopted a pawn.")
+
+
+@bot.command(name="my")
+async def my_pawn(ctx):
+    """!my — show your adopted pawn."""
+    pid = state.world_state["adoptions"].get(str(ctx.author.id))
+    if not pid:
+        await ctx.send("❌ You haven't adopted a pawn yet — try `!adopt <name>`.")
+        return
+    pawn = state.world_state["pawns"].get(pid)
+    if not pawn:
+        await ctx.send("🪦 Your adopted pawn is no longer among the living.")
+        return
+    await ctx.send(f"Your adopted pawn:\n{_pawn_line(pid, pawn)}")
 
 
 @bot.command(name="tick")
@@ -357,9 +485,20 @@ async def resume(ctx):
     await ctx.send("▶️ Terrarium resumed.")
 
 
+async def _dm_adopter(user_id, message):
+    """Gateway DM hook registered as core.notifier (webhooks can't DM)."""
+    try:
+        user = bot.get_user(int(user_id)) or await bot.fetch_user(int(user_id))
+        if user:
+            await user.send(message)
+    except Exception as e:
+        print(f"Adoption DM to {user_id} failed: {e}")
+
+
 @bot.event
 async def on_ready():
     global tick_task
+    core.notifier = _dm_adopter
     print(f"🤖 Logged in as {bot.user}")
     print(f"📡 God channel: {GOD_CHANNEL_NAME or 'any channel'}")
     if tick_task is None or tick_task.done():

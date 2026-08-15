@@ -16,6 +16,7 @@ def build_models():
     ]
     if not pawn_ids:
         raise ValueError("No active pawns to simulate")
+    target_ids = pawn_ids + [w["id"] for w in state.world_state["wildlife"]]
 
     AgentDecision = create_model(
         "AgentDecision",
@@ -40,8 +41,8 @@ def build_models():
             Field(default=None, description="Direction — only for the Move action."),
         ),
         target=(
-            Optional[Literal[tuple(pawn_ids)]],
-            Field(default=None, description="Target pawn id — only for Attack, Share, or Mate."),
+            Optional[Literal[tuple(target_ids)]],
+            Field(default=None, description="Target pawn id (Attack/Share/Mate) or wildlife id (Attack, or Interact taming) — never self."),
         ),
         flavor=(
             Optional[str],

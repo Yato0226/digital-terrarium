@@ -746,6 +746,7 @@ def test_break_apathetic_wanders():
 def test_break_ends_after_ticks(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 1.0)
     p = pawn("pawn_1")
+    p["traits"] = []
     p["mental_break"] = "paranoid"
     p["break_ticks"] = 1
     p["vitals"]["morale"] = 30
@@ -1060,7 +1061,8 @@ def test_elder_energy_and_morale_tax():
     biome = state.world_state["biome"]
     result = []
     young = pawn("pawn_1")
-    elder = state.make_pawn("pawn_9", "Old", hp=100, energy=80)
+    young["traits"] = []
+    elder = state.make_pawn("pawn_9", "Old", hp=100, energy=80, traits=[])
     elder["born_tick"] = 1 - engine.ELDER_AGE
     state.world_state["pawns"]["pawn_9"] = elder
     engine._metabolize(young, "pawn_1", biome, lit=False, day=1, result=result)
@@ -1190,6 +1192,7 @@ def test_interact_gather_wood_on_forest():
 
 def test_interact_unknown_verb_lifts_morale():
     p = pawn("pawn_1")
+    p["traits"] = []
     before = p["vitals"]["morale"]
     evs = engine.resolve_actions({"pawn_1": ("Interact", None, "fiddling")})
     assert evs[0]["type"] == "interact"

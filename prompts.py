@@ -6,24 +6,46 @@ EULOGY_PROMPT = """You are the graveyard keeper of the terrarium.
 Write ONE solemn but warm-hearted tombstone inscription for the following fallen pawn.
 Return only the inscription itself, one sentence, no quotes around it."""
 
+CHRONICLE_PROMPT = """You are the lorekeeper of the terrarium.
+Write the seasonal chronicle entry for the season that has just begun.
+First line: a 2-4 word era title (e.g. "The Winter of the Great Wolf").
+Then ONE paragraph (3-5 sentences) chronicling what the colony has endured and what this season holds.
+Return only the title line and the paragraph."""
+
+# Humanized reasons for the director-hint feedback loop (engine.FEASIBILITY_REASONS).
+REASON_HINTS = {
+    "low_energy": "is too exhausted",
+    "need_wood": "has no wood to build",
+    "wrong_tile": "is on the wrong tile",
+    "forest_depleted": "the forest is bare",
+    "food_depleted": "the wild food is gone",
+    "too_far": "is too far from the target",
+    "target_down": "the target is down",
+    "off_grid": "is at the edge of the world",
+    "pacifist": "is a pacifist and cannot fight",
+}
+
 ELDER_DAYS = engine.ELDER_AGE // engine.TICKS_PER_DAY
 
 SYSTEM_PROMPT = f"""You are the AI Director of a digital terrarium — a tiny enclosed forest where creatures live.
 Your job: decide what each ACTIVE pawn WANTS to do this tick. You propose intent; the engine resolves the real consequences.
 Rules:
-- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25), or Interact (do anything — set 'flavor' to whatever the pawn is doing, e.g. fishing, carving, meditating, comforting a friend; the engine decides the effects by context).
-- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
+- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn or hunt a wild animal — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25), or Interact (do anything — set 'flavor' to whatever the pawn is doing, e.g. fishing, carving, meditating, comforting a friend, taming a nearby animal; the engine decides the effects by context).
+- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id — or, for an Attack, a wildlife id listed in the Wildlife section. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
 - Personal goals: a pawn may carry a goal (shown as "Goal: ... (progress/needed)"). Help it pursue that goal. If a pawn has NO goal, you may propose one in 'new_goal' (e.g. "gather 10 wood", "befriend Chief", "build a shelter", "survive 5 days") — the engine decides if it fits and tracks its progress; completing a goal lifts morale and grants skill XP.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
 - Pawns may add a 'quote' (spoken aloud to the group) and an 'inner_monologue' (their private thought — may contradict the quote). Reflect personality and vitals: starving pawns obsess over food, low-morale pawns turn paranoid or bitter, aggressive pawns sound threatening.
+- Heirlooms: when a titled pawn dies holding a tool, it leaves an heirloom (e.g. "Willow's Flint Spear"). A pawn can Interact to claim one (e.g. "claim Willow's Flint Spear") to inherit its skill bonus and a proud moodlet. Owned heirlooms appear in the status as 🏆.
 - Reproduction: pawns have a sex (M/F). A 'Mate' action succeeds only on the same tile with an opposite-sex pawn they've bonded with (relationship 25+ in BOTH directions — the bond must be mutual and maintained, since relationships fade several steps every day). A successful Mate makes the pair official: both are recorded as partners, and partners can keep mating without re-earning the bond (a pawn may have several partners, but close kin — siblings, half-siblings, or a parent and child — can never court; the engine blocks it). A successful pairing makes the female pregnant for one full day, then she gives birth to a newborn who must mature through two days of childhood before courting. The colony caps at 10 — a full colony refuses new life.
 - Pawns age. Newborns are children (Child) for two days. Elders (roughly {ELDER_DAYS}+ days old) tire faster, recover less from rest, and eventually die of old age — the colony mourns them.
 - The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp.
-- The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical.
+- Wildlife roams the map (see the Wildlife section): prey (🦌 Deer, 🐇 Rabbit) flee the colony and yield food + fiber when hunted; predators (🐺 Wolf, 🐻 Bear) stalk the pawn furthest from camp and can bite — but never kill outright (like pawn combat, they only incapacitate). Taming a same-tile animal via Interact (e.g. "tame the deer") turns it into a pet that stays at camp and lifts everyone's morale.
+- The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
 - Morale below 20 is dangerous and morale at 0 triggers a mental break (berserk rampage, paranoid hiding, or apathetic wandering) — the pawn is uncontrollable until it subsides or the Creator whispers to it.
 - The Creator may give direct orders or whispers; orders are absolute and must appear in your output.
+- Every pawn has fixed Traits (e.g. Night Owl, Brawler, Pacifist) and may carry temporary Moods (shown as "Mood: ..."). Traits are unchangeable — never propose adding, removing, or changing a trait, and never try to circumvent the engine's rulings on them.
 - Keep choices coherent and flavorful. Write a short 1-2 sentence narrative per pawn.
 - Write the 'world_event' as a 2-3 sentence atmospheric summary of the tick: the season, weather, and what the colony as a whole is up to. Make it vivid but truthful to the situation — no numbers, no invented events.
 Return ONLY valid JSON matching the required schema."""
@@ -34,11 +56,25 @@ def build_prompt():
 
     biome = state.world_state["biome"]
     day_txt = "Day" if biome["day"] else "Night"
+    infra_txt = ""
+    if biome.get("granary"):
+        infra_txt += ", Granary"
+    if biome.get("palisade", 0):
+        infra_txt += f", Palisade {biome['palisade']}"
     biome_line = (
         f"{biome['season']}, {biome['weather']}, {day_txt}, "
         f"Campfire {biome['campfire']}, Shelter {biome['shelter']}, "
-        f"Forest wood {biome['wood_stock']}, Wild food {biome['food_stock']}"
+        f"Forest wood {biome['wood_stock']}, Wild food {biome['food_stock']}{infra_txt}"
     )
+
+    wild_lines = []
+    for w in state.world_state["wildlife"]:
+        spec = engine.WILDLIFE[w["species"]]
+        if w["state"] == "tamed":
+            wild_lines.append(f"{spec['emoji']} {w['species']} (tamed pet, at camp)")
+        else:
+            wild_lines.append(f"{spec['emoji']} {w['species']} ({w['id']}) at {w['pos']}")
+    wild_txt = "\n".join(wild_lines) if wild_lines else "none"
 
     pawn_lines = []
     for pid, pawn in state.world_state["pawns"].items():
@@ -63,10 +99,21 @@ def build_prompt():
         ]
         partners_txt = f", Partners: {', '.join(partners)}" if partners else ""
         break_txt = f", Mental break: {pawn['mental_break']}" if pawn.get("mental_break") else ""
+        traits_txt = f", Traits: {', '.join(pawn['traits'])}" if pawn.get("traits") else ""
+        mood_txt = ""
+        if pawn.get("moodlets"):
+            moods = ", ".join(
+                f"{m['name']} ({m['delta']:+d}, {m['ticks_left']}t)" for m in pawn["moodlets"]
+            )
+            mood_txt = f", Mood: {moods}"
         goal_txt = ""
         g = pawn.get("goal")
         if g:
             goal_txt = f", Goal: {g['text']} ({g['progress']}/{g['needed']})"
+        owned = [
+            h["name"] for h in state.world_state["heirlooms"] if h.get("owner") == pid
+        ]
+        heir_txt = f", Heirlooms: {', '.join(owned)}" if owned else ""
         x, y = pawn["pos"]
         tile = engine._tile_at(x, y) or "?"
         pawn_lines.append(
@@ -77,7 +124,8 @@ def build_prompt():
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
             f"Personality {pawn['personality']}{sex_txt}{age_txt}{stage_txt}{job_txt}"
-            f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{break_txt}{goal_txt}{rel_txt}"
+            f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{break_txt}{traits_txt}{mood_txt}"
+            f"{goal_txt}{rel_txt}{heir_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 
@@ -108,6 +156,21 @@ def build_prompt():
             + "\n".join(creator_lines)
         )
 
+    hint_lines = []
+    for pid, info in state.failed_intents.items():
+        pawn = state.world_state["pawns"].get(pid)
+        if not pawn or pawn["status"] != "active" or info.get("count", 0) < 2:
+            continue
+        reason = info.get("reason")
+        why = REASON_HINTS.get(reason, reason)
+        hint_lines.append(
+            f"- Director note: {pawn['name']} tried {info.get('action', 'act')} "
+            f"but {why} — choose a feasible action instead."
+        )
+    hint_block = ""
+    if hint_lines:
+        hint_block = "\n\nDirector notes:\n" + "\n".join(hint_lines)
+
     return f"""
 Recent terrarium history: {history}
 
@@ -116,9 +179,13 @@ Biome: {biome_line}{fallen_line}
 Map:
 {map_view}
 
+Wildlife:
+{wild_txt}
+
 Current status:
 {pawn_status}
 {creator_block}
+{hint_block}
 
 Decide what each pawn does this tick.
 """

@@ -20,6 +20,30 @@ ACTIONS = tuple(ACTION_COSTS)
 SKILL_MAX = 20
 RECOVER_HEAL = 10
 
+WILDLIFE = {
+    "Deer": {"emoji": "🦌", "kind": "prey", "hp": 50, "food_yield": 15, "fiber_yield": 10, "bite_damage": 0},
+    "Rabbit": {"emoji": "🐇", "kind": "prey", "hp": 30, "food_yield": 10, "fiber_yield": 5, "bite_damage": 0},
+    "Wolf": {"emoji": "🐺", "kind": "predator", "hp": 80, "food_yield": 20, "fiber_yield": 5, "bite_damage": 8},
+    "Bear": {"emoji": "🐻", "kind": "predator", "hp": 120, "food_yield": 35, "fiber_yield": 15, "bite_damage": 15},
+}
+PREY_SPECIES = ("Deer", "Rabbit")
+PREDATOR_SPECIES = ("Wolf", "Bear")
+WILDLIFE_MAX = 3
+PALISADE_MAX = 3
+PET_MORALE_BONUS = 2
+PREY_DESPAWN_CHANCE = 0.1
+FEASIBILITY_REASONS = {
+    "low_energy",
+    "need_wood",
+    "wrong_tile",
+    "forest_depleted",
+    "food_depleted",
+    "too_far",
+    "target_down",
+    "off_grid",
+    "pacifist",
+}
+
 GRID_SIZE = state.GRID_SIZE
 CAMP_POS = state.CAMP_POS
 CAMP_RANGE = 1
@@ -43,6 +67,14 @@ RECIPES = {
 TOOL_TIER = {"Flint Spear": 3, "Stone Axe": 2, "Warm Coat": 1}
 SPEAR_DAMAGE = 4
 COAT_INSULATION = 4
+
+# Heirlooms: relics dropped by titled pawns who die holding a tool.
+HEIRLOOM_BONUS = {
+    "Stone Axe": {"woodcutting": 1},
+    "Flint Spear": {"combat": 1},
+}
+HEIRLOOM_MOODLET_DELTA = 5
+HEIRLOOM_MOODLET_TICKS = 20
 
 SEASON_TICKS = 100
 DAY_CYCLE = 20
@@ -107,12 +139,62 @@ def _clamp(value, lo=0, hi=100):
     return max(lo, min(hi, value))
 
 
+def _record_feasibility(pawn_id, action, reason):
+    info = state.failed_intents.get(pawn_id)
+    if info and info.get("reason") == reason and info.get("action") == action:
+        info["count"] += 1
+    else:
+        state.failed_intents[pawn_id] = {"action": action, "reason": reason, "count": 1}
+
+
 def age_of(pawn):
     return state.world_state["tick"] - pawn.get("born_tick", state.world_state["tick"])
 
 
 def is_elder(pawn):
     return age_of(pawn) >= ELDER_AGE
+
+
+def _tick_moodlets(pawn):
+    net = 0
+    kept = []
+    for m in pawn.get("moodlets", []):
+        net += m["delta"]
+        m["ticks_left"] -= 1
+        if m["ticks_left"] > 0:
+            kept.append(m)
+    pawn["moodlets"] = kept
+    return net
+
+
+def _add_moodlet(pawn, name, delta, ticks_left):
+    moodlets = pawn.setdefault("moodlets", [])
+    for m in moodlets:
+        if m["name"] == name:
+            m["delta"] = delta
+            m["ticks_left"] = max(m["ticks_left"], ticks_left)
+            return
+    moodlets.append({"name": name, "delta": delta, "ticks_left": ticks_left})
+
+
+def _inherit_traits(mother, father):
+    traits_m = mother.get("traits", [])
+    traits_f = father.get("traits", [])
+    child_traits = []
+    if traits_m and random.random() < 0.5:
+        child_traits.append(random.choice(traits_m))
+    if traits_f and random.random() < 0.5:
+        chosen = random.choice(traits_f)
+        if chosen not in child_traits:
+            child_traits.append(chosen)
+    if not child_traits:
+        if traits_m:
+            child_traits.append(random.choice(traits_m))
+        elif traits_f:
+            child_traits.append(random.choice(traits_f))
+    if not child_traits:
+        child_traits.append(random.choice(state.TRAITS))
+    return child_traits[:2]
 
 
 def _adjust_relationship(pawn, other_id, delta):
@@ -148,6 +230,8 @@ def _are_kin(a, b):
 
 def _pay_cost(pawn, action):
     cost = ACTION_COSTS[action]
+    if "Night Owl" in pawn.get("traits", []) and not is_day():
+        cost //= 2
     if pawn["vitals"]["energy"] < cost:
         return False
     pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] - cost)
@@ -173,6 +257,7 @@ INTERACT_WORDS = {
     "train": ("train", "practice", "spar", "exercise", "lift", "stretch", "drill"),
     "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
     "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
+    "heirloom": ("claim", "inherit", "bequeath", "receive"),
 }
 
 GOAL_MORALE = 15
@@ -288,25 +373,36 @@ def _manhattan(a, b):
 
 
 def render_grid():
-    """ASCII/emoji codeblock view of the 5x5 map with pawns on it."""
+    """ASCII/emoji codeblock view of the 5x5 map with pawns and wildlife on it."""
     grid = state.world_state["grid"]
     occupants = {}
     for pawn in state.world_state["pawns"].values():
         if pawn["status"] != "active":
             continue
         x, y = pawn["pos"]
-        occupants[(x, y)] = occupants.get((x, y), 0) + 1
+        occupants.setdefault((x, y), {"pawns": 0, "animals": []})
+        occupants[(x, y)]["pawns"] += 1
+    for w in state.world_state["wildlife"]:
+        x, y = w["pos"]
+        occupants.setdefault((x, y), {"pawns": 0, "animals": []})
+        occupants[(x, y)]["animals"].append(WILDLIFE[w["species"]]["emoji"])
     lines = []
     for y in range(len(grid)):
         cells = []
         for x in range(len(grid[y])):
-            n = occupants.get((x, y), 0)
-            if n > 1:
-                cells.append("[👥]")
-            elif n == 1:
-                cells.append("[🧙]")
-            else:
+            occ = occupants.get((x, y))
+            if not occ:
                 cells.append(f"[{grid[y][x]}]")
+            else:
+                p_count = occ["pawns"]
+                animals = occ["animals"]
+                symbols = []
+                if p_count > 1:
+                    symbols.append("👥")
+                elif p_count == 1:
+                    symbols.append("🧙")
+                symbols.extend(animals)
+                cells.append("[" + "".join(symbols) + "]")
         lines.append("".join(cells))
     return "\n".join(lines)
 
@@ -563,6 +659,8 @@ def _do_forage(pawn, pawn_id):
         )
     skill = pawn["skills"]["scouting"]
     food = 2 + skill // 4 + random.choice([0, 1])
+    if "Pacifist" in pawn.get("traits", []):
+        food += 2
     food = _inspire_bonus(pawn, food)
     food = min(biome["food_stock"], food)
     biome["food_stock"] -= food
@@ -636,16 +734,16 @@ def _do_build(pawn, pawn_id):
             data={"item": crafted},
             description=f"{pawn['name']} crafts a {crafted}.",
         )
-    if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
-        return events.add_event(
-            "failed",
-            actor=pawn_id,
-            data={"reason": "need_wood"},
-            description=f"{pawn['name']} doesn't have enough wood to build.",
-        )
-    pawn["inventory"]["wood"] -= BUILD_WOOD_COST
     biome = state.world_state["biome"]
     if biome["shelter"] < 100:
+        if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_wood"},
+                description=f"{pawn['name']} doesn't have enough wood to build.",
+            )
+        pawn["inventory"]["wood"] -= BUILD_WOOD_COST
         biome["shelter"] = _clamp(biome["shelter"] + BUILD_GAIN)
         _gain_skill(pawn, "woodcutting")
         _goal_nudge(pawn, 1, kind="build")
@@ -655,6 +753,68 @@ def _do_build(pawn, pawn_id):
             data={"structure": "shelter", "level": biome["shelter"]},
             description=f"{pawn['name']} reinforces the shelter.",
         )
+    if biome["campfire"] < 100:
+        if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_wood"},
+                description=f"{pawn['name']} doesn't have enough wood to build.",
+            )
+        pawn["inventory"]["wood"] -= BUILD_WOOD_COST
+        biome["campfire"] = _clamp(biome["campfire"] + BUILD_GAIN)
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
+        return events.add_event(
+            "build",
+            actor=pawn_id,
+            data={"structure": "campfire", "level": biome["campfire"]},
+            description=f"{pawn['name']} rebuilds the campfire.",
+        )
+    if not biome.get("granary"):
+        if pawn["inventory"]["wood"] < 5:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_wood"},
+                description=f"{pawn['name']} doesn't have enough wood to build the granary.",
+            )
+        pawn["inventory"]["wood"] -= 5
+        biome["granary"] = True
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
+        return events.add_event(
+            "build",
+            actor=pawn_id,
+            data={"structure": "granary"},
+            description=f"{pawn['name']} builds a granary to store food.",
+        )
+    if biome.get("palisade", 0) < PALISADE_MAX:
+        if pawn["inventory"]["wood"] < 5:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_wood"},
+                description=f"{pawn['name']} doesn't have enough wood for the palisade.",
+            )
+        pawn["inventory"]["wood"] -= 5
+        biome["palisade"] = biome.get("palisade", 0) + 1
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
+        return events.add_event(
+            "build",
+            actor=pawn_id,
+            data={"structure": "palisade", "level": biome["palisade"]},
+            description=f"{pawn['name']} fortifies the palisade (level {biome['palisade']}).",
+        )
+    if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "need_wood"},
+            description=f"{pawn['name']} doesn't have enough wood to build.",
+        )
+    pawn["inventory"]["wood"] -= BUILD_WOOD_COST
     biome["campfire"] = _clamp(biome["campfire"] + BUILD_GAIN)
     _gain_skill(pawn, "woodcutting")
     _goal_nudge(pawn, 1, kind="build")
@@ -681,6 +841,93 @@ def _do_attack(pawn, pawn_id, target):
             data={"reason": "self_target"},
             description=f"{pawn['name']} nearly strikes themself!",
         )
+    if target.startswith("wild_"):
+        animal = next((w for w in state.world_state["wildlife"] if w["id"] == target), None)
+        if animal is None:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "unknown_target"},
+                description=f"{pawn['name']} looks for a beast that isn't there.",
+            )
+        if _manhattan(pawn["pos"], animal["pos"]) > 1:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "too_far"},
+                description=f"{pawn['name']} is too far from the {animal['species']} to strike.",
+            )
+        if "Pacifist" in pawn.get("traits", []):
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "pacifist"},
+                description=f"{pawn['name']} is a pacifist and refuses to hunt.",
+            )
+        if not _pay_cost(pawn, "Attack"):
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "low_energy"},
+                description=f"{pawn['name']} is too exhausted to attack.",
+            )
+        spec = WILDLIFE[animal["species"]]
+        damage = max(
+            1,
+            5
+            + pawn["skills"]["combat"] // 2
+            + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+            + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
+        )
+        animal["hp"] -= damage
+        pawn["counters"]["damage_dealt"] += damage
+        _gain_skill(pawn, "combat")
+        if animal["hp"] <= 0:
+            state.world_state["wildlife"].remove(animal)
+            pawn["inventory"]["food"] += spec["food_yield"]
+            pawn["inventory"]["fiber"] += spec["fiber_yield"]
+            _goal_nudge(pawn, spec["food_yield"], resource="food")
+            return events.add_event(
+                "hunt",
+                actor=pawn_id,
+                target=target,
+                data={"species": animal["species"], "food": spec["food_yield"], "fiber": spec["fiber_yield"]},
+                description=f"{pawn['name']} hunts and slays the {animal['species']}, gathering {spec['food_yield']} food and {spec['fiber_yield']} fiber.",
+            )
+        else:
+            desc = f"{pawn['name']} attacks the {animal['species']} for {damage} damage."
+            if spec["kind"] == "prey":
+                x, y = animal["pos"]
+                best_pos, max_d = animal["pos"], _manhattan(animal["pos"], pawn["pos"])
+                for dx, dy in DIRS.values():
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE:
+                        d = _manhattan([nx, ny], pawn["pos"])
+                        if d > max_d:
+                            max_d = d
+                            best_pos = [nx, ny]
+                animal["pos"] = best_pos
+                desc += f" The {animal['species']} flees!"
+            else:
+                bite = spec["bite_damage"]
+                pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] - bite)
+                desc += f" The {animal['species']} retaliates, biting for {bite} damage!"
+                if pawn["vitals"]["hp"] <= 0:
+                    pawn["vitals"]["hp"] = 0
+                    pawn["status"] = "incapacitated"
+                    desc += f" {pawn['name']} collapses!"
+            return events.add_event(
+                "attack",
+                actor=pawn_id,
+                target=target,
+                data={"damage": damage, "species": animal["species"], "bite": spec["kind"] == "predator"},
+                description=desc,
+            )
+
     tpawn = state.world_state["pawns"].get(target)
     if tpawn is None:
         return events.add_event(
@@ -705,6 +952,14 @@ def _do_attack(pawn, pawn_id, target):
             data={"reason": "too_far"},
             description=f"{pawn['name']} is too far from {tpawn['name']} to strike.",
         )
+    if "Pacifist" in pawn.get("traits", []):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "pacifist"},
+            description=f"{pawn['name']} is a pacifist and refuses to fight.",
+        )
     if not _pay_cost(pawn, "Attack"):
         return events.add_event(
             "failed",
@@ -719,7 +974,8 @@ def _do_attack(pawn, pawn_id, target):
         5
         + pawn["skills"]["combat"] // 2
         - tpawn["skills"]["combat"] // 4
-        + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0),
+        + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+        + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
     )
     tpawn["vitals"]["hp"] = _clamp(tpawn["vitals"]["hp"] - damage)
     pawn["counters"]["attacks_won"] += 1
@@ -839,6 +1095,8 @@ def _do_interact(pawn, pawn_id, flavor):
         tile = _tile_at(*pawn["pos"])
         if tile in FORAGE_TILES:
             yield_ = 1 + pawn["skills"]["scouting"] // 6 + random.choice([0, 1])
+            if "Pacifist" in pawn.get("traits", []):
+                yield_ += 2
             stock = state.world_state["biome"]["food_stock"]
             yield_ = min(stock, yield_)
             state.world_state["biome"]["food_stock"] -= yield_
@@ -884,6 +1142,32 @@ def _do_interact(pawn, pawn_id, flavor):
         pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 10)
         pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
         effects.append("+10 energy, +3 morale")
+    elif "tame" in verb or "feed" in verb:
+        animal = next((w for w in state.world_state["wildlife"] if w["pos"] == pawn["pos"] and w["state"] == "wandering"), None)
+        if animal and animal["state"] == "wandering":
+            chance = _clamp(0.5 + pawn["skills"]["scouting"] * 0.02, 0.1, 0.95)
+            if random.random() < chance:
+                animal["state"] = "tamed"
+                animal["tamed_by"] = pawn_id
+                animal["pos"] = list(CAMP_POS)
+                pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
+                effects.append(f"tamed {animal['species']}")
+                return events.add_event(
+                    "tame",
+                    actor=pawn_id,
+                    data={"species": animal["species"]},
+                    description=f"{pawn['name']} successfully tames the {animal['species']} as a camp pet!",
+                )
+            else:
+                effects.append("taming attempt failed")
+        else:
+            effects.append("no wild animal here to tame")
+    elif _in_words(verb, INTERACT_WORDS["heirloom"]):
+        claimed = _claim_heirloom(pawn, pawn_id, verb)
+        if claimed:
+            effects.append(f"claims {claimed['name']} (+{claimed.get('moodlet_delta', 5)} morale)")
+        else:
+            effects.append("no heirloom to claim")
     else:
         pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
         effects.append("+3 morale")
@@ -897,6 +1181,24 @@ def _do_interact(pawn, pawn_id, flavor):
 
 def _in_words(verb, words):
     return any(w in verb for w in words)
+
+
+def _claim_heirloom(pawn, pawn_id, verb):
+    """Claim an unclaimed heirloom: grant its skill bonus and a proud moodlet."""
+    heirlooms = state.world_state["heirlooms"]
+    unclaimed = [h for h in heirlooms if not h.get("owner")]
+    if not unclaimed:
+        return None
+    target = unclaimed[0]
+    for h in unclaimed:
+        if h["name"].lower() in verb:
+            target = h
+            break
+    target["owner"] = pawn_id
+    for skill, bonus in (target.get("stat_bonus") or {}).items():
+        pawn["skills"][skill] = _clamp(pawn["skills"][skill] + bonus, 0, SKILL_MAX)
+    _add_moodlet(pawn, "Proud", target.get("moodlet_delta", HEIRLOOM_MOODLET_DELTA), HEIRLOOM_MOODLET_TICKS)
+    return target
 
 
 def _do_mate(pawn, pawn_id, target):
@@ -1051,12 +1353,15 @@ def _give_birth(mother, mother_id, result):
         (n for n in state.NAME_POOL if n.lower() not in used),
         f"Child_{len(state.world_state['pawns']) + 1}",
     )
+    father = _pawn_by_id(mother.get("partner_id"))
+    traits = _inherit_traits(mother, father) if father else _inherit_traits(mother, mother)
     child = state.make_pawn(
         child_id,
         name,
         hp=NEWBORN_HP,
         energy=NEWBORN_ENERGY,
         job=random.choice(state.JOB_POOL),
+        traits=traits,
     )
     child["pos"] = list(mother["pos"])
     child["child_ticks"] = CHILD_MATURITY
@@ -1091,7 +1396,8 @@ def _feed_campfire():
 def _metabolize(pawn, pawn_id, biome, lit, day, result):
     v = pawn["vitals"]
     before_hunger = v["hunger"]
-    v["hunger"] = _clamp(v["hunger"] - HUNGER_DRAIN)
+    hunger_drain = 1 if "Iron Stomach" in pawn.get("traits", []) else HUNGER_DRAIN
+    v["hunger"] = _clamp(v["hunger"] - hunger_drain)
     if v["hunger"] <= EAT_THRESHOLD and pawn["inventory"]["food"] >= 1:
         pawn["inventory"]["food"] -= 1
         v["hunger"] = _clamp(v["hunger"] + EAT_REPLENISH)
@@ -1136,6 +1442,7 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         v["warmth"] = _clamp(v["warmth"] + delta)
         if v["warmth"] <= 0:
             v["warmth"] = 0
+            _add_moodlet(pawn, "Frostbitten", -5, 10)
             result.append(
                 events.add_event(
                     "frostbite",
@@ -1168,9 +1475,25 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         morale += 1
     elif v["hunger"] < 30:
         morale -= 2
-    if not day:
-        morale -= 1
     v["morale"] = _clamp(v["morale"] + morale)
+
+    net_mood = _tick_moodlets(pawn)
+    if net_mood != 0:
+        v["morale"] = _clamp(v["morale"] + net_mood)
+
+    traits = pawn.get("traits", [])
+    if "Night Owl" in traits:
+        v["morale"] = _clamp(v["morale"] + (2 if not day else -2))
+    if "Brawler" in traits:
+        tool = pawn["gear"].get("main_hand")
+        if tool and tool != "Flint Spear":
+            v["morale"] = _clamp(v["morale"] - 5)
+    if "Pyromaniac" in traits and near_fire:
+        v["morale"] = _clamp(v["morale"] + 5)
+
+    has_pet = any(w["state"] == "tamed" for w in state.world_state["wildlife"])
+    if has_pet:
+        v["morale"] = _clamp(v["morale"] + PET_MORALE_BONUS)
 
     if v["morale"] <= 0 and not pawn.get("mental_break"):
         pawn["mental_break"] = _break_archetype(pawn)
@@ -1186,6 +1509,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
 
 
 def _break_archetype(pawn):
+    if "Pyromaniac" in pawn.get("traits", []):
+        return "firesetter"
     pers = pawn["personality"]
     defaults = state.DEFAULT_PERSONALITY
     if pers.get("aggression", defaults["aggression"]) >= 6:
@@ -1259,6 +1584,32 @@ def _resolve_break(pawn, pawn_id):
             data={"break": "paranoid"},
             description=f"{pawn['name']} hides in the shadows, hoarding food.",
         )
+    if kind == "firesetter":
+        biome = state.world_state["biome"]
+        if biome["campfire"] > 0:
+            biome["campfire"] = _clamp(biome["campfire"] - 10)
+            return events.add_event(
+                "break",
+                actor=pawn_id,
+                data={"break": "firesetter", "action": "douse_fire"},
+                description=f"{pawn['name']} maniacally douses the campfire (-10)!",
+            )
+        elif pawn["inventory"]["wood"] >= 2:
+            pawn["inventory"]["wood"] -= 2
+            return events.add_event(
+                "break",
+                actor=pawn_id,
+                data={"break": "firesetter", "action": "burn_wood"},
+                description=f"{pawn['name']} burns 2 stocks of wood in a manic frenzy!",
+            )
+        else:
+            biome["shelter"] = _clamp(biome["shelter"] - 5)
+            return events.add_event(
+                "break",
+                actor=pawn_id,
+                data={"break": "firesetter", "action": "damage_shelter"},
+                description=f"{pawn['name']} sets a wild fire, damaging the shelter (-5)!",
+            )
     moved = _wander_from_camp(pawn)
     return events.add_event(
         "break",
@@ -1317,9 +1668,23 @@ def _kill(pawn_id, pawn, cause):
         "epitaph": f"Here lies {pawn['name']}, taken by {cause}.",
     }
     state.world_state["graveyard"].append(entry)
+    for h in state.world_state["heirlooms"]:
+        if h.get("owner") == pawn_id:
+            h.pop("owner", None)
+    if pawn.get("title") and pawn["gear"]["main_hand"]:
+        tool = pawn["gear"]["main_hand"]
+        state.world_state["heirlooms"].append({
+            "id": state.next_heirloom_id(),
+            "name": f"{pawn['name']}'s {tool}",
+            "stat_bonus": HEIRLOOM_BONUS.get(tool, {"combat": 1}),
+            "moodlet_delta": HEIRLOOM_MOODLET_DELTA,
+            "source": f"death of {pawn['name']}",
+        })
     for other in state.world_state["pawns"].values():
         if pawn_id in other.get("partners", []):
             other["partners"].remove(pawn_id)
+        if other["status"] in ("active", "incapacitated"):
+            _add_moodlet(other, "Grief", -10, 10)
     pawn["status"] = "dead"
     pawn["vitals"]["hp"] = 0
     del state.world_state["pawns"][pawn_id]
@@ -1342,6 +1707,7 @@ def tick_environment():
 
     new_season = SEASONS[(tick // SEASON_TICKS) % len(SEASONS)]
     if new_season != biome["season"]:
+        state.pending_chronicle = new_season
         result.append(
             events.add_event(
                 "season",
@@ -1352,7 +1718,88 @@ def tick_environment():
         if biome["season"] == "Winter" and new_season == "Spring":
             for pawn in state.world_state["pawns"].values():
                 pawn["counters"]["blizzards_survived"] += 1
+        new_wild = []
+        for w in state.world_state["wildlife"]:
+            if w["state"] == "tamed" or WILDLIFE[w["species"]]["kind"] != "predator":
+                new_wild.append(w)
+            else:
+                result.append(events.add_event("wildlife_despawn", data={"species": w["species"]}, description=f"The {w['species']} retreats into the wilderness."))
+        state.world_state["wildlife"] = new_wild
+
     biome["season"] = new_season
+
+    if new_season == "Summer" and not biome.get("granary"):
+        biome["food_stock"] = _clamp(biome["food_stock"] - 2)
+
+    ws = state.world_state["wildlife"]
+    if len(ws) < WILDLIFE_MAX and random.random() < 0.3:
+        palisade_lvl = biome.get("palisade", 0)
+        if new_season in ("Winter", "Autumn"):
+            pred_chance = 0.25 * (1 - palisade_lvl * 0.3)
+            if random.random() < pred_chance:
+                species = random.choice(PREDATOR_SPECIES)
+                ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
+                result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
+        else:
+            if random.random() < 0.3:
+                species = random.choice(PREY_SPECIES)
+                ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
+                result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
+
+    active_pawns = [p for p in state.world_state["pawns"].values() if p["status"] == "active"]
+    gone = []
+    for w in list(ws):
+        if w["state"] == "tamed":
+            w["pos"] = list(CAMP_POS)
+            continue
+        spec = WILDLIFE[w["species"]]
+        if spec["kind"] == "prey" and w.get("spawn_tick") != state.world_state["tick"] and random.random() < PREY_DESPAWN_CHANCE:
+            gone.append(w["id"])
+            result.append(events.add_event("wildlife_despawn", data={"species": w["species"]}, description=f"The {w['species']} bounds away into the brush."))
+            continue
+        if spec["kind"] == "prey" and active_pawns:
+            nearest = min(active_pawns, key=lambda p: _manhattan(w["pos"], p["pos"]))
+            if _manhattan(w["pos"], nearest["pos"]) <= 2:
+                x, y = w["pos"]
+                best_pos, max_d = w["pos"], _manhattan(w["pos"], nearest["pos"])
+                for dx, dy in DIRS.values():
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE:
+                        d = _manhattan([nx, ny], nearest["pos"])
+                        if d > max_d:
+                            max_d = d
+                            best_pos = [nx, ny]
+                w["pos"] = best_pos
+        elif spec["kind"] == "predator" and active_pawns:
+            furthest = max(active_pawns, key=lambda p: _manhattan(p["pos"], CAMP_POS))
+            x, y = w["pos"]
+            best_pos, min_d = w["pos"], _manhattan(w["pos"], furthest["pos"])
+            for dx, dy in DIRS.values():
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE:
+                    d = _manhattan([nx, ny], furthest["pos"])
+                    if d < min_d:
+                        min_d = d
+                        best_pos = [nx, ny]
+            w["pos"] = best_pos
+
+        if spec["kind"] == "predator":
+            for pid, p in state.world_state["pawns"].items():
+                if p["status"] == "active" and p["pos"] == w["pos"]:
+                    bite = spec["bite_damage"]
+                    p["vitals"]["hp"] = _clamp(p["vitals"]["hp"] - bite)
+                    desc = f"The {w['species']} bites {p['name']} for {bite} damage!"
+                    if p["vitals"]["hp"] <= 0:
+                        p["vitals"]["hp"] = 0
+                        p["status"] = "incapacitated"
+                        desc += f" {p['name']} collapses!"
+                    result.append(events.add_event("bite", actor=pid, data={"species": w["species"], "damage": bite}, description=desc))
+
+    if gone:
+        state.world_state["wildlife"] = [w for w in ws if w["id"] not in gone]
+
+    if not state.world_state["pawns"]:
+        state.world_state["wildlife"] = []
 
     if random.random() < WEATHER_CHANGE_CHANCE:
         new_weather = random.choice(WEATHER_OPTIONS[new_season])
@@ -1413,7 +1860,6 @@ def tick_environment():
         if goal and goal.get("kind") == "survive" and goal.get("progress", 0) >= goal.get("needed", 1):
             _complete_goal(pawn, pawn_id, goal, result)
 
-    # Children mature, pregnancies come to term.
     for pawn_id, pawn in list(state.world_state["pawns"].items()):
         if pawn.get("child_ticks", 0) > 0:
             pawn["child_ticks"] -= 1
@@ -1433,7 +1879,7 @@ def tick_environment():
 
 
 def resolve_actions(intents):
-    """intents: dict pawn_id -> (action, target). Applies deterministic effects."""
+    """intents: dict pawn_id -> (action, target, flavor, new_goal). Applies deterministic effects."""
     resulting = []
 
     # Incapacitated pawns recover before anyone acts.
@@ -1464,6 +1910,7 @@ def resolve_actions(intents):
         pawn = state.world_state["pawns"].get(pawn_id)
         if pawn is None or pawn["status"] != "active":
             continue
+        is_god_order = pawn_id in state.god_orders and state.god_orders[pawn_id].get("action") == intent[0]
         if pawn.get("mental_break"):
             resulting.append(_resolve_break(pawn, pawn_id))
             continue
@@ -1472,24 +1919,89 @@ def resolve_actions(intents):
         flavor = intent[2] if len(intent) > 2 else None
         if action == "Rest":
             resulting.append(_do_rest(pawn, pawn_id))
+            if not is_god_order:
+                state.failed_intents.pop(pawn_id, None)
         elif action == "Chop":
-            resulting.append(_do_chop(pawn, pawn_id))
+            ev = _do_chop(pawn, pawn_id)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Scout":
-            resulting.append(_do_scout(pawn, pawn_id))
+            ev = _do_scout(pawn, pawn_id)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Forage":
-            resulting.append(_do_forage(pawn, pawn_id))
+            ev = _do_forage(pawn, pawn_id)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Build":
-            resulting.append(_do_build(pawn, pawn_id))
+            ev = _do_build(pawn, pawn_id)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Share":
-            resulting.append(_do_share(pawn, pawn_id, target))
+            ev = _do_share(pawn, pawn_id, target)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Attack":
-            resulting.append(_do_attack(pawn, pawn_id, target))
+            ev = _do_attack(pawn, pawn_id, target)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Move":
-            resulting.append(_do_move(pawn, pawn_id, target))
+            ev = _do_move(pawn, pawn_id, target)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Mate":
-            resulting.append(_do_mate(pawn, pawn_id, target))
+            ev = _do_mate(pawn, pawn_id, target)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         elif action == "Interact":
-            resulting.append(_do_interact(pawn, pawn_id, flavor))
+            ev = _do_interact(pawn, pawn_id, flavor)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         else:
             resulting.append(
                 events.add_event(
@@ -1512,5 +2024,8 @@ def resolve_actions(intents):
         goal = pawn.get("goal")
         if goal and goal.get("progress", 0) >= goal.get("needed", 1):
             _complete_goal(pawn, pawn_id, goal, resulting)
+        # Survive goals tick here too (not just in tick_environment).
+        if goal and goal.get("kind") == "survive":
+            _goal_nudge(pawn, 1, kind="survive")
 
     return resulting

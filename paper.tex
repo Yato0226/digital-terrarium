@@ -108,7 +108,7 @@ Figure~\ref{fig:architecture} shows the overall system: the AI Director sits bet
 \label{fig:architecture}
 \end{figure}
 
-The system is a single Python process split into focused modules: \texttt{state.py} (world state and persistence), \texttt{schema.py} (per-tick LLM output models), \texttt{prompts.py} (system prompt and prompt builder), \texttt{llm.py} (hosted Gemini API client with primary/fallback models), \texttt{engine.py} (deterministic rules), \texttt{events.py} (structured event log), \texttt{core.py} (tick orchestration and scheduler), and \texttt{bot.py} (Discord god interface). The data flow per tick is:
+The system is a single Python process split into focused modules: \texttt{state.py} (world state and persistence), \texttt{schema.py} (per-tick LLM output models), \texttt{prompts.py} (system prompt and prompt builder), \texttt{llm.py} (hosted Gemini API client with primary/fallback models), \texttt{engine.py} (deterministic rules), \texttt{events.py} (structured event log), \texttt{map\_renderer.py} (pure-Python PNG map writer), \texttt{core.py} (tick orchestration and scheduler), and \texttt{bot.py} (Discord god interface). The data flow per tick is:
 
 \begin{enumerate}
 \item \textbf{Schema rebuild}: \texttt{schema.py} constructs a Pydantic model containing one decision field per \emph{active} agent, plus optional \texttt{quote}, \texttt{inner\_monologue}, and Move \texttt{direction} fields and a \texttt{target} literal built from the current roster. Adding or removing agents therefore requires no schema edits.
@@ -142,7 +142,7 @@ The system is a single Python process split into focused modules: \texttt{state.
 \label{fig:tick}
 \end{figure}
 
-Agent state is intentionally rich and nested: \texttt{vitals} (HP, energy, hunger, warmth, morale), \texttt{skills} (woodcutting, scouting, combat), \texttt{personality}, \texttt{inventory} (wood, food, stone, fiber), \texttt{gear} (main hand / body equipment), \texttt{counters} (lifetime deeds such as trees felled and blizzards survived), a \texttt{title} epithet recomputed from those counters each tick, \texttt{relationships}, a \texttt{pos} coordinate on a shared $5\times5$ map, and \texttt{status} (active / incapacitated / dead). A shared \texttt{biome} block holds the world: season (rolled every 100 ticks, Figure~\ref{fig:seasons}), weather, a 20-tick day/night cycle, campfire and shelter integrity, depletable wood/food stocks that regrow every tick except in Winter, and the map tiles themselves. A lit campfire warms only agents within one tile of the Camp tile; shelter warmth is global. Reaching 0 HP incapacitates an agent; it is excluded from LLM decisions and auto-recovers 10 HP per subsequent tick. Environmental permadeath is reserved for freezing in a Blizzard (warmth reaches 0), starvation beyond five consecutive starving ticks, or reaching old age (\texttt{OLD\_AGE\_MAX} = 320 ticks = 16 days): the agent is removed from the roster and enshrined in the \texttt{graveyard} with its final epithet, cause, and a tombstone. Psychological pressure is a real mechanic: morale below 20 is a breakdown risk, morale at 0 triggers a deterministic \emph{mental break} (berserk rampage, paranoid hiding, or apathetic wandering) that overrides all agency for three ticks, and morale above 80 grants a $+10\%$ gathering bonus. All action effects are listed in Table~\ref{tab:actions}; the LLM's schema contains \emph{no} numerical fields.
+Agent state is intentionally rich and nested: \texttt{vitals} (HP, energy, hunger, warmth, morale), \texttt{skills} (woodcutting, scouting, combat), \texttt{personality}, \texttt{inventory} (wood, food, stone, fiber), \texttt{gear} (main hand / body equipment), \texttt{counters} (lifetime deeds such as trees felled and blizzards survived), a \texttt{title} epithet recomputed from those counters each tick, \texttt{relationships}, a \texttt{pos} coordinate on a shared $5\times5$ map, and \texttt{status} (active / incapacitated / dead). Two deterministic layers add psychological texture: \texttt{traits} are rolled once at spawn/birth (Night Owl, Brawler, Pyromaniac, Pacifist, Iron Stomach) and their effects live entirely in the engine --- cheaper night actions, unarmed damage, fires, forage yields, slower hunger --- never in the LLM output; and \texttt{moodlets} are transient episodic morale drains (Grief when a survivor dies, Frostbitten when warmth hits zero) that decay by one tick per simulation tick and sum into net morale, so grief can tip an agent toward a mental break. A shared \texttt{biome} block holds the world: season (rolled every 100 ticks, Figure~\ref{fig:seasons}), weather, a 20-tick day/night cycle, campfire and shelter integrity, depletable wood/food stocks that regrow every tick except in Winter, and the map tiles themselves. A lit campfire warms only agents within one tile of the Camp tile; shelter warmth is global. Reaching 0 HP incapacitates an agent; it is excluded from LLM decisions and auto-recovers 10 HP per subsequent tick. Environmental permadeath is reserved for freezing in a Blizzard (warmth reaches 0), starvation beyond five consecutive starving ticks, or reaching old age (\texttt{OLD\_AGE\_MAX} = 320 ticks = 16 days): the agent is removed from the roster and enshrined in the \texttt{graveyard} with its final epithet, cause, and a tombstone. Psychological pressure is a real mechanic: morale below 20 is a breakdown risk, morale at 0 triggers a deterministic \emph{mental break} (berserk rampage, paranoid hiding, apathetic wandering, or a pyromaniac's firesetting) that overrides all agency for three ticks, and morale above 80 grants a $+10\%$ gathering bonus. The world also hosts a small \texttt{wildlife} population of deterministic non-agent entities --- prey (Deer, Rabbit) flee the nearest agent and predators (Wolf, Bear) stalk the agent furthest from Camp and bite only to incapacitate, never kill, consistent with combat. Hunting converts a kill directly into food and fiber (no intermediate resource), and an agent can tame same-tile prey into a camp pet that lifts the whole colony's morale; a built granary stops Summer food decay and a palisade level deters predators. All action effects are listed in Table~\ref{tab:actions}; the LLM's schema contains \emph{no} numerical fields.
 
 \begin{figure}[htbp]
 \centering
@@ -189,8 +189,10 @@ Interact & 5 & any free-form verb in \texttt{flavor}; engine buckets it by keywo
 \caption*{\scriptsize All yields receive a $+10\%$ bonus while morale is above 80 (``Inspired''). Personal goals (\texttt{goal}) are proposed by the LLM in \texttt{new\_goal}, parsed and tracked by the engine, advanced by matching deeds, and pay $+15$ morale and skill XP on completion.}
 \end{table}
 
+Beyond the colonists, the world itself is alive. A \texttt{wildlife} roster holds non-pawn entities (Deer/Rabbit = prey, Wolf/Bear = predator; each carrying \texttt{hp}, \texttt{food\_yield}, \texttt{fiber\_yield}, and \texttt{bite\_damage}). \texttt{tick\_environment} spawns them season-gated --- predators in Winter/Autumn, prey in Spring/Summer, capped at three --- and runs deterministic AI: prey flee the nearest pawn within two tiles (and occasionally wander off), while predators stalk the pawn furthest from the Camp and bite to \emph{incapacitate}, never kill, consistent with combat. Because the per-tick schema's \texttt{target} literal extends to \texttt{pawn\_ids + wildlife\_ids}, the \texttt{Attack} action accepts wildlife targets: killing an animal converts it to \texttt{food} and \texttt{fiber} --- no new ``meat'' resource is introduced. Alternatively a pawn may tame a same-tile animal with an \texttt{Interact} ``tame''/``feed'' flavor; a scouting-scaled roll ($0.5 + \texttt{scouting} \times 0.02$) brings the pet to the Camp, where it grants the whole colony a passive $+2$ morale. Two further \texttt{Build} upgrades harden the camp: a \texttt{granary} stops Summer \texttt{food\_stock} decay, and a \texttt{palisade} (up to level 3) lowers the predator spawn chance.
+
 \subsection{Discord ``God'' Interface}
-Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exposes a god layer that manipulates the world directly (Table~\ref{tab:god}). Commands that mutate \texttt{world\_state} are serialised against the tick loop via an \texttt{asyncio.Lock}, and a \texttt{!pause}/\texttt{!resume} pair gates the scheduler. Enforced orders (\texttt{!order}) are injected into the prompt and overridden in code; whispers (\texttt{!say}) are injected into the prompt \emph{and} grant a deterministic $+15$ morale, letting the Creator pull an agent out of a mental break. \texttt{!graveyard} reads the permanent record of the fallen.
+Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exposes a god layer that manipulates the world directly (Table~\ref{tab:god}). Commands that mutate \texttt{world\_state} are serialised against the tick loop via an \texttt{asyncio.Lock}, and a \texttt{!pause}/\texttt{!resume} pair gates the scheduler. Enforced orders (\texttt{!order}) are injected into the prompt and overridden in code; whispers (\texttt{!say}) are injected into the prompt \emph{and} grant a deterministic $+15$ morale, letting the Creator pull an agent out of a mental break. \texttt{!graveyard} reads the permanent record of the fallen, \texttt{!tree} renders kinship and rivalries, \texttt{!wildlife} lists the fauna, \texttt{!heirlooms} lists the relics of the fallen, and \texttt{!chronicle} reads the seasonal lore. Human watchers (not just the god) can also adopt a pawn from any channel via \texttt{!adopt} --- the mapping persists, \texttt{!my} shows the adopted ward, \texttt{!unadopt} releases it, and milestone events (birth, fulfilled goal, mental break, death) are delivered to the adopter as a direct message over the gateway, routed through a notifier hook (\texttt{core.notifier}) that \texttt{bot.on\_ready} registers, so \texttt{engine.py} stays free of Discord logic.
 
 \begin{table}[htbp]
 \centering
@@ -206,18 +208,22 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
 \texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
 \texttt{!graveyard}                 & List the fallen with epithets and epitaphs \\
+\texttt{!tree} / \texttt{!wildlife} & Family tree / roaming fauna \\
+\texttt{!heirlooms} / \texttt{!chronicle} & Relics of the fallen / seasonal lore \\
+\texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
 \texttt{!status} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Inspect, force, or gate the simulation \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Implementation Code}
-Listing~\ref{lst:schema} shows the per-tick dynamic schema; Listing~\ref{lst:engine} the deterministic resolution core; Listing~\ref{lst:tick} the tick orchestration. Together they implement the AI Director pattern. Note that \texttt{Literal[tuple(pawn\_ids)]} is used deliberately: on Python 3.10 the starred \texttt{Literal[*ids]} unpacking form is unavailable, and the tuple form is equivalent per PEP~586.
+Listing~\ref{lst:schema} shows the per-tick dynamic schema; Listing~\ref{lst:engine} the deterministic resolution core; Listing~\ref{lst:tick} the tick orchestration. Together they implement the AI Director pattern. Note that \texttt{Literal[tuple(pawn\_ids + wildlife\_ids)]} is used deliberately: on Python 3.10 the starred \texttt{Literal[*ids]} unpacking form is unavailable, and the tuple form is equivalent per PEP~586.
 
-\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses \texttt{Literal[tuple(pawn\_ids)]} for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
+\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses \texttt{Literal[tuple(pawn\_ids + wildlife\_ids)]} for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
 def build_models():
     pawn_ids = [pid for pid, p in world_state["pawns"].items()
                 if p["status"] == "active"]            # roster-aware
+    target_ids = pawn_ids + [w["id"] for w in world_state["wildlife"]]
     AgentDecision = create_model(
         "AgentDecision",
         action=(Literal["Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact"],
@@ -228,8 +234,8 @@ def build_models():
                                               description="Private thought")),
         direction=(Optional[Literal["N", "S", "E", "W"]], Field(
             default=None, description="Direction - only for Move")),
-        target=(Optional[Literal[tuple(pawn_ids)]], Field(
-            default=None, description="Target pawn id - for Attack/Share/Mate")),
+        target=(Optional[Literal[tuple(target_ids)]], Field(
+            default=None, description="Target pawn id (Attack/Share/Mate) or wildlife id (Attack, taming)")),
         flavor=(Optional[str], Field(default=None,
                                      description="Free-form verb - only for Interact")),
         new_goal=(Optional[str], Field(default=None,
@@ -241,7 +247,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, and personal goals}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, and fauna (hunt/tame, granary, palisade)}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]
@@ -249,6 +255,8 @@ def resolve_actions(intents):
         target = intent[1] if len(intent) > 1 else None
         flavor = intent[2] if len(intent) > 2 else None
         cost = ACTION_COSTS[action]   # Chop 10, Scout 15, Move 5, Interact 5
+        if "Night Owl" in pawn["traits"] and not is_day():
+            cost //= 2                # night owls act cheaply after dark
         if pawn["vitals"]["energy"] < cost:        # engine refuses intent
             add_event("failed", reason="low_energy")
             continue
@@ -281,11 +289,24 @@ def resolve_actions(intents):
             pawn["inventory"]["food"] -= 1
             world_state["pawns"][target]["inventory"]["food"] += 1
         elif action == "Attack":
-            if not target or target == pawn_id or not target_pawn_active(target):
-                add_event("failed", reason="illegal_target")
+            if not target or target == pawn_id:
+                add_event("failed", reason="illegal_target"); continue
+            if target in WILDLIFE_IDS:     # hunt: damage the animal; kill yields
+                dmg = max(1, 4 + pawn["skills"]["combat"] // 2)   # spear adds 4
+                animal = wildlife[target]; animal["hp"] -= dmg
+                if animal["hp"] <= 0:      # food + fiber, no "meat" resource
+                    pawn["inventory"]["food"] += animal["food_yield"]
+                    pawn["inventory"]["fiber"] += animal["fiber_yield"]
+                    del wildlife[target]; add_event("hunt", target=target)
                 continue
+            if not target_pawn_active(target):
+                add_event("failed", reason="illegal_target"); continue
+            if "Pacifist" in pawn["traits"]: ...   # refuses to fight
+                add_event("failed", reason="pacifist"); continue
             dmg = max(1, 5 + pawn["skills"]["combat"] // 2
                       - target["skills"]["combat"] // 4)
+            if "Brawler" in pawn["traits"] and pawn["gear"]["main_hand"] is None:
+                dmg += 3                            # bare-knuckle bonus
             target["vitals"]["hp"] = clamp(target["vitals"]["hp"] - dmg)
             if target["vitals"]["hp"] <= 0:
                 target["status"] = "incapacitated" # auto-recovers next tick
@@ -319,6 +340,12 @@ def resolve_actions(intents):
                 pawn["vitals"]["energy"] += 10
             elif flavor in TRAIN_WORDS:         # +1 combat XP
                 pawn["skills"]["combat"] += 1
+            elif flavor in TAME_WORDS:          # "tame"/"feed": scouting-scaled roll
+                if same_tile_animal(pawn):
+                    chance = clamp(0.5 + pawn["skills"]["scouting"] * 0.02, 0.1, 0.95)
+                    if random.random() < chance:
+                        tame_pet(pawn)            # returns to Camp: +2 colony morale
+                        add_event("tame", species=animal["species"])
             else:
                 pawn["vitals"]["morale"] += 3   # unknown verb is still safe
     else:
@@ -345,6 +372,21 @@ def tick_environment():             # the world ages after pawns act
     ...                             # campfire burns 1 wood per tick;
                                     # metabolism, regrowth (never in
                                     # Winter), frostbite, starvation
+    # wildlife: season-gated spawn (predators Winter/Autumn, prey
+    # Spring/Summer, cap 3); prey flee the nearest pawn, predators
+    # stalk the pawn furthest from Camp and bite to incapacitate
+    spawn_wildlife(biome["season"]); update_wildlife(biome)
+    if biome["season"] == "Summer" and biome["granary"]:
+        ...                            # granary halts food_stock decay
+    predator_chance -= 0.2 * biome["palisade"]  # palisade deters predators
+    # moodlets: decay by one tick and sum into net morale (e.g. Grief)
+    net_morale = 0
+    for m in pawn["moodlets"]:
+        net_morale += m["delta"]
+        m["ticks_left"] -= 1
+    pawn["moodlets"] = [m for m in pawn["moodlets"] if m["ticks_left"] > 0]
+    if pawn["vitals"]["warmth"] <= 0:
+        add_moodlet(pawn, "Frostbitten", -5, 10)  # fresh, refreshable debuff
     # aging: elders drain +1 energy/morale/tick, heal -5 less
     if age_of(pawn) >= ELDER_AGE:       # 200 ticks = 10 days -> elder
         ...                             # +1/tick energy & morale tax
@@ -352,12 +394,12 @@ def tick_environment():             # the world ages after pawns act
             _kill(pawn_id, pawn, "old age")
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Tick Orchestration (core.py, condensed). lock $\to$ schema $\to$ LLM $\to$ override $\to$ resolve $\to$ environment $\to$ tick++ $\to$ save; eulogy + embed outside lock}, label={lst:tick}]
+\begin{lstlisting}[style=python, caption={Tick Orchestration (core.py, condensed). lock $\to$ schema $\to$ LLM $\to$ override $\to$ resolve $\to$ environment $\to$ tick++ $\to$ save; season-change detection, eulogy, adoption DMs, and embed all run outside the lock}, label={lst:tick}]
 async def run_tick():
     async with tick_lock:                              # serialises vs god commands
         TickResponse = schema.build_models()           # 1. roster-aware schema
         content, _ = await asyncio.to_thread(          # 2. structured LLM output
-            llm.generate_with_fallback,                #    (primary -> fallback)
+            _llm_call,                                 #    lazy import of llm.py
             SYSTEM_PROMPT, build_prompt(), TickResponse, 0.7)
         data = TickResponse.model_validate_json(content)
         events.add_event("world", description=data.world_event)
@@ -375,15 +417,18 @@ async def run_tick():
             if order:
                 action, target = order["action"], order.get("target")
             intents[pid] = (action, target)
-        engine.resolve_actions(intents)                # 4. deterministic effects
-        engine.tick_environment()                      #    world ages
+        tick_events = engine.resolve_actions(intents)  # 4. deterministic effects
+        tick_events += engine.tick_environment()       #    world ages; may signal season change
         state.god_orders.clear(); state.god_whispers.clear()
         state.world_state["tick"] += 1                 # increment \emph{before} save
         state.save_state(); events.log_to_jsonl()      # 5. persist
     # Lock released: god commands can run during the slow LLM/webhook I/O.
+    if state.pending_chronicle:                        # season changed: write chronicle
+        await _chronicle_season(state.pending_chronicle)
     await _eulogize_fallen(dead_tick)                  # LLM epitaph (per fallen)
-    state.save_state()                                 # re-save after eulogies
-    await asyncio.to_thread(post_to_discord, data)     # Discord webhook
+    await _notify_adopted(tick_events)                 # DM adopted pawns' milestones
+    state.save_state()                                 # re-save after outside-lock calls
+    await asyncio.to_thread(post_to_discord, data)     # Discord webhook + PNG map
 \end{lstlisting}
 
 \section{Expected Outcomes}
@@ -426,7 +471,7 @@ Daily Quota Utilisation (RPD) & $\approx$ 10\% of 14.4K at a 60 s tick \\
 The following qualitative results were observed over continuous runs:
 
 \begin{enumerate}
-\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 96-test offline suite (\texttt{tests/test\_engine.py}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
+\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 200-test offline suite (\texttt{tests/}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
 \item \textbf{Enforcement Rate}: every illegal intent (energy shortfall, self-attack, missing/unknown target) was rejected by the engine and recorded as a \texttt{failed} event; at no point did a hallucinated stat alter the world, because the model never emits numeric deltas.
 \item \textbf{Intervention Correctness}: \texttt{!order} always produced the commanded action even when the model proposed otherwise; \texttt{!say} influenced narrative flavour only, as designed.
 \item \textbf{Emergent Dynamics}: relationship deltas after combat produced visible grudge cycles (repeated mutual attacks) in the event history, demonstrating that the model reads and reacts to the rendered relationship state.
@@ -435,7 +480,7 @@ The following qualitative results were observed over continuous runs:
 \end{enumerate}
 
 \section{Conclusion}
-The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 96-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
+The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 200-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
 
 \appendix
 \section{Appendix A: Legacy Monolithic Implementation}

@@ -10,6 +10,17 @@ MAX_HISTORY = 10
 god_orders = {}    # pawn_id -> {"action": str, "target": str | None}
 god_whispers = {}  # pawn_id -> str
 
+# Transient director feedback (not persisted): pawn_id -> {"action", "reason", "count"}.
+# Consecutive failed intents after a feasibility reason; prompts build_prompt into hints.
+failed_intents = {}
+
+MAX_CHRONICLE = 24  # keep the last N seasonal chronicle entries
+
+# Transient seasonal-chronicle signal (not persisted): set by engine.tick_environment
+# to the new season name when the season turns, consumed by core.run_tick after the
+# tick lock is released. Cleared in reset_world.
+pending_chronicle = None
+
 NAME_POOL = [
     "Willow", "Bramble", "Moss", "Fern", "Hazel", "Ash", "Rowan", "Ivy",
     "Thistle", "Clover", "Birch", "Cedar", "Ember", "Sable", "Onyx", "Rune",
@@ -21,6 +32,16 @@ JOB_POOL = [
     "Herbalist", "Cook", "Watchman", "Smith", "Gatherer", "Tanner",
 ]
 
+TRAITS = ("Night Owl", "Brawler", "Pyromaniac", "Pacifist", "Iron Stomach")
+
+TRAIT_EMOJI = {
+    "Night Owl": "🦉",
+    "Brawler": "🥊",
+    "Pyromaniac": "🔥",
+    "Pacifist": "🕊️",
+    "Iron Stomach": "🍽️",
+}
+
 
 def next_pawn_id():
     nums = [
@@ -29,6 +50,39 @@ def next_pawn_id():
         if pid.startswith("pawn_")
     ]
     return f"pawn_{max(nums, default=0) + 1}"
+
+
+def next_wild_id():
+    nums = [
+        int(w["id"].split("_")[1])
+        for w in world_state["wildlife"]
+        if w["id"].startswith("wild_")
+    ]
+    return f"wild_{max(nums, default=0) + 1}"
+
+
+def next_heirloom_id():
+    nums = [
+        int(h["id"].split("_")[1])
+        for h in world_state["heirlooms"]
+        if h["id"].startswith("heirloom_")
+    ]
+    return f"heirloom_{max(nums, default=0) + 1}"
+
+
+def make_animal(species, pos=None, hp=100):
+    """Non-pawn wildlife entity: prey flee, predators stalk, tamed pets stay at camp."""
+    if pos is None:
+        pos = [CAMP_POS[0], CAMP_POS[1]]
+    return {
+        "id": next_wild_id(),
+        "species": species,
+        "pos": [pos[0], pos[1]],
+        "state": "wandering",  # wandering | tamed
+        "hp": hp,
+        "spawn_tick": world_state["tick"],
+        "tamed_by": None,
+    }
 
 DEFAULT_PERSONALITY = {"bravery": 5, "aggression": 5, "curiosity": 5, "sociability": 5}
 DEFAULT_SKILLS = {"woodcutting": 5, "scouting": 5, "combat": 5}
@@ -41,6 +95,8 @@ DEFAULT_BIOME = {
     "shelter": 50,
     "wood_stock": 100,
     "food_stock": 100,
+    "granary": False,
+    "palisade": 0,
 }
 
 GRID_SIZE = 5
@@ -60,6 +116,10 @@ world_state = {
     "graveyard": [],
     "grid": [row[:] for row in DEFAULT_GRID],
     "pawns": {},
+    "wildlife": [],
+    "chronicle": [],
+    "heirlooms": [],
+    "adoptions": {},
     "extinct": False,
 }
 
@@ -76,13 +136,18 @@ def make_pawn(
     skills=None,
     job=None,
     sex=None,
+    traits=None,
 ):
+    if traits is None:
+        traits = random.sample(TRAITS, k=random.choice((1, 2)))
     return {
         "id": pawn_id,
         "name": name,
         "job": job or "Wanderer",
         "sex": sex or random.choice(("M", "F")),
         "status": "active",  # active | incapacitated
+        "traits": [t for t in traits if t in TRAITS],
+        "moodlets": [],  # [{"name", "delta", "ticks_left"}] — episodic morale drains
         "vitals": {
             "hp": hp,
             "energy": energy,
@@ -119,12 +184,19 @@ def make_pawn(
 
 
 def reset_world():
+    global pending_chronicle
     world_state["tick"] = 1
     world_state["history"] = []
     world_state["biome"] = dict(DEFAULT_BIOME)
     world_state["graveyard"] = []
     world_state["grid"] = [row[:] for row in DEFAULT_GRID]
+    world_state["wildlife"] = []
+    world_state["chronicle"] = []
+    world_state["heirlooms"] = []
+    world_state["adoptions"] = {}
     world_state["extinct"] = False
+    pending_chronicle = None
+    failed_intents.clear()
     world_state["pawns"] = {
         "pawn_1": make_pawn(
             "pawn_1",
@@ -134,6 +206,7 @@ def reset_world():
             sex="M",
             personality={"bravery": 6, "aggression": 7, "curiosity": 3, "sociability": 4},
             skills={"woodcutting": 8, "scouting": 3, "combat": 6},
+            traits=["Brawler"],
         ),
         "pawn_2": make_pawn(
             "pawn_2",
@@ -143,6 +216,7 @@ def reset_world():
             sex="F",
             personality={"bravery": 4, "aggression": 3, "curiosity": 8, "sociability": 6},
             skills={"woodcutting": 3, "scouting": 8, "combat": 4},
+            traits=["Night Owl"],
         ),
     }
 
@@ -189,6 +263,20 @@ def _migrate_pawn(pawn_id, pawn):
             base[key] = pawn.get(key)
     if isinstance(pawn.get("partners"), list):
         base["partners"] = [p for p in pawn["partners"] if isinstance(p, str)]
+    if isinstance(pawn.get("traits"), list):
+        base["traits"] = [t for t in pawn["traits"] if t in TRAITS]
+        if not base["traits"]:
+            base["traits"] = random.sample(TRAITS, k=random.choice((1, 2)))
+    if isinstance(pawn.get("moodlets"), list):
+        base["moodlets"] = [
+            {
+                "name": m.get("name"),
+                "delta": int(m.get("delta", 0)),
+                "ticks_left": int(m.get("ticks_left", 0)),
+            }
+            for m in pawn["moodlets"]
+            if isinstance(m, dict) and m.get("name")
+        ]
     return base
 
 
@@ -229,8 +317,23 @@ def load_state():
             pid: _migrate_pawn(pid, p) for pid, p in loaded.get("pawns", {}).items()
         }
         world_state.setdefault("biome", dict(DEFAULT_BIOME))
+        world_state["biome"].setdefault("granary", False)
+        world_state["biome"].setdefault("palisade", 0)
         world_state.setdefault("graveyard", [])
         world_state.setdefault("grid", [row[:] for row in DEFAULT_GRID])
+        world_state.setdefault("wildlife", [])
+        if "chronicle" in loaded:
+            world_state["chronicle"] = loaded["chronicle"][-MAX_CHRONICLE:]
+        else:
+            world_state.setdefault("chronicle", [])
+        if "heirlooms" in loaded:
+            world_state["heirlooms"] = loaded["heirlooms"]
+        else:
+            world_state.setdefault("heirlooms", [])
+        if "adoptions" in loaded:
+            world_state["adoptions"] = loaded["adoptions"]
+        else:
+            world_state.setdefault("adoptions", {})
         if not world_state["pawns"]:
             if world_state["graveyard"]:
                 # Real extinction: keep the dataset and stay paused.
