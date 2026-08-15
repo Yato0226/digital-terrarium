@@ -307,7 +307,7 @@ def resolve_actions(intents):
             # relationships fade 5 steps toward 0 each dawn (RELATIONSHIP_DECAY)
         elif action == "Interact":
             # free-form verb: engine buckets it into safe effects
-            if flavor in SOCIAL_WORDS:          # +5 morale; same-tile bond ±10
+            if flavor in SOCIAL_WORDS:          # +5 morale; same-tile bond +/-10
                 pawn["vitals"]["morale"] += 5
             elif flavor in GATHER_WORDS:        # small tile-gated yield
                 if tile_at(pawn) in FORAGE_TILES: food += 1  # meadow/river
@@ -345,10 +345,10 @@ def tick_environment():             # the world ages after pawns act
     ...                             # campfire burns 1 wood per tick;
                                     # metabolism, regrowth (never in
                                     # Winter), frostbite, starvation
-    # aging: elders drain +1 energy/morale/tick, heal −5 less
-    if age_of(pawn) >= ELDER_AGE:       # 200 ticks = 10 days → elder
+    # aging: elders drain +1 energy/morale/tick, heal -5 less
+    if age_of(pawn) >= ELDER_AGE:       # 200 ticks = 10 days -> elder
         ...                             # +1/tick energy & morale tax
-        if age_of(pawn) >= OLD_AGE_MAX:  # 320 ticks = 16 days → 2% death chance
+        if age_of(pawn) >= OLD_AGE_MAX:  # 320 ticks = 16 days -> 2% death chance
             _kill(pawn_id, pawn, "old age")
 \end{lstlisting}
 
@@ -370,7 +370,7 @@ async def run_tick():
             decision = getattr(data, pid)
             action, target = decision.action, decision.target
             if action == "Move":
-                target = decision.direction            # map \texttt{direction}→target
+                target = decision.direction            # map \texttt{direction}->target
             order = state.god_orders.get(pid)
             if order:
                 action, target = order["action"], order.get("target")
@@ -441,7 +441,7 @@ The proposed architecture confirms that hosted open-weight models such as Gemma 
 \section{Appendix A: Legacy Monolithic Implementation}
 For contrast, Listing~\ref{lst:legacy} reproduces the initial single-file prototype that preceded the modular AI Director design. In this version the LLM emitted numeric deltas (\texttt{hp\_change}, \texttt{energy\_change}) directly, so state integrity depended entirely on model compliance; the refactor described in this paper eliminates that risk by moving all numbers into the deterministic engine.
 
-\begin{lstlisting}[style=python, caption={Legacy Monolithic Loop (superseded — LLM emitted \texttt{hp\_change}, \texttt{energy\_change} deltas directly)}, label={lst:legacy}]
+\begin{lstlisting}[style=python, caption={Legacy Monolithic Loop (superseded --- LLM emitted \texttt{hp\_change}, \texttt{energy\_change} deltas directly)}, label={lst:legacy}]
 import json
 import time
 import requests
