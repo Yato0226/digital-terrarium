@@ -113,6 +113,8 @@ ruff check . && python -m pytest tests -q   # 201 tests, fully offline
 
 See `AGENTS.md` for the architecture, the engine's lockstep constraints (adding a stat/action touches multiple modules), and deployment notes.
 
+Built with [opencode](https://opencode.ai) — an open-source AI coding CLI that wrote, tested, and iterated the codebase with a human in the loop.
+
 ## Disclaimer
 
 `google-genai` requires a network call to the Gemini API. Free-tier quotas (~14.4K requests/day, 30 RPM) are more than enough for a 60 s tick; the server costs nothing while the bot is off.
