@@ -1,3 +1,4 @@
+import json
 import random
 
 import pytest
@@ -318,6 +319,7 @@ def test_epithet_precedence_scarred(monkeypatch):
 def test_winter_survival_counter(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 1.0)
     state.world_state["tick"] = 400
+    pawn("pawn_1")["born_tick"] = 399  # young enough to survive a long world
     state.world_state["biome"]["season"] = "Winter"
     engine.tick_environment()
     assert pawn("pawn_1")["counters"]["blizzards_survived"] == 1
@@ -835,4 +837,113 @@ def test_child_matures_over_ticks():
     p["child_ticks"] = 1
     engine.tick_environment()
     assert p["child_ticks"] == 0
+
+
+def test_age_of():
+    assert engine.age_of(pawn("pawn_1")) == 0
+    pawn("pawn_1")["born_tick"] = -10
+    assert engine.age_of(pawn("pawn_1")) == 11
+
+
+def test_is_elder_threshold():
+    p = pawn("pawn_1")
+    p["born_tick"] = 1 - engine.ELDER_AGE + 1
+    assert not engine.is_elder(p)
+    p["born_tick"] = 1 - engine.ELDER_AGE
+    assert engine.is_elder(p)
+
+
+def test_elder_energy_and_morale_tax():
+    biome = state.world_state["biome"]
+    result = []
+    young = pawn("pawn_1")
+    elder = state.make_pawn("pawn_9", "Old", hp=100, energy=80)
+    elder["born_tick"] = 1 - engine.ELDER_AGE
+    state.world_state["pawns"]["pawn_9"] = elder
+    engine._metabolize(young, "pawn_1", biome, lit=False, day=1, result=result)
+    engine._metabolize(elder, "pawn_9", biome, lit=False, day=1, result=result)
+    assert elder["vitals"]["energy"] == young["vitals"]["energy"] - engine.ELDER_ENERGY_TAX
+    assert elder["vitals"]["morale"] == young["vitals"]["morale"] - engine.ELDER_MORALE_TAX
+
+
+def test_elder_rest_recovery_penalty():
+    p = pawn("pawn_1")
+    p["vitals"]["hp"] = 50
+    p["born_tick"] = 1 - engine.ELDER_AGE
+    engine.resolve_actions({"pawn_1": ("Rest", None)})
+    assert p["vitals"]["hp"] == 50 + engine.RECOVER_HEAL - engine.ELDER_REST_PENALTY
+
+
+def test_no_age_death_before_elder():
+    p = pawn("pawn_1")
+    p["born_tick"] = 1 - engine.ELDER_AGE + 1
+    engine.tick_environment()
+    assert "pawn_1" in state.world_state["pawns"]
+    assert all(e.get("data", {}).get("cause") != "old age" for e in state.world_state["history"])
+
+
+def test_old_age_hard_cap_death():
+    p = pawn("pawn_1")
+    p["born_tick"] = 1 - engine.OLD_AGE_MAX
+    evs = engine.tick_environment()
+    assert "pawn_1" not in state.world_state["pawns"]
+    death = [e for e in evs if e["type"] == "death" and e["actor"] == "pawn_1"]
+    assert death and death[0]["data"]["cause"] == "old age"
+    entry = state.world_state["graveyard"][-1]
+    assert entry["id"] == "pawn_1"
+    assert entry["cause"] == "old age"
+
+
+def test_elder_random_death_chance(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    p = pawn("pawn_1")
+    p["born_tick"] = 1 - engine.ELDER_AGE
+    evs = engine.tick_environment()
+    assert "pawn_1" not in state.world_state["pawns"]
+    assert any(
+        e["type"] == "death" and e.get("data", {}).get("cause") == "old age" for e in evs
+    )
+
+
+def test_elder_gets_ancient_title(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    p = pawn("pawn_1")
+    p["born_tick"] = 1 - engine.ELDER_AGE
+    engine.tick_environment()
+    assert p["title"] == "the Ancient"
+
+
+def test_break_archetype_defaults():
+    p = pawn("pawn_1")
+    p["personality"] = {"bravery": 2}
+    assert engine._break_archetype(p) == "paranoid"
+    p["personality"] = {"aggression": 7}
+    assert engine._break_archetype(p) == "berserk"
+    p["personality"] = {}
+    assert engine._break_archetype(p) == "apathetic"
+
+
+def test_load_state_preserves_extinction(monkeypatch, tmp_path):
+    state.world_state["pawns"] = {}
+    state.world_state["graveyard"] = [
+        {"id": "pawn_1", "name": "Lumberjack", "cause": "old age", "died_tick": 10}
+    ]
+    state.world_state["extinct"] = True
+    f = tmp_path / "state.json"
+    f.write_text(json.dumps(state.world_state), encoding="utf-8")
+    monkeypatch.setattr(state, "STATE_FILE", str(f))
+    state.load_state()
+    assert state.world_state["pawns"] == {}
+    assert state.world_state["extinct"] is True
+    assert len(state.world_state["graveyard"]) == 1
+
+
+def test_load_state_respawns_fresh_when_empty_and_no_graveyard(monkeypatch, tmp_path):
+    state.world_state["pawns"] = {}
+    state.world_state["graveyard"] = []
+    f = tmp_path / "state.json"
+    f.write_text(json.dumps(state.world_state), encoding="utf-8")
+    monkeypatch.setattr(state, "STATE_FILE", str(f))
+    state.load_state()
+    assert len(state.world_state["pawns"]) == 2
 

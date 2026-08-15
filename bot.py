@@ -73,19 +73,21 @@ def _pawn_line(pid, pawn):
     sex = " ♂" if pawn.get("sex") == "M" else " ♀" if pawn.get("sex") == "F" else ""
     preg = " 🤰" if pawn.get("pregnant_ticks", 0) > 0 else ""
     child = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
+    elder = " 👴" if engine.is_elder(pawn) else ""
+    age = f" | {engine.age_of(pawn) // engine.TICKS_PER_DAY} days old"
     gear = f" | 🛠️ {pawn['gear']['main_hand'] or '—'}, {pawn['gear']['body'] or '—'}"
     break_txt = f" | 🌀 {pawn['mental_break']}" if pawn.get("mental_break") else ""
     sk = pawn["skills"]
     x, y = pawn["pos"]
     tile = engine._tile_at(x, y) or "?"
     return (
-        f"**{pawn['name']}**{sex}{job}{title}{preg}{child} (`{pid}`): "
+        f"**{pawn['name']}**{sex}{job}{title}{preg}{child}{elder} (`{pid}`): "
         f"HP {v['hp']} | Energy {v['energy']} | "
         f"Hunger {v['hunger']} | Warmth {v['warmth']} | Morale {v['morale']} | "
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
         f"{gear} | Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}"
-        f" | 📍 {tile} ({x},{y}){break_txt} | {pawn['status']}"
+        f"{age} | 📍 {tile} ({x},{y}){break_txt} | {pawn['status']}"
     )
 
 
@@ -209,7 +211,7 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
             return
         pawn = state.world_state["pawns"][pawn_id]
         action = action.capitalize()
-        valid_actions = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate")
+        valid_actions = engine.ACTIONS
         needs_target = ("Attack", "Share", "Mate")
         if action not in valid_actions:
             await ctx.send(
@@ -251,6 +253,7 @@ async def say(ctx, pawn_id: str, *, instruction: str):
         state.god_whispers[pawn_id] = instruction
         pawn = state.world_state["pawns"][pawn_id]
         pawn["vitals"]["morale"] = max(0, min(100, pawn["vitals"]["morale"] + 15))
+        state.save_state()
         name = pawn["name"]
         await ctx.send(f"🗣️ Whisper sent to **{name}** (+15 morale).")
 
@@ -343,3 +346,6 @@ async def on_ready():
     print(f"📡 God channel: {GOD_CHANNEL_NAME or 'any channel'}")
     if tick_task is None or tick_task.done():
         tick_task = asyncio.create_task(core.tick_loop())
+    if state.world_state.get("extinct"):
+        print("🪦 World is extinct — scheduler stays paused.")
+        core.pause_event.clear()

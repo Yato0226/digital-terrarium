@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import requests
 
@@ -15,6 +16,8 @@ pause_event = asyncio.Event()
 pause_event.set()
 
 tick_lock = asyncio.Lock()
+
+EMBED_CHAR_CAP = 6000  # Discord webhook embed total size limit
 
 
 def post_to_discord(data):
@@ -36,7 +39,7 @@ def post_to_discord(data):
                 + "```\n"
                 f"🔥 Campfire {biome['campfire']} | 🏠 Shelter {biome['shelter']} | "
                 f"🌲 Wood {biome['wood_stock']} | 🍎 Food {biome['food_stock']}"
-            ),
+            )[:1024],
             "inline": False,
         }
     )
@@ -62,16 +65,17 @@ def post_to_discord(data):
         sex_txt = "♂" if pawn.get("sex") == "M" else "♀" if pawn.get("sex") == "F" else ""
         preg_txt = " 🤰" if pawn.get("pregnant_ticks", 0) > 0 else ""
         child_txt = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
+        elder_txt = " 👴" if engine.is_elder(pawn) else ""
         break_txt = f" 🌀{pawn['mental_break']}" if pawn.get("mental_break") else ""
         gear_txt = f" {pawn['gear']['main_hand'] or '—'}/{pawn['gear']['body'] or '—'}"
         inv = pawn["inventory"]
         name = (
-            f"🌲 {pawn['name']}{sex_txt}{job_txt}{title}{break_txt}{preg_txt}{child_txt} | "
+            f"🌲 {pawn['name']}{sex_txt}{job_txt}{title}{break_txt}{preg_txt}{child_txt}{elder_txt} | "
             f"HP{v['hp']} E{v['energy']} H{v['hunger']} W{v['warmth']} M{v['morale']} | "
             f"{gear_txt} | W{inv['wood']} F{inv['food']} S{inv['stone']} Fb{inv['fiber']}"
             f"{action_txt}"
         )
-        fields.append({"name": name, "value": value, "inline": False})
+        fields.append({"name": name[:256], "value": value[:1024], "inline": False})
 
     footer_text = " → ".join(
         ev["description"] for ev in state.world_state["history"][-3:]
@@ -82,6 +86,10 @@ def post_to_discord(data):
         "fields": fields[:25],
         "footer": {"text": footer_text},
     }
+    if len(json.dumps(embed, ensure_ascii=False)) > EMBED_CHAR_CAP:
+        embed["footer"] = {"text": footer_text[:200]}
+        if len(json.dumps(embed, ensure_ascii=False)) > EMBED_CHAR_CAP:
+            del embed["footer"]
     if not DISCORD_WEBHOOK_URL:
         return
     try:
@@ -91,16 +99,16 @@ def post_to_discord(data):
         print(f"Discord post failed: {e}")
 
 
-async def _eulogize_fallen():
+async def _eulogize_fallen(dead_tick):
     """Best-effort one-shot LLM epitaph for pawns that died this tick."""
     for entry in state.world_state["graveyard"]:
-        if entry.get("died_tick") != state.world_state["tick"] or entry.get("eulogized"):
+        if entry.get("died_tick") != dead_tick or entry.get("eulogized"):
             continue
         try:
             text, _model_used = await asyncio.to_thread(
                 llm.generate_with_fallback,
                 prompts.EULOGY_PROMPT,
-                f"{entry['name']} died of {entry['cause']} on Day {entry['died_tick']}.",
+                f"{entry['name']} died of {entry['cause']} on Day {entry['died_tick'] // engine.TICKS_PER_DAY}.",
                 None,
                 0.9,
             )
@@ -113,20 +121,19 @@ async def _eulogize_fallen():
 
 
 def _notify_extinction():
-    """Roster empty: ping the god and pause so no more API is wasted."""
-    if state.world_state.get("extinct"):
-        return
-    state.world_state["extinct"] = True
-    print("🪦 Extinction detected — pausing simulation.")
-    message = (
-        "🪦 **The terrarium has fallen silent.** Every last pawn is gone. "
-        f"<@{config.NOTIFY_USER_ID}>"
-    )
-    if DISCORD_WEBHOOK_URL:
-        try:
-            requests.post(DISCORD_WEBHOOK_URL, json={"content": message}, timeout=5)
-        except requests.exceptions.RequestException as e:
-            print(f"Extinction ping failed: {e}")
+    """Roster empty: ping the god once and pause so no more API is wasted."""
+    if not state.world_state.get("extinct"):
+        state.world_state["extinct"] = True
+        print("🪦 Extinction detected — pausing simulation.")
+        message = (
+            "🪦 **The terrarium has fallen silent.** Every last pawn is gone. "
+            f"<@{config.NOTIFY_USER_ID}>"
+        )
+        if DISCORD_WEBHOOK_URL:
+            try:
+                requests.post(DISCORD_WEBHOOK_URL, json={"content": message}, timeout=5)
+            except requests.exceptions.RequestException as e:
+                print(f"Extinction ping failed: {e}")
     pause_event.clear()
 
 
@@ -137,8 +144,10 @@ async def run_tick():
         if state.world_state["pawns"]:
             state.world_state["extinct"] = False
         else:
+            if not state.world_state.get("extinct"):
+                state.world_state["tick"] += 1
             _notify_extinction()
-            state.world_state["tick"] += 1
+            state.save_state()
             return
 
         try:
@@ -146,6 +155,7 @@ async def run_tick():
         except ValueError as e:
             print(f"❌ Schema error: {e}")
             state.world_state["tick"] += 1
+            state.save_state()
             return
 
         prompt = prompts.build_prompt()
@@ -164,9 +174,11 @@ async def run_tick():
         except Exception as e:
             print(f"❌ LLM or parsing error: {e}")
             state.world_state["tick"] += 1
+            state.save_state()
             return
 
         events.add_event("world", description=data.world_event)
+        dead_tick = state.world_state["tick"]
 
         # Build intents; god orders override the LLM's proposal.
         intents = {}
@@ -184,15 +196,16 @@ async def run_tick():
 
         engine.resolve_actions(intents)
         engine.tick_environment()
-        await _eulogize_fallen()
         state.god_orders.clear()
         state.god_whispers.clear()
-        state.save_state()
-
-        await asyncio.to_thread(post_to_discord, data)
-
         state.world_state["tick"] += 1
+        state.save_state()
         print(f"✅ Tick complete. {state.status_summary()}")
+
+    # Lock released: god commands can run during the slow LLM/webhook I/O.
+    await _eulogize_fallen(dead_tick)
+    state.save_state()
+    await asyncio.to_thread(post_to_discord, data)
 
 
 async def tick_loop():

@@ -45,6 +45,7 @@ COAT_INSULATION = 4
 SEASON_TICKS = 100
 DAY_CYCLE = 20
 DAY_LENGTH = 10
+TICKS_PER_DAY = DAY_CYCLE  # one full day/night cycle = 20 ticks
 SEASONS = ("Spring", "Summer", "Autumn", "Winter")
 WEATHER_OPTIONS = {
     "Spring": ("Clear", "Rain", "Clear", "Rain", "Clear"),
@@ -84,15 +85,30 @@ REGROWTH_SPRING = 2
 
 MATE_RELATIONSHIP = 25
 CONCEPTION_CHANCE = 0.5
-PREGNANCY_TICKS = 6
-CHILD_MATURITY = 5
+PREGNANCY_TICKS = TICKS_PER_DAY  # 1 day (20 ticks)
+CHILD_MATURITY = 2 * TICKS_PER_DAY  # 2 days (40 ticks)
 MAX_PAWNS = 10
 NEWBORN_HP = 60
 NEWBORN_ENERGY = 40
 
+ELDER_AGE = 10 * TICKS_PER_DAY  # 10 days (200 ticks)
+OLD_AGE_DEATH_CHANCE = 0.02
+OLD_AGE_MAX = 16 * TICKS_PER_DAY  # 16 days (320 ticks)
+ELDER_ENERGY_TAX = 1
+ELDER_MORALE_TAX = 1
+ELDER_REST_PENALTY = 5
+
 
 def _clamp(value, lo=0, hi=100):
     return max(lo, min(hi, value))
+
+
+def age_of(pawn):
+    return state.world_state["tick"] - pawn.get("born_tick", state.world_state["tick"])
+
+
+def is_elder(pawn):
+    return age_of(pawn) >= ELDER_AGE
 
 
 def _adjust_relationship(pawn, other_id, delta):
@@ -159,7 +175,8 @@ def render_grid():
 
 
 def _do_rest(pawn, pawn_id):
-    pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] + 10)
+    heal = RECOVER_HEAL - (ELDER_REST_PENALTY if is_elder(pawn) else 0)
+    pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] + heal)
     pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 20)
     return events.add_event(
         "rest", actor=pawn_id, description=f"{pawn['name']} rests and recovers."
@@ -798,6 +815,10 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
     if biome["season"] == "Summer" and biome["weather"] == "Heatwave":
         v["energy"] = _clamp(v["energy"] - HEATWAVE_ENERGY)
 
+    if is_elder(pawn):
+        v["energy"] = _clamp(v["energy"] - ELDER_ENERGY_TAX)
+        v["morale"] = _clamp(v["morale"] - ELDER_MORALE_TAX)
+
     morale = 0
     if biome["shelter"] > 50:
         morale += 1
@@ -830,9 +851,10 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
 
 def _break_archetype(pawn):
     pers = pawn["personality"]
-    if pers.get("aggression", 0) >= 6:
+    defaults = state.DEFAULT_PERSONALITY
+    if pers.get("aggression", defaults["aggression"]) >= 6:
         return "berserk"
-    if pers.get("bravery", 5) <= 3:
+    if pers.get("bravery", defaults["bravery"]) <= 3:
         return "paranoid"
     return "apathetic"
 
@@ -917,6 +939,9 @@ def _resolve_break(pawn, pawn_id):
 def _update_titles():
     """Recompute each living pawn's epithet from its lifetime counters."""
     for pawn in state.world_state["pawns"].values():
+        if is_elder(pawn):
+            pawn["title"] = "the Ancient"
+            continue
         c = pawn["counters"]
         if c["damage_dealt"] >= 100:
             pawn["title"] = "the Scarred"
@@ -938,6 +963,9 @@ def _death_cause(pawn, biome):
         return "froze in a blizzard"
     if pawn.get("starving_ticks", 0) > 5:
         return "starvation"
+    if is_elder(pawn):
+        if age_of(pawn) >= OLD_AGE_MAX or random.random() < OLD_AGE_DEATH_CHANCE:
+            return "old age"
     return None
 
 

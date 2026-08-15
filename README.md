@@ -22,8 +22,9 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **5×5 living world** — seasons, weather, day/night, depletable wood/food stocks, campfire warmth
 - **Pawn biology & psyche** — HP, energy, hunger, warmth, morale, skills, relationships, gear, mental breaks
 - **Reproduction** — pawns have a sex (♂/♀); bonded pairs can Mate (same tile, relationship ≥ 25), pregnancies come to term, and newborns mature into full colonists (colony capped at 10)
+- **Aging & old age** — pawns age tick by tick; elders (👴) tire faster, heal less, and eventually die of old age, freeing a colony slot
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)
-- **Permadeath** — freeze in a Blizzard or starve → pawn is enshrined in the Graveyard with a tombstone and eulogy
+- **Permadeath** — freeze in a Blizzard, starve, or reach old age → pawn is enshrined in the Graveyard with a tombstone and eulogy
 - **God interface** — spawn, edit, order, whisper, pause/resume
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 

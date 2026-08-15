@@ -60,6 +60,7 @@ world_state = {
     "graveyard": [],
     "grid": [row[:] for row in DEFAULT_GRID],
     "pawns": {},
+    "extinct": False,
 }
 
 
@@ -118,6 +119,7 @@ def reset_world():
     world_state["biome"] = dict(DEFAULT_BIOME)
     world_state["graveyard"] = []
     world_state["grid"] = [row[:] for row in DEFAULT_GRID]
+    world_state["extinct"] = False
     world_state["pawns"] = {
         "pawn_1": make_pawn(
             "pawn_1",
@@ -207,6 +209,7 @@ def load_state():
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         world_state["tick"] = loaded.get("tick", 1)
+        world_state["extinct"] = loaded.get("extinct", False)
         world_state["history"] = [
             _migrate_event(h) for h in loaded.get("history", [])
         ][-MAX_HISTORY:]
@@ -217,7 +220,11 @@ def load_state():
         world_state.setdefault("graveyard", [])
         world_state.setdefault("grid", [row[:] for row in DEFAULT_GRID])
         if not world_state["pawns"]:
-            reset_world()
+            if world_state["graveyard"]:
+                # Real extinction: keep the dataset and stay paused.
+                world_state["extinct"] = True
+            else:
+                reset_world()
         print(
             f"Resumed from {STATE_FILE}: tick {world_state['tick']}, "
             f"{len(world_state['pawns'])} pawns"
