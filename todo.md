@@ -91,11 +91,11 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 1. Data Model & Registries — `state.py`
 
-- [ ] Add `world_state["custom_recipes"]` dictionary (stores AI-synthesized blueprints with material costs and primitive bonus keys).
-- [ ] Add `world_state["active_quests"]` list (stores multi-tick procedural world prophecies/goals).
-- [ ] Add `world_state["patch_version"]` string (`"v1.0"`, incremented each patch cycle).
-- [ ] Add `world_state["biome"]["modifiers"]` dictionary (bounded tuning multipliers for regrowth, cold, and spawn rates).
-- [ ] `_migrate_pawn` and `load_state` ensure backwards-compatibility for saves without Stage 9 keys.
+- [x] Add `world_state["custom_recipes"]` dictionary (stores AI-synthesized blueprints with material costs and primitive bonus keys).
+- [x] Add `world_state["active_quests"]` list (stores multi-tick procedural world prophecies/goals).
+- [x] Add `world_state["patch_version"]` string (`"v1.0"`, incremented each patch cycle).
+- [x] Add `world_state["biome"]["modifiers"]` dictionary (bounded tuning multipliers for regrowth, cold, and spawn rates).
+- [x] `_migrate_pawn` and `load_state` ensure backwards-compatibility for saves without Stage 9 keys.
 
 ### 2. Synthesis & Quest Engine — `engine.py`
 

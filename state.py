@@ -152,6 +152,8 @@ def make_raider(pos=None):
 DEFAULT_PERSONALITY = {"bravery": 5, "aggression": 5, "curiosity": 5, "sociability": 5}
 DEFAULT_SKILLS = {"woodcutting": 5, "scouting": 5, "combat": 5}
 
+DEFAULT_MODIFIERS = {"regrowth": 1.0, "cold": 1.0, "spawn": 1.0}
+
 DEFAULT_BIOME = {
     "season": "Spring",
     "weather": "Clear",
@@ -166,6 +168,7 @@ DEFAULT_BIOME = {
     "flooded": [],
     "miasma": 0,
     "aurora": False,
+    "modifiers": dict(DEFAULT_MODIFIERS),
 }
 
 GRID_SIZE = 5
@@ -195,6 +198,9 @@ world_state = {
     "raiders": [],
     "monument": {"wood": 0, "stone": 0, "done": False, "inscription": None},
     "traditions": {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
+    "custom_recipes": {},
+    "active_quests": [],
+    "patch_version": "v1.0",
 }
 
 
@@ -274,6 +280,9 @@ def reset_world():
     world_state["raiders"] = []
     world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None}
     world_state["traditions"] = {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
+    world_state["custom_recipes"] = {}
+    world_state["active_quests"] = []
+    world_state["patch_version"] = "v1.0"
     pending_chronicle = None
     pending_monument = None
     failed_intents.clear()
@@ -406,6 +415,9 @@ def load_state():
         world_state["biome"].setdefault("flooded", [])
         world_state["biome"].setdefault("miasma", 0)
         world_state["biome"].setdefault("aurora", False)
+        modifiers = world_state["biome"].setdefault("modifiers", {})
+        for key in DEFAULT_MODIFIERS:
+            modifiers.setdefault(key, DEFAULT_MODIFIERS[key])
         world_state.setdefault("graveyard", [])
         world_state.setdefault("grid", [row[:] for row in DEFAULT_GRID])
         world_state.setdefault("wildlife", [])
@@ -427,6 +439,9 @@ def load_state():
             world_state.setdefault("tiles", {})
         world_state.setdefault("visitors", [])
         world_state.setdefault("raiders", [])
+        world_state.setdefault("custom_recipes", {})
+        world_state.setdefault("active_quests", [])
+        world_state.setdefault("patch_version", "v1.0")
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )
