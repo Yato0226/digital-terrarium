@@ -204,3 +204,126 @@ def test_kindred_social_morale_boosted():
     p["vitals"]["energy"] = 100
     engine._do_interact(p, "pawn_1", "chat")
     assert p["vitals"]["morale"] == 50 + engine.KINDRED_SOCIAL_MORALE
+
+
+def test_feast_unit_effects():
+    biome = state.world_state["biome"]
+    biome["food_stock"] = 100
+    for p in state.world_state["pawns"].values():
+        p["vitals"]["morale"] = 50
+    ev = engine._seasonal_feast()
+    assert ev["type"] == "feast"
+    assert biome["food_stock"] == 100 - engine.FEAST_FOOD_COST
+    for p in state.world_state["pawns"].values():
+        assert p["vitals"]["morale"] == 50 + engine.FEAST_MORALE
+        assert any(
+            m["name"] == "Festive"
+            and m["delta"] == engine.FESTIVE_MOODLET_DELTA
+            and m["ticks_left"] == engine.FESTIVE_MOODLET_TICKS
+            for m in p["moodlets"]
+        )
+
+
+def test_feast_unit_skipped_when_larder_low():
+    biome = state.world_state["biome"]
+    biome["food_stock"] = engine.FEAST_FOOD_REQUIRED
+    assert engine._seasonal_feast() is None
+    assert biome["food_stock"] == engine.FEAST_FOOD_REQUIRED
+
+
+@pytest.mark.parametrize(
+    "tick,old_season,regrowth",
+    [(100, "Spring", engine.REGROWTH), (300, "Autumn", 0)],
+)
+def test_solstice_feast_on_season_change(tick, old_season, regrowth):
+    state.world_state["tick"] = tick
+    biome = state.world_state["biome"]
+    biome["season"] = old_season
+    biome["food_stock"] = 100
+    biome["granary"] = True
+    result = engine.tick_environment()
+    assert any(e["type"] == "feast" for e in result)
+    assert biome["food_stock"] == 100 - engine.FEAST_FOOD_COST + regrowth
+    for p in state.world_state["pawns"].values():
+        assert any(m["name"] == "Festive" for m in p["moodlets"])
+
+
+def test_feast_not_triggered_when_larder_low():
+    state.world_state["tick"] = 300
+    biome = state.world_state["biome"]
+    biome["season"] = "Autumn"
+    biome["food_stock"] = engine.FEAST_FOOD_REQUIRED
+    result = engine.tick_environment()
+    assert not any(e["type"] == "feast" for e in result)
+    assert biome["food_stock"] == engine.FEAST_FOOD_REQUIRED
+
+
+def test_feast_not_triggered_in_spring():
+    state.world_state["tick"] = 1
+    biome = state.world_state["biome"]
+    biome["season"] = "Winter"
+    biome["food_stock"] = 100
+    result = engine.tick_environment()
+    assert not any(e["type"] == "feast" for e in result)
+
+
+def test_beloved_death_records_flag():
+    p1 = pawn("pawn_1")
+    p1["relationships"] = {"pawn_2": 30, "pawn_3": 25}
+    engine._kill("pawn_1", p1, "starvation")
+    assert state.world_state["graveyard"][-1]["beloved"] is True
+
+
+def test_unloved_death_not_beloved():
+    p1 = pawn("pawn_1")
+    p1["relationships"] = {"pawn_2": 5, "pawn_3": 5}
+    engine._kill("pawn_1", p1, "starvation")
+    assert state.world_state["graveyard"][-1]["beloved"] is False
+
+
+def test_rite_halves_grief_for_same_tile_survivors():
+    p1 = pawn("pawn_1")
+    p1["relationships"] = {"pawn_2": 40}
+    engine._kill("pawn_1", p1, "starvation")
+    p2 = pawn("pawn_2")
+    p2["vitals"]["energy"] = 100
+    grief2 = next(m for m in p2["moodlets"] if m["name"] == "Grief")
+    assert grief2["ticks_left"] == 10
+    ev = engine._do_interact(p2, "pawn_2", "bury the fallen")
+    assert ev["type"] == "rite"
+    assert ev["data"]["grief_halved"] == 1
+    assert grief2["ticks_left"] == 5
+
+
+def test_rite_eulogize_word_routes_to_rite():
+    p1 = pawn("pawn_1")
+    p1["relationships"] = {"pawn_2": 40}
+    engine._kill("pawn_1", p1, "starvation")
+    p2 = pawn("pawn_2")
+    p2["vitals"]["energy"] = 100
+    ev = engine._do_interact(p2, "pawn_2", "eulogize the chief")
+    assert ev["type"] == "rite"
+    assert ev["data"]["beloved"] == p1["name"]
+
+
+def test_rite_gated_to_camp_or_ruins():
+    p1 = pawn("pawn_1")
+    p1["relationships"] = {"pawn_2": 40}
+    engine._kill("pawn_1", p1, "starvation")
+    p2 = pawn("pawn_2")
+    p2["vitals"]["energy"] = 100
+    p2["pos"] = [0, 0]
+    grief = next(m for m in p2["moodlets"] if m["name"] == "Grief")
+    ev = engine._do_interact(p2, "pawn_2", "bury")
+    assert ev["type"] == "failed"
+    assert grief["ticks_left"] == 10
+
+
+def test_rite_without_beloved_is_plain_interact():
+    p2 = pawn("pawn_2")
+    p2["vitals"]["energy"] = 100
+    p2["vitals"]["morale"] = 50
+    ev = engine._do_interact(p2, "pawn_2", "mourn")
+    assert ev["type"] == "interact"
+    assert p2["vitals"]["morale"] == 53
+    assert p2["moodlets"] == []

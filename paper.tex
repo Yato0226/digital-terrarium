@@ -193,6 +193,8 @@ Beyond the colonists, the world itself is alive. A \texttt{wildlife} roster hold
 
 As the colony's history accumulates, it becomes a culture: a \texttt{traditions} block in \texttt{world\_state} tallies colony-wide counters --- predators slain, trees felled, and rations shared --- that survive individual pawn deaths. On each season change the engine's \texttt{\_evaluate\_tradition} checks the thresholds (10, 100, 20, in priority order) and, once one is crossed, permanently stamps a \textbf{Tradition Tag}: \emph{Hunters of the North} (double combat XP on hunting kills, and cold-weather penalties reduced by 1), \emph{Children of the Forest} ($+1$ wood yield from every \texttt{Chop}, and shelter damage from fires and mental breaks halved --- the only ways shelter degrades), or \emph{Kindred of the Hearth} (social \texttt{Interact} grants $+8$ morale instead of $+5$). Tags are sticky once earned, appear in the prompt and the Discord embed, and are inspected via the \texttt{!tradition} god command, which also shows the live counters en route to the next tag.
 
+Culture also has its rituals. On the first tick of a new Winter or Summer, if the colony larder exceeds 15 \texttt{food\_stock}, the engine's \texttt{\_seasonal\_feast} spends 5 of it on a \textbf{Solstice Feast}: every active pawn gains $+15$ morale and a \texttt{Festive} moodlet ($+5$ for 15 ticks). And when a pawn dies, \texttt{\_kill} marks the graveyard entry as \emph{beloved} whenever survivors held it in high average regard ($\geq 25$ relationships); thereafter any pawn on the Camp or Ruins tile can \texttt{Interact} with a ``bury'' / ``mourn'' / ``eulogize'' flavor to hold a \textbf{funerary rite} that halves the remaining \texttt{Grief} moodlet duration ($\lfloor \texttt{ticks\_left}/2 \rfloor$) for everyone gathered there --- a communal counterweight to the automatic $+10$ grief of loss.
+
 The colony is no longer fully isolated: roughly every 150 ticks a transient \texttt{visitor} (Merchant with rare stone/fiber stocks, Lost Wanderer, or Wandering Bard) spawns on a random edge tile of the $5\times5$ grid. Visitor AI is a tiny deterministic state machine --- \texttt{arriving} walks greedily toward the Camp, \texttt{visiting} lingers 3--5 ticks (a Bard plays by the fire for $+5$ colony-wide morale), and \texttt{leaving} walks back off the edge and despawns. The schema's \texttt{target} literal extends to \texttt{visitor\_ids} as well, wiring three social verbs into the engine: \texttt{Share} of 2 food barters 3 stone from a Merchant (or fiber from a Wanderer); \texttt{Mate} targeting a visitor, or an \texttt{Interact} ``invite to stay''/``recruit'' flavor, makes a sociability-scaled recruitment roll ($0.3 + \texttt{sociability} \times 0.05$) that turns the wanderer into a permanent colonist under \texttt{MAX\_PAWNS}; and \texttt{Attack} plunders the visitor's inventory on death while stamping a \texttt{Guilt} moodlet ($-5$) on pawns below the aggression threshold.
 
 \subsection{Discord ``God'' Interface}
@@ -211,7 +213,7 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \texttt{!god \textless id\textgreater \textless stat\textgreater \textless v\textgreater}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
 \texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
 \texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
-\texttt{!graveyard}                 & List the fallen with epithets and epitaphs \\
+\texttt{!graveyard} & List the fallen with epithets and epitaphs (💖 marks the beloved) \\
 \texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} & Family tree / roaming fauna / travelers \\
 \texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} & Relics of the fallen / the monolith / emergent tradition / seasonal lore \\
 \texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
@@ -253,7 +255,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (predators slain / trees felled / rations shared $\to$ Tradition Tag), wildfires, and seasonal disasters}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts &amp; funerary rites (Grief halving), wildfires, and seasonal disasters}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]
@@ -451,6 +453,22 @@ def tick_environment():             # the world ages after pawns act
         # Hunters: 2x hunting combat XP, cold penalties -1
         # Foresters: +1 wood/Chop, shelter damage halved
         # Kindred: social Interact +8 morale instead of +5
+    # solstice feast (Stage 7): on the first tick of Winter/Summer, a full
+    # larder (>15 food_stock) buys a colony-wide feast: -5 stock, every active
+    # pawn +15 morale and a Festive moodlet (+5 for 15 ticks)
+    if new_season in (Winter, Summer) and season just changed:
+        if biome["food_stock"] > 15:
+            biome["food_stock"] -= 5
+            for p in active_pawns:
+                p["vitals"]["morale"] += 15; moodlet(p, "Festive", +5, 15)
+    # funerary rites (Stage 7): _kill marks the graveyard entry "beloved" when
+    # survivors' average relationship >= 25; Interact "bury"/"mourn"/"eulogize"
+    # at Camp or Ruins halves every Grief moodlet for same-tile active pawns
+    if flavor matches rite words and tile in (Camp, Ruins):
+        if any beloved in graveyard:
+            for p in same_tile active pawns:
+                for m in p["moodlets"] where m["name"] == "Grief":
+                    m["ticks_left"] //= 2
     # wildfires (Stage 4): storm lightning / Summer heatwave ignite Forest;
     # burning tiles drain 10 wood/tick, hurt occupants (incapacitate, never
     # kill), and spread to adjacent Forest/Camp; they burn out into ash that
@@ -574,13 +592,12 @@ The following qualitative results were observed over continuous runs:
 \end{enumerate}
 
 \section{Conclusion}
-The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 289-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
+The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 301-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
 
 \subsection{Future Work: Roadmap}
-The design remains a staged roadmap beyond the community/lore layer of Stage 3, the hazard/visitor layers of Stages 4--5, and the megaproject/farming layer of Stage 6. Each stage keeps the AI Director pattern --- the LLM proposes intent only, while pure-Python deterministic rules own all numbers, state stays flat, and every mechanic remains offline-testable:
+The design remains a staged roadmap beyond the community/lore layer of Stage 3, the hazard/visitor layers of Stages 4--5, the megaproject/farming layer of Stage 6, and the culture/ritual layer of Stage 7. Each stage keeps the AI Director pattern --- the LLM proposes intent only, while pure-Python deterministic rules own all numbers, state stays flat, and every mechanic remains offline-testable:
 
 \begin{enumerate}
-\item \textbf{Stage 7 --- Colony Ideology, Traditions \& Rituals}: emergent Tradition Tags (Hunters of the North, Children of the Forest, Kindred of the Hearth) already tune hunting, woodcutting, and social morale from colony-wide historical counters; Solstice Feasts and funerary rites (which halve \texttt{Grief} duration) remain to add communal texture.
 \item \textbf{Stage 8 --- Bandits, Raids \& Hostile Outcasts}: prosperous colonies attract Scavenger Raids in Autumn (1--2 hostiles targeting the Granary), countered by Palisade level, tamed predator interceptors, and high-combat defenders; raiders flee once damaged or after stealing enough food.
 \end{enumerate}
 

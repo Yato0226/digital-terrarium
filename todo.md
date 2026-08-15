@@ -69,8 +69,8 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 2. Communal Festivals & Rituals
 
-- [ ] **Seasonal Solstice Feast (Winter/Summer):** with >15 camp food on Day 1 of the season, pawns consume a feast — all gain +15 morale and a `Festive` moodlet (+5 for 15 ticks).
-- [ ] **Funerary Rites:** on the death of a beloved pawn (high average relationships), survivors can `Interact` `flavor="bury"` / `"mourn"` / `"eulogize"` at the Ruins or Camp to halve the remaining `Grief` moodlet duration.
+- [x] **Seasonal Solstice Feast (Winter/Summer):** with >15 camp food on Day 1 of the season, pawns consume a feast — all gain +15 morale and a `Festive` moodlet (+5 for 15 ticks).
+- [x] **Funerary Rites:** on the death of a beloved pawn (high average relationships), survivors can `Interact` `flavor="bury"` / `"mourn"` / `"eulogize"` at the Ruins or Camp to halve the remaining `Grief` moodlet duration.
 
 ---
 

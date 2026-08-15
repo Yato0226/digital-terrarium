@@ -36,6 +36,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Permadeath** — freeze in a Blizzard, starve, or reach old age → pawn is enshrined in the Graveyard with a tombstone and eulogy
 - **Seasonal chronicle** — a lorekeeper LLM writes a title and paragraph whenever the season turns (`!chronicle`)
 - **Emergent traditions** — the engine tallies colony history and auto-assigns a **Tradition Tag** on a season change: *Hunters of the North* (10+ predators slain → double hunting XP, colder-tolerant), *Children of the Forest* (100+ trees felled → +1 wood per chop, shelter decays half as fast), or *Kindred of the Hearth* (20+ rations shared → socials grant +8 morale). Tags persist once earned (`!tradition` shows the tag, its effects, and the counters)
+- **Festivals & rites** — on the first day of Winter and Summer, a bountiful larder (15+ camp food) means a **Solstice Feast**: everyone gains +15 morale and a Festive moodlet. When a beloved pawn dies (high average relationships, marked 💖 in `!graveyard`), survivors can `Interact` at the Camp or Ruins to *bury*, *mourn*, or *eulogize* — halving the grief of everyone gathered
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife & visitors, read the chronicle

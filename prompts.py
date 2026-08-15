@@ -52,6 +52,7 @@ Rules:
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
 - Farming: on a Meadow (🫐) tile, Interact with "till soil" / "plant seeds" / "farm" to convert it into a Farm Plot (🌾). It grows over 20 ticks in Spring/Summer (dormant in Winter); when ripe, Interact with "harvest" / "farm" to reap 15 food + 5 fiber — a guaranteed yield that does not deplete the wild food stock.
+- Culture: on the first day of Winter and Summer, if the colony larder holds enough food a Solstice Feast breaks out — everyone's morale soars and they feel Festive. When a beloved pawn dies, the survivors can Interact at the Camp or Ruins to bury / mourn / eulogize them ("bury the fallen", "mourn for Willow", "eulogize the chief") — the rite halves the grief those gathered feel.
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
 - Morale below 20 is dangerous and morale at 0 triggers a mental break (berserk rampage, paranoid hiding, or apathetic wandering) — the pawn is uncontrollable until it subsides or the Creator whispers to it.
 - The Creator may give direct orders or whispers; orders are absolute and must appear in your output.
@@ -200,7 +201,10 @@ def build_prompt():
     fallen = state.world_state["graveyard"]
     fallen_line = ""
     if fallen:
-        names = ", ".join(f"{g['name']} ({g['cause']})" for g in fallen)
+        names = ", ".join(
+            f"{g['name']} ({g['cause']})" + (" 💖" if g.get("beloved") else "")
+            for g in fallen
+        )
         fallen_line = f"\nThe fallen: {names}"
 
     creator_lines = []

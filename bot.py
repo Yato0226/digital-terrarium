@@ -313,9 +313,10 @@ async def graveyard(ctx):
     lines = ["🪦 **The Graveyard**"]
     for entry in fallen:
         title = f" {entry['title']}" if entry.get("title") else ""
+        beloved = " 💖" if entry.get("beloved") else ""
         survived = max(0, entry.get("died_tick", 0) - entry.get("born_tick", 0))
         lines.append(
-            f"- **{entry['name']}**{title} — died of {entry['cause']} "
+            f"- **{entry['name']}**{title}{beloved} — died of {entry['cause']} "
             f"on tick {entry.get('died_tick', '?')} (survived {survived} ticks)"
         )
         lines.append(f"  {entry.get('epitaph', '')}")

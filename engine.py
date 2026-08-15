@@ -127,6 +127,16 @@ HUNTERS_COLD_REDUCTION = 1  # cold-weather penalties reduced
 FORESTERS_CHOP_BONUS = 1    # wood yield from Chop
 KINDRED_SOCIAL_MORALE = 8   # social Interact morale (base 5)
 
+# Stage 7 festivals & funerary rites.
+FEAST_SEASONS = ("Winter", "Summer")
+FEAST_FOOD_REQUIRED = 15    # camp food_stock must exceed this
+FEAST_FOOD_COST = 5         # consumed from the colony stock
+FEAST_MORALE = 15           # every active pawn
+FESTIVE_MOODLET_DELTA = 5
+FESTIVE_MOODLET_TICKS = 15
+RITE_TILES = (BUILD_TILE, RUIN_TILE)  # Camp or Ruins
+BELOVED_RELATIONSHIP = 25   # avg relationship to survivors for "beloved"
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -355,6 +365,7 @@ INTERACT_WORDS = {
     "farm": ("till", "plant", "farm", "seed", "sow", "hoe", "plough", "plow", "cultivat", "harvest", "reap", "crop"),
     "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
     "heirloom": ("claim", "inherit", "bequeath", "receive"),
+    "rite": ("bury", "mourn", "eulogiz", "grieve", "lament", "funeral", "wake", "honor", "remember"),
     "extinguish": ("extinguish", "quench", "douse"),
 }
 
@@ -1932,6 +1943,8 @@ def _do_interact(pawn, pawn_id, flavor):
                     ),
                 )
             effects.append(f"{visitor['name']} politely declines")
+    elif _in_words(verb, INTERACT_WORDS["rite"]):
+        return _do_funerary_rite(pawn, pawn_id, verb)
     elif _in_words(verb, INTERACT_WORDS["heirloom"]):
         claimed = _claim_heirloom(pawn, pawn_id, verb)
         if claimed:
@@ -1980,6 +1993,50 @@ def _claim_heirloom(pawn, pawn_id, verb):
         pawn["skills"][skill] = _clamp(pawn["skills"][skill] + bonus, 0, SKILL_MAX)
     _add_moodlet(pawn, "Proud", target.get("moodlet_delta", HEIRLOOM_MOODLET_DELTA), HEIRLOOM_MOODLET_TICKS)
     return target
+
+
+def _do_funerary_rite(pawn, pawn_id, verb):
+    """Hold a rite for a beloved fallen pawn: halve Grief for same-tile survivors."""
+    tile = _tile_at(*pawn["pos"])
+    if tile not in RITE_TILES:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "wrong_tile"},
+            description=f"{pawn['name']} must hold the rite at the Camp or the Ruins.",
+        )
+    beloved = next(
+        (g for g in reversed(state.world_state["graveyard"]) if g.get("beloved")),
+        None,
+    )
+    if beloved is None:
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
+        return events.add_event(
+            "interact",
+            actor=pawn_id,
+            data={"flavor": verb, "effects": ["+3 morale"]},
+            description=(
+                f"{pawn['name']} {_verb_phrase(pawn['name'], verb)} — "
+                f"but no one beloved is remembered."
+            ),
+        )
+    halved = 0
+    for other in state.world_state["pawns"].values():
+        if other["status"] != "active" or other["pos"] != pawn["pos"]:
+            continue
+        for m in other.get("moodlets", []):
+            if m["name"] == "Grief" and m["ticks_left"] > 0:
+                m["ticks_left"] = max(1, m["ticks_left"] // 2)
+                halved += 1
+    return events.add_event(
+        "rite",
+        actor=pawn_id,
+        data={"verb": verb, "beloved": beloved["name"], "grief_halved": halved},
+        description=(
+            f"{pawn['name']} holds a {verb} rite for {beloved['name']} — "
+            f"grief eases for those who mourn."
+        ),
+    )
 
 
 def _do_mate(pawn, pawn_id, target):
@@ -2463,6 +2520,18 @@ def _death_cause(pawn, biome):
     return None
 
 
+def _is_beloved(pawn_id, pawn):
+    """The fallen are beloved when survivors hold high average regard for them."""
+    vals = [
+        rel
+        for pid, rel in pawn["relationships"].items()
+        if pid != pawn_id and pid in state.world_state["pawns"]
+    ]
+    if not vals:
+        return False
+    return sum(vals) / len(vals) >= BELOVED_RELATIONSHIP
+
+
 def _kill(pawn_id, pawn, cause):
     """Remove a pawn and enshrine a snapshot in the graveyard."""
     entry = {
@@ -2473,6 +2542,7 @@ def _kill(pawn_id, pawn, cause):
         "died_tick": state.world_state["tick"],
         "born_tick": pawn.get("born_tick", 0),
         "epitaph": f"Here lies {pawn['name']}, taken by {cause}.",
+        "beloved": _is_beloved(pawn_id, pawn),
     }
     state.world_state["graveyard"].append(entry)
     for h in state.world_state["heirlooms"]:
@@ -2500,6 +2570,30 @@ def _kill(pawn_id, pawn, cause):
         actor=pawn_id,
         data={"cause": cause},
         description=f"{pawn['name']} has fallen — {cause}.",
+    )
+
+
+def _seasonal_feast():
+    """Winter/Summer solstice feast: consume camp food for colony-wide morale."""
+    biome = state.world_state["biome"]
+    if biome["food_stock"] <= FEAST_FOOD_REQUIRED:
+        return None
+    biome["food_stock"] = _clamp(biome["food_stock"] - FEAST_FOOD_COST)
+    fed = 0
+    for pawn in state.world_state["pawns"].values():
+        if pawn["status"] != "active":
+            continue
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + FEAST_MORALE)
+        _add_moodlet(pawn, "Festive", FESTIVE_MOODLET_DELTA, FESTIVE_MOODLET_TICKS)
+        fed += 1
+    return events.add_event(
+        "feast",
+        data={"season": biome["season"], "food": FEAST_FOOD_COST, "fed": fed},
+        description=(
+            f"The colony gathers for a {biome['season']} Solstice Feast "
+            f"(-{FEAST_FOOD_COST} camp food): everyone is Festive "
+            f"(+{FEAST_MORALE} morale)."
+        ),
     )
 
 
@@ -2564,6 +2658,10 @@ def tick_environment():
         tradition_event = _evaluate_tradition()
         if tradition_event:
             result.append(tradition_event)
+        if new_season in FEAST_SEASONS:
+            feast_event = _seasonal_feast()
+            if feast_event:
+                result.append(feast_event)
 
     if new_season == "Summer" and not biome.get("granary"):
         biome["food_stock"] = _clamp(biome["food_stock"] - 2)

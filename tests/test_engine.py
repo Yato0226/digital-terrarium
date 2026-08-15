@@ -225,6 +225,7 @@ def test_frostbite_in_winter():
 
 def test_no_regrowth_in_winter():
     state.world_state["tick"] = 300
+    state.world_state["biome"]["food_stock"] = 10  # below the Solstice Feast threshold
     ws = state.world_state["biome"]["wood_stock"]
     fs = state.world_state["biome"]["food_stock"]
     engine.tick_environment()
