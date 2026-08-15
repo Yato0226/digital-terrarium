@@ -535,6 +535,28 @@ def test_family_tree_renders_couples_kin_and_rivals():
     assert "💢" in tree and "Gruff" in tree
 
 
+def test_family_tree_bonded_is_not_couple():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["relationships"]["pawn_2"] = 40
+    p2["relationships"]["pawn_1"] = 40
+    tree = engine.render_family_tree()
+    assert "💞" not in tree
+    assert "🤝" in tree and "Lumberjack" in tree and "Scout" in tree
+
+
+def test_family_tree_kids_make_a_couple():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["relationships"]["pawn_2"] = 30
+    p2["relationships"]["pawn_1"] = 30
+    kid = state.make_pawn(state.next_pawn_id(), "Sprout")
+    kid["mother_id"] = "pawn_2"
+    kid["father_id"] = "pawn_1"
+    state.world_state["pawns"][kid["id"]] = kid
+    tree = engine.render_family_tree()
+    assert "💞" in tree and "Sprout" in tree
+    assert "🤝" not in tree
+
+
 def test_family_tree_empty_world():
     assert "lonely" in engine.render_family_tree()
 
@@ -764,8 +786,8 @@ def test_relationship_decay_once_per_day():
     state.world_state["tick"] = 25  # dawn of the next day
     state.world_state["biome"]["day"] = 0
     engine.tick_environment()
-    assert p1["relationships"]["pawn_2"] == 49
-    assert p2["relationships"]["pawn_1"] == -39
+    assert p1["relationships"]["pawn_2"] == 45
+    assert p2["relationships"]["pawn_1"] == -35
 
 
 def test_mate_requires_same_tile():

@@ -86,8 +86,9 @@ REGROWTH = 1
 REGROWTH_SPRING = 2
 
 MATE_RELATIONSHIP = 25
+COUPLE_THRESHOLD = 60  # mutual bond needed to be a "committed couple" in the tree
 RIVAL_THRESHOLD = -25
-RELATIONSHIP_DECAY = 1  # per ingame day: bonds drift toward 0 each dawn
+RELATIONSHIP_DECAY = 5  # per ingame day: bonds drift toward 0 each dawn
 CONCEPTION_CHANCE = 0.5
 PREGNANCY_TICKS = TICKS_PER_DAY  # 1 day (20 ticks)
 CHILD_MATURITY = 2 * TICKS_PER_DAY  # 2 days (40 ticks)
@@ -345,13 +346,19 @@ def render_family_tree():
             return "?"
         return f"{p['name']} 🪦" if pid not in living else p["name"]
 
-    couples, rivals = [], []
+    couples, bonded, rivals = [], [], []
     for i, aid in enumerate(ids):
         for bid in ids[i + 1 :]:
             a, b = living[aid], living[bid]
             mutual = min(a["relationships"].get(bid, 0), b["relationships"].get(aid, 0))
-            if mutual >= MATE_RELATIONSHIP:
+            shares_kids = any(
+                {p.get("mother_id"), p.get("father_id")} == {aid, bid}
+                for p in living.values()
+            )
+            if mutual >= COUPLE_THRESHOLD or shares_kids:
                 couples.append((aid, bid))
+            elif mutual >= MATE_RELATIONSHIP:
+                bonded.append((aid, bid))
             elif mutual <= RIVAL_THRESHOLD:
                 rivals.append((aid, bid))
 
@@ -366,6 +373,10 @@ def render_family_tree():
             ]
             kids_txt = f" — kids: {', '.join(kids)}" if kids else ""
             lines.append(f"💞 **{a['name']}** ⇄ **{b['name']}**{kids_txt}")
+    if bonded:
+        lines.append("\n🤝 **Bonded:**")
+        for aid, bid in bonded:
+            lines.append(f"- **{living[aid]['name']}** ⇄ **{living[bid]['name']}**")
     kin = [
         (p, lineage_label(p))
         for p in living.values()
@@ -379,7 +390,7 @@ def render_family_tree():
         lines.append("\n💢 **Rivals:**")
         for aid, bid in rivals:
             lines.append(f"- **{living[aid]['name']}** ⇄ **{living[bid]['name']}**")
-    if not couples and not kin and not rivals:
+    if not couples and not bonded and not kin and not rivals:
         lines.append("No bonds or lineage yet — a lonely terrarium.")
     return "\n".join(lines)
 
