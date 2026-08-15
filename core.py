@@ -53,6 +53,8 @@ def post_to_discord(data):
                 if quote:
                     value += f" 💬 *\"{quote}\"*"
                 action_txt = f" | {decision.action}"
+                if decision.action == "Interact" and getattr(decision, "flavor", None):
+                    action_txt = f" | ✨ {decision.flavor}"
             else:
                 value = "🌱 *A new life enters the terrarium.*"
                 action_txt = ""
@@ -187,12 +189,16 @@ async def run_tick():
                 continue
             decision = getattr(data, pid)
             action, target = decision.action, decision.target
+            flavor = getattr(decision, "flavor", None) if action == "Interact" else None
+            new_goal = getattr(decision, "new_goal", None)
             if action == "Move":
                 target = decision.direction
             order = state.god_orders.get(pid)
             if order:
                 action, target = order["action"], order.get("target")
-            intents[pid] = (action, target)
+                if action == "Interact":
+                    flavor = order.get("flavor") or flavor
+            intents[pid] = (action, target, flavor, new_goal)
 
         engine.resolve_actions(intents)
         engine.tick_environment()

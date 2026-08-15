@@ -947,3 +947,113 @@ def test_load_state_respawns_fresh_when_empty_and_no_graveyard(monkeypatch, tmp_
     state.load_state()
     assert len(state.world_state["pawns"]) == 2
 
+
+def test_schema_has_interact_and_goal_fields():
+    assert "Interact" in schema.ACTIONS
+    assert "Interact" in engine.ACTIONS
+    tick_model = schema.build_models()
+    agent = tick_model.model_fields["pawn_1"].annotation
+    assert "flavor" in agent.model_fields
+    assert "new_goal" in agent.model_fields
+
+
+def test_interact_social_boosts_morale_and_relationship():
+    p, t = pawn("pawn_1"), pawn("pawn_2")
+    p["pos"] = t["pos"] = [2, 2]
+    evs = engine.resolve_actions({"pawn_1": ("Interact", None, "talking")})
+    assert evs[0]["type"] == "interact"
+    assert p["vitals"]["morale"] == 85
+    assert p["relationships"]["pawn_2"] > 0
+    assert t["relationships"]["pawn_1"] > 0
+
+
+def test_interact_gather_food_on_meadow():
+    p = pawn("pawn_1")
+    p["pos"] = [1, 1]
+    before = p["inventory"]["food"]
+    evs = engine.resolve_actions({"pawn_1": ("Interact", None, "fishing")})
+    assert evs[0]["type"] == "interact"
+    assert p["inventory"]["food"] > before
+
+
+def test_interact_gather_wood_on_forest():
+    p = pawn("pawn_1")
+    p["pos"] = [0, 0]
+    before = p["inventory"]["wood"]
+    evs = engine.resolve_actions({"pawn_1": ("Interact", None, "gathering")})
+    assert evs[0]["type"] == "interact"
+    assert p["inventory"]["wood"] > before
+
+
+def test_interact_unknown_verb_lifts_morale():
+    p = pawn("pawn_1")
+    before = p["vitals"]["morale"]
+    evs = engine.resolve_actions({"pawn_1": ("Interact", None, "fiddling")})
+    assert evs[0]["type"] == "interact"
+    assert p["vitals"]["morale"] == before + 3
+
+
+def test_interact_low_energy_fails():
+    p = pawn("pawn_1")
+    p["vitals"]["energy"] = 3
+    evs = engine.resolve_actions({"pawn_1": ("Interact", None, "dancing")})
+    assert evs[0]["type"] == "failed"
+
+
+def test_goal_adopted_from_new_goal():
+    p = pawn("pawn_1")
+    engine.resolve_actions({"pawn_1": ("Rest", None, None, "gather 10 wood")})
+    g = p["goal"]
+    assert g["kind"] == "gather"
+    assert g["resource"] == "wood"
+    assert g["needed"] == 10
+    assert g["progress"] == 0
+
+
+def test_goal_kept_when_already_held():
+    p = pawn("pawn_1")
+    p["goal"] = {"kind": "survive", "needed": 20, "progress": 0, "text": "survive 1 day"}
+    engine.resolve_actions({"pawn_1": ("Rest", None, None, "gather 10 wood")})
+    assert p["goal"]["kind"] == "survive"
+
+
+def test_goal_completes_on_gather():
+    p = pawn("pawn_1")
+    p["pos"] = [0, 0]
+    p["goal"] = {"kind": "gather", "resource": "wood", "needed": 3, "progress": 0, "text": "gather 3 wood"}
+    before = p["vitals"]["morale"]
+    evs = engine.resolve_actions({"pawn_1": ("Chop", None)})
+    types = [e["type"] for e in evs]
+    assert "goal" in types
+    assert p["goal"] is None
+    assert p["vitals"]["morale"] == before + 15
+
+
+def test_goal_social_advances_on_share():
+    p = pawn("pawn_1")
+    p["goal"] = {"kind": "social", "target_id": "pawn_2", "needed": 2, "progress": 0, "text": "befriend Scout"}
+    p["inventory"]["food"] = 5
+    engine.resolve_actions({"pawn_1": ("Share", "pawn_2")})
+    assert p["goal"]["progress"] == 1
+    engine.resolve_actions({"pawn_1": ("Share", "pawn_2")})
+    assert p["goal"] is None
+
+
+def test_goal_survive_ticks_in_environment():
+    p = pawn("pawn_1")
+    p["goal"] = {"kind": "survive", "needed": 3, "progress": 0, "text": "survive 3 days"}
+    engine.tick_environment()
+    assert p["goal"]["progress"] == 1
+    engine.tick_environment()
+    evs = engine.tick_environment()
+    assert "goal" in [e["type"] for e in evs]
+    assert p["goal"] is None
+
+
+def test_migrate_pawn_keeps_goal():
+    goal = {"kind": "gather", "resource": "wood", "needed": 10, "progress": 3, "text": "gather 10 wood"}
+    out = state._migrate_pawn("p1", {"name": "A", "goal": goal})
+    assert out["goal"] == goal
+    out = state._migrate_pawn("p2", {"name": "B"})
+    assert out["goal"] is None
+

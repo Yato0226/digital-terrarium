@@ -4,7 +4,7 @@ from pydantic import Field, create_model
 
 import state
 
-ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate")
+ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact")
 
 
 def build_models():
@@ -42,6 +42,14 @@ def build_models():
         target=(
             Optional[Literal[tuple(pawn_ids)]],
             Field(default=None, description="Target pawn id — only for Attack, Share, or Mate."),
+        ),
+        flavor=(
+            Optional[str],
+            Field(default=None, description="Free-form verb — only for the Interact action (e.g. fishing, carving, meditating)."),
+        ),
+        new_goal=(
+            Optional[str],
+            Field(default=None, description="A personal goal wish, only when the pawn has no goal (e.g. 'gather 10 wood', 'befriend Chief')."),
         ),
     )
     fields = {

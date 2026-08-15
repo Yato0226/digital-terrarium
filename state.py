@@ -110,6 +110,7 @@ def make_pawn(
         "title": None,
         "born_tick": world_state["tick"],
         "starving_ticks": 0,
+        "goal": None,
     }
 
 
@@ -177,6 +178,8 @@ def _migrate_pawn(pawn_id, pawn):
         base["child_ticks"] = pawn["child_ticks"]
     if pawn.get("status") in ("active", "incapacitated"):
         base["status"] = pawn["status"]
+    if isinstance(pawn.get("goal"), dict):
+        base["goal"] = pawn["goal"]
     return base
 
 

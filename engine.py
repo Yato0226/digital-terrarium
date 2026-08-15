@@ -1,4 +1,5 @@
 import random
+import re
 
 import events
 import state
@@ -13,6 +14,7 @@ ACTION_COSTS = {
     "Share": 5,
     "Move": 5,
     "Mate": 10,
+    "Interact": 5,
 }
 ACTIONS = tuple(ACTION_COSTS)
 SKILL_MAX = 20
@@ -135,6 +137,113 @@ def _inspire_bonus(pawn, amount):
     return amount
 
 
+INTERACT_WORDS = {
+    "social": ("talk", "chat", "comfort", "gossip", "encourage", "teach", "groom",
+               "dance", "sing", "laugh", "play", "greet", "joke", "discuss", "joke"),
+    "relax": ("meditat", "pray", "watch", "daydream", "sit", "nap", "bathe",
+              "contemplate", "stargaze", "dream", "sunbathe", "reflect"),
+    "train": ("train", "practice", "spar", "exercise", "lift", "stretch", "drill"),
+    "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
+    "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
+}
+
+GOAL_MORALE = 15
+GOAL_SKILLS = {
+    ("gather", "wood"): "woodcutting",
+    ("gather", "food"): "scouting",
+    ("gather", "stone"): "scouting",
+    ("gather", "fiber"): "scouting",
+    ("build", None): "woodcutting",
+}
+
+
+def _goal_nudge(pawn, amount=1, **match):
+    """Advance a pawn's personal goal when the tick's deeds match it."""
+    goal = pawn.get("goal")
+    if not goal or goal.get("progress", 0) >= goal.get("needed", 1):
+        return
+    for key, value in match.items():
+        if goal.get(key) != value:
+            return
+    goal["progress"] = min(goal["needed"], goal["progress"] + amount)
+
+
+def _complete_goal(pawn, pawn_id, goal, result):
+    pawn["goal"] = None
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + GOAL_MORALE)
+    skill = GOAL_SKILLS.get((goal.get("kind"), goal.get("resource")))
+    if skill:
+        _gain_skill(pawn, skill)
+    result.append(
+        events.add_event(
+            "goal",
+            actor=pawn_id,
+            data={"goal": goal.get("text", "")},
+            description=f"{pawn['name']} fulfills a personal goal: {goal.get('text', '')}!",
+        )
+    )
+
+
+def _adopt_goal(pawn, text):
+    """Parse an LLM goal wish into an engine-tracked goal. Ignored if unclear."""
+    if pawn.get("goal"):
+        return None
+    t = (text or "").strip().lower().rstrip(".,!?")
+    if not t:
+        return None
+    m = re.search(r"\d+", t)
+    n = int(m.group(0)) if m else 5
+
+    def make_goal(kind, **kw):
+        return {"kind": kind, "needed": n, "progress": 0, "text": t, **kw}
+
+    if any(w in t for w in ("survive", "endure", "grow old", " live")):
+        return make_goal("survive", needed=n * TICKS_PER_DAY)
+    if any(w in t for w in ("wood", "chop", "lumber", "firewood")):
+        return make_goal("gather", resource="wood")
+    if any(w in t for w in ("food", "forag", "berry", "fish", "meal", "provision")):
+        return make_goal("gather", resource="food")
+    if any(w in t for w in ("stone", "quarry")):
+        return make_goal("gather", resource="stone")
+    if any(w in t for w in ("fiber", "flax", "grass")):
+        return make_goal("gather", resource="fiber")
+    if any(w in t for w in ("build", "shelter", "craft", "campfire", "wall", "cabin")):
+        return make_goal("build")
+    if any(w in t for w in ("befriend", "friend", "bond", "comfort", "help")):
+        return make_goal("social", target_id=_name_to_id(t))
+    return None
+
+
+def _name_to_id(text):
+    """Find a living active pawn whose name appears in the goal text."""
+    for pid, pawn in state.world_state["pawns"].items():
+        if pawn["status"] == "active" and pawn["name"].lower() in text:
+            return pid
+    return None
+
+
+def _verb_phrase(name, verb):
+    """Turn a free-form verb into a readable third-person sentence fragment."""
+    verb = (verb or "").strip().lower().rstrip(".,!?")
+    if not verb:
+        return f"{name} idles quietly"
+    if verb.endswith("ing"):
+        return f"{name} spends the tick {verb}"
+    if verb.endswith("e"):
+        return f"{name} {verb.rstrip('e')}es"
+    if verb.endswith(("s", "x", "z", "ch", "sh")):
+        return f"{name} {verb}es"
+    return f"{name} {verb}s"
+
+
+def _tilemate(pawn, pawn_id):
+    """Another active pawn sharing the same tile, or None."""
+    for pid, other in state.world_state["pawns"].items():
+        if pid != pawn_id and other["status"] == "active" and other["pos"] == pawn["pos"]:
+            return other
+    return None
+
+
 def is_day():
     return (state.world_state["tick"] % DAY_CYCLE) < DAY_LENGTH
 
@@ -247,6 +356,7 @@ def _do_chop(pawn, pawn_id):
     wood = min(biome["wood_stock"], wood)
     biome["wood_stock"] -= wood
     pawn["inventory"]["wood"] += wood
+    _goal_nudge(pawn, wood, resource="wood")
     pawn["counters"]["trees_felled"] += 1
     _gain_skill(pawn, "woodcutting")
     return events.add_event(
@@ -270,6 +380,7 @@ def _do_scout(pawn, pawn_id):
         _gain_skill(pawn, "scouting")
         stone = 1 + skill // 5 + random.choice([0, 1])
         pawn["inventory"]["stone"] += stone
+        _goal_nudge(pawn, stone, resource="stone")
         return events.add_event(
             "scout",
             actor=pawn_id,
@@ -288,6 +399,7 @@ def _do_scout(pawn, pawn_id):
             )
         food = 4 + skill // 3 + random.choice([0, 1])
         pawn["inventory"]["food"] += food
+        _goal_nudge(pawn, food, resource="food")
         return events.add_event(
             "scout",
             actor=pawn_id,
@@ -297,6 +409,7 @@ def _do_scout(pawn, pawn_id):
     if random.random() < min(0.85, 0.4 + skill * 0.04):
         food = 2 + skill // 4 + random.choice([0, 1])
         pawn["inventory"]["food"] += food
+        _goal_nudge(pawn, food, resource="food")
         _gain_skill(pawn, "scouting")
         return events.add_event(
             "scout",
@@ -342,10 +455,12 @@ def _do_forage(pawn, pawn_id):
     food = min(biome["food_stock"], food)
     biome["food_stock"] -= food
     pawn["inventory"]["food"] += food
+    _goal_nudge(pawn, food, resource="food")
     fiber_gain = 0
     if _tile_at(*pawn["pos"]) == "🫐" and random.random() < 0.35:
         fiber_gain = 1
         pawn["inventory"]["fiber"] += fiber_gain
+        _goal_nudge(pawn, 1, resource="fiber")
     _gain_skill(pawn, "scouting")
     desc = f"{pawn['name']} forages, finding {food} food."
     if fiber_gain:
@@ -402,6 +517,7 @@ def _do_build(pawn, pawn_id):
     crafted = _try_craft(pawn, pawn_id)
     if crafted:
         _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
         return events.add_event(
             "craft",
             actor=pawn_id,
@@ -420,6 +536,7 @@ def _do_build(pawn, pawn_id):
     if biome["shelter"] < 100:
         biome["shelter"] = _clamp(biome["shelter"] + BUILD_GAIN)
         _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
         return events.add_event(
             "build",
             actor=pawn_id,
@@ -428,6 +545,7 @@ def _do_build(pawn, pawn_id):
         )
     biome["campfire"] = _clamp(biome["campfire"] + BUILD_GAIN)
     _gain_skill(pawn, "woodcutting")
+    _goal_nudge(pawn, 1, kind="build")
     return events.add_event(
         "build",
         actor=pawn_id,
@@ -570,6 +688,7 @@ def _do_share(pawn, pawn_id, target):
     pawn["inventory"]["food"] -= SHARE_FOOD
     tpawn["inventory"]["food"] += SHARE_FOOD
     pawn["counters"]["rations_shared"] += 1
+    _goal_nudge(pawn, 1, kind="social", target_id=target)
     _adjust_relationship(pawn, target, 25)
     _adjust_relationship(tpawn, pawn_id, 25)
     pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
@@ -581,6 +700,91 @@ def _do_share(pawn, pawn_id, target):
         data={"food": SHARE_FOOD},
         description=f"{pawn['name']} shares food with {tpawn['name']}.",
     )
+
+
+def _do_interact(pawn, pawn_id, flavor):
+    """Free-form Interact: engine buckets any verb into safe, context effects."""
+    if not _pay_cost(pawn, "Interact"):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted for {flavor or 'anything'}.",
+        )
+    verb = (flavor or "").strip().lower().rstrip(".,!?")
+    effects = []
+    desc = _verb_phrase(pawn["name"], verb)
+    if _in_words(verb, INTERACT_WORDS["social"]):
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
+        effects.append("+5 morale")
+        partner = _tilemate(pawn, pawn_id)
+        if partner:
+            _adjust_relationship(pawn, partner["id"], 10)
+            _adjust_relationship(partner, pawn_id, 10)
+            _goal_nudge(pawn, 1, kind="social", target_id=partner["id"])
+            effects.append(f"closer to {partner['name']}")
+    elif _in_words(verb, INTERACT_WORDS["gather"]):
+        tile = _tile_at(*pawn["pos"])
+        if tile in FORAGE_TILES:
+            yield_ = 1 + pawn["skills"]["scouting"] // 6 + random.choice([0, 1])
+            stock = state.world_state["biome"]["food_stock"]
+            yield_ = min(stock, yield_)
+            state.world_state["biome"]["food_stock"] -= yield_
+            pawn["inventory"]["food"] += yield_
+            _goal_nudge(pawn, yield_, resource="food")
+            if tile == "🫐" and random.random() < 0.3:
+                pawn["inventory"]["fiber"] += 1
+                _goal_nudge(pawn, 1, resource="fiber")
+                effects.append(f"+{yield_} food, +1 fiber")
+            else:
+                effects.append(f"+{yield_} food")
+        elif tile in FOREST_TILES:
+            yield_ = 1 + random.choice([0, 1])
+            stock = state.world_state["biome"]["wood_stock"]
+            yield_ = min(stock, yield_)
+            state.world_state["biome"]["wood_stock"] -= yield_
+            pawn["inventory"]["wood"] += yield_
+            _goal_nudge(pawn, yield_, resource="wood")
+            effects.append(f"+{yield_} wood")
+        elif tile in (RUIN_TILE, QUARRY_TILE):
+            yield_ = 1 + random.choice([0, 1])
+            pawn["inventory"]["stone"] += yield_
+            _goal_nudge(pawn, yield_, resource="stone")
+            effects.append(f"+{yield_} stone")
+        else:
+            effects.append("finds little here")
+        _gain_skill(pawn, "scouting")
+    elif _in_words(verb, INTERACT_WORDS["craft"]):
+        if _tile_at(*pawn["pos"]) == BUILD_TILE and state.world_state["biome"]["shelter"] < 100:
+            state.world_state["biome"]["shelter"] = _clamp(
+                state.world_state["biome"]["shelter"] + 3
+            )
+            _goal_nudge(pawn, 1, kind="build")
+            effects.append("+3 shelter")
+        else:
+            pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
+            effects.append("+5 morale")
+        _gain_skill(pawn, "woodcutting")
+    elif _in_words(verb, INTERACT_WORDS["train"]):
+        _gain_skill(pawn, "combat")
+        effects.append("+1 combat XP")
+    elif _in_words(verb, INTERACT_WORDS["relax"]):
+        pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 10)
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
+        effects.append("+10 energy, +3 morale")
+    else:
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
+        effects.append("+3 morale")
+    return events.add_event(
+        "interact",
+        actor=pawn_id,
+        data={"flavor": flavor or "", "effects": effects},
+        description=f"{desc}. ({', '.join(effects)})",
+    )
+
+
+def _in_words(verb, words):
+    return any(w in verb for w in words)
 
 
 def _do_mate(pawn, pawn_id, target):
@@ -1067,6 +1271,10 @@ def tick_environment():
                     )
                 )
         _metabolize(pawn, pawn_id, biome, lit, day, result)
+        _goal_nudge(pawn, 1, kind="survive")
+        goal = pawn.get("goal")
+        if goal and goal.get("kind") == "survive" and goal.get("progress", 0) >= goal.get("needed", 1):
+            _complete_goal(pawn, pawn_id, goal, result)
 
     # Children mature, pregnancies come to term.
     for pawn_id, pawn in list(state.world_state["pawns"].items()):
@@ -1115,13 +1323,16 @@ def resolve_actions(intents):
                     )
                 )
 
-    for pawn_id, (action, target) in intents.items():
+    for pawn_id, intent in intents.items():
         pawn = state.world_state["pawns"].get(pawn_id)
         if pawn is None or pawn["status"] != "active":
             continue
         if pawn.get("mental_break"):
             resulting.append(_resolve_break(pawn, pawn_id))
             continue
+        action = intent[0]
+        target = intent[1] if len(intent) > 1 else None
+        flavor = intent[2] if len(intent) > 2 else None
         if action == "Rest":
             resulting.append(_do_rest(pawn, pawn_id))
         elif action == "Chop":
@@ -1140,6 +1351,8 @@ def resolve_actions(intents):
             resulting.append(_do_move(pawn, pawn_id, target))
         elif action == "Mate":
             resulting.append(_do_mate(pawn, pawn_id, target))
+        elif action == "Interact":
+            resulting.append(_do_interact(pawn, pawn_id, flavor))
         else:
             resulting.append(
                 events.add_event(
@@ -1149,5 +1362,18 @@ def resolve_actions(intents):
                     description=f"{pawn['name']} hesitates, unsure what to do.",
                 )
             )
+
+    # Personal goals: adopt fresh wishes, then pay off any now complete.
+    for pawn_id, intent in intents.items():
+        if len(intent) > 3 and intent[3]:
+            pawn = state.world_state["pawns"].get(pawn_id)
+            if pawn and pawn["status"] == "active":
+                adopted = _adopt_goal(pawn, intent[3])
+                if adopted:
+                    pawn["goal"] = adopted
+    for pawn_id, pawn in state.world_state["pawns"].items():
+        goal = pawn.get("goal")
+        if goal and goal.get("progress", 0) >= goal.get("needed", 1):
+            _complete_goal(pawn, pawn_id, goal, resulting)
 
     return resulting

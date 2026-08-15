@@ -11,8 +11,9 @@ ELDER_DAYS = engine.ELDER_AGE // engine.TICKS_PER_DAY
 SYSTEM_PROMPT = f"""You are the AI Director of a digital terrarium — a tiny enclosed forest where creatures live.
 Your job: decide what each ACTIVE pawn WANTS to do this tick. You propose intent; the engine resolves the real consequences.
 Rules:
-- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), or Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25).
-- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. Never target yourself.
+- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25), or Interact (do anything — set 'flavor' to whatever the pawn is doing, e.g. fishing, carving, meditating, comforting a friend; the engine decides the effects by context).
+- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
+- Personal goals: a pawn may carry a goal (shown as "Goal: ... (progress/needed)"). Help it pursue that goal. If a pawn has NO goal, you may propose one in 'new_goal' (e.g. "gather 10 wood", "befriend Chief", "build a shelter", "survive 5 days") — the engine decides if it fits and tracks its progress; completing a goal lifts morale and grants skill XP.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
 - Pawns may add a 'quote' (spoken aloud to the group) and an 'inner_monologue' (their private thought — may contradict the quote). Reflect personality and vitals: starving pawns obsess over food, low-morale pawns turn paranoid or bitter, aggressive pawns sound threatening.
@@ -56,6 +57,10 @@ def build_prompt():
         child_txt = ", Child" if pawn.get("child_ticks", 0) > 0 else ""
         rel_txt = f", Relationships {rel}" if rel else ""
         break_txt = f", Mental break: {pawn['mental_break']}" if pawn.get("mental_break") else ""
+        goal_txt = ""
+        g = pawn.get("goal")
+        if g:
+            goal_txt = f", Goal: {g['text']} ({g['progress']}/{g['needed']})"
         x, y = pawn["pos"]
         tile = engine._tile_at(x, y) or "?"
         pawn_lines.append(
@@ -66,7 +71,7 @@ def build_prompt():
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
             f"Personality {pawn['personality']}{sex_txt}{age_txt}{stage_txt}{job_txt}"
-            f"{preg_txt}{child_txt}{title_txt}{break_txt}{rel_txt}"
+            f"{preg_txt}{child_txt}{title_txt}{break_txt}{goal_txt}{rel_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 

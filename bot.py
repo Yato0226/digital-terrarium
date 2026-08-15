@@ -77,6 +77,10 @@ def _pawn_line(pid, pawn):
     age = f" | {engine.age_of(pawn) // engine.TICKS_PER_DAY} days old"
     gear = f" | 🛠️ {pawn['gear']['main_hand'] or '—'}, {pawn['gear']['body'] or '—'}"
     break_txt = f" | 🌀 {pawn['mental_break']}" if pawn.get("mental_break") else ""
+    goal_txt = ""
+    g = pawn.get("goal")
+    if g:
+        goal_txt = f" | 🎯 {g['text']} ({g['progress']}/{g['needed']})"
     sk = pawn["skills"]
     x, y = pawn["pos"]
     tile = engine._tile_at(x, y) or "?"
@@ -87,7 +91,7 @@ def _pawn_line(pid, pawn):
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
         f"{gear} | Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}"
-        f"{age} | 📍 {tile} ({x},{y}){break_txt} | {pawn['status']}"
+        f"{age} | 📍 {tile} ({x},{y}){break_txt}{goal_txt} | {pawn['status']}"
     )
 
 
@@ -203,7 +207,7 @@ async def god_edit(ctx, pawn_id: str, stat: str, value: str = "50"):
 @bot.command(name="order")
 @is_god_channel()
 async def order(ctx, pawn_id: str, action: str, target: str = None):
-    """!order <name|pawn_id> <Chop|Rest|Scout|Attack|Forage|Build|Share|Move|Mate> [target]"""
+    """!order <name|pawn_id> <Chop|Rest|Scout|Attack|Forage|Build|Share|Move|Mate|Interact> [target|verb]"""
     async with core.tick_lock:
         pawn_id, err = resolve_pawn_id(pawn_id)
         if err:
@@ -215,7 +219,7 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
         needs_target = ("Attack", "Share", "Mate")
         if action not in valid_actions:
             await ctx.send(
-                "❌ Action must be Chop, Rest, Scout, Attack, Forage, Build, Share, Move, or Mate."
+                "❌ Action must be Chop, Rest, Scout, Attack, Forage, Build, Share, Move, Mate, or Interact."
             )
             return
         if action == "Move":
@@ -223,6 +227,11 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
                 await ctx.send("❌ Move requires a direction: N, S, E, or W.")
                 return
             target = target.upper()
+        elif action == "Interact":
+            flavor = target or "idling"
+            state.god_orders[pawn_id] = {"action": action, "target": None, "flavor": flavor}
+            await ctx.send(f"🗣️ Order locked in: **{pawn['name']}** must {flavor}.")
+            return
         elif action in needs_target:
             if not target:
                 await ctx.send("❌ Attacks, shares, and mates require a valid target (not self).")
