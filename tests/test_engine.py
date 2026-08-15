@@ -557,6 +557,23 @@ def test_family_tree_kids_make_a_couple():
     assert "🤝" not in tree
 
 
+def test_family_tree_partners_are_couples_even_when_bond_low():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["partners"].append("pawn_2")
+    p2["partners"].append("pawn_1")
+    tree = engine.render_family_tree()
+    assert "💞" in tree and "🤝" not in tree
+
+
+def test_family_tree_high_bond_without_partners_is_not_a_couple():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["relationships"]["pawn_2"] = 90
+    p2["relationships"]["pawn_1"] = 90
+    tree = engine.render_family_tree()
+    assert "💞" not in tree
+    assert "🤝" in tree
+
+
 def test_family_tree_empty_world():
     assert "lonely" in engine.render_family_tree()
 
@@ -862,6 +879,45 @@ def test_conception_pins_father(monkeypatch):
     pawn("pawn_2")["relationships"]["pawn_1"] = 30
     engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert pawn("pawn_2")["partner_id"] == "pawn_1"
+
+
+def test_mate_success_records_partners():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert "pawn_2" in pawn("pawn_1")["partners"]
+    assert "pawn_1" in pawn("pawn_2")["partners"]
+
+
+def test_mate_partners_skip_bond_gate(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["partners"].append("pawn_2")
+    p2["partners"].append("pawn_1")
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "mate"
+    assert evs[0]["data"]["conceived"] is True
+
+
+def test_mate_polygamy_allowed(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    p3 = state.make_pawn("pawn_3", "Tertia", sex="F")
+    state.world_state["pawns"]["pawn_3"] = p3
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    pawn("pawn_1")["relationships"]["pawn_3"] = 30
+    pawn("pawn_3")["relationships"]["pawn_1"] = 30
+    engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    engine.resolve_actions({"pawn_1": ("Mate", "pawn_3")})
+    assert pawn("pawn_1")["partners"] == ["pawn_2", "pawn_3"]
+
+
+def test_kill_clears_partners():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["partners"].append("pawn_2")
+    p2["partners"].append("pawn_1")
+    engine._kill("pawn_2", p2, "test")
+    assert "pawn_2" not in pawn("pawn_1")["partners"]
 
 
 def test_mate_blocked_for_siblings():
@@ -1208,13 +1264,15 @@ def test_migrate_pawn_keeps_goal():
 def test_migrate_pawn_keeps_lineage():
     out = state._migrate_pawn(
         "p1",
-        {"name": "A", "mother_id": "m", "father_id": "f", "partner_id": "x"},
+        {"name": "A", "mother_id": "m", "father_id": "f", "partner_id": "x", "partners": ["q", "r"]},
     )
     assert out["mother_id"] == "m"
     assert out["father_id"] == "f"
     assert out["partner_id"] == "x"
+    assert out["partners"] == ["q", "r"]
     out = state._migrate_pawn("p2", {"name": "B"})
     assert out["mother_id"] is None
     assert out["father_id"] is None
     assert out["partner_id"] is None
+    assert out["partners"] == []
 

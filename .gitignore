@@ -3,4 +3,3 @@ __pycache__/
 .env
 terrarium_state.json
 terrarium_log.jsonl
-paper.txt

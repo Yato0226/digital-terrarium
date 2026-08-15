@@ -114,6 +114,7 @@ def make_pawn(
         "mother_id": None,
         "father_id": None,
         "partner_id": None,
+        "partners": [],
     }
 
 
@@ -186,6 +187,8 @@ def _migrate_pawn(pawn_id, pawn):
     for key in ("mother_id", "father_id", "partner_id"):
         if pawn.get(key) in (None,) or isinstance(pawn.get(key), str):
             base[key] = pawn.get(key)
+    if isinstance(pawn.get("partners"), list):
+        base["partners"] = [p for p in pawn["partners"] if isinstance(p, str)]
     return base
 
 

@@ -86,7 +86,6 @@ REGROWTH = 1
 REGROWTH_SPRING = 2
 
 MATE_RELATIONSHIP = 25
-COUPLE_THRESHOLD = 60  # mutual bond needed to be a "committed couple" in the tree
 RIVAL_THRESHOLD = -25
 RELATIONSHIP_DECAY = 5  # per ingame day: bonds drift toward 0 each dawn
 CONCEPTION_CHANCE = 0.5
@@ -351,11 +350,12 @@ def render_family_tree():
         for bid in ids[i + 1 :]:
             a, b = living[aid], living[bid]
             mutual = min(a["relationships"].get(bid, 0), b["relationships"].get(aid, 0))
+            partners = aid in b.get("partners", []) and bid in a.get("partners", [])
             shares_kids = any(
                 {p.get("mother_id"), p.get("father_id")} == {aid, bid}
                 for p in living.values()
             )
-            if mutual >= COUPLE_THRESHOLD or shares_kids:
+            if partners or shares_kids:
                 couples.append((aid, bid))
             elif mutual >= MATE_RELATIONSHIP:
                 bonded.append((aid, bid))
@@ -962,7 +962,11 @@ def _do_mate(pawn, pawn_id, target):
             data={"reason": "too_close_kin"},
             description=f"{pawn['name']} and {tpawn['name']} are too closely related.",
         )
-    if pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP or tpawn["relationships"].get(pawn_id, 0) < MATE_RELATIONSHIP:
+    partners = target in pawn.get("partners", []) and pawn_id in tpawn.get("partners", [])
+    if not partners and (
+        pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP
+        or tpawn["relationships"].get(pawn_id, 0) < MATE_RELATIONSHIP
+    ):
         return events.add_event(
             "failed",
             actor=pawn_id,
@@ -1005,6 +1009,10 @@ def _do_mate(pawn, pawn_id, target):
         )
     _adjust_relationship(pawn, target, 10)
     _adjust_relationship(tpawn, pawn_id, 10)
+    if target not in pawn.get("partners", []):
+        pawn["partners"].append(target)
+    if pawn_id not in tpawn.get("partners", []):
+        tpawn["partners"].append(pawn_id)
     if random.random() < CONCEPTION_CHANCE:
         female["pregnant_ticks"] = PREGNANCY_TICKS
         female["partner_id"] = pawn_id
@@ -1021,7 +1029,7 @@ def _do_mate(pawn, pawn_id, target):
         actor=pawn_id,
         target=target,
         data={"conceived": False},
-        description=f"{pawn['name']} and {tpawn['name']} grow closer.",
+        description=f"{pawn['name']} and {tpawn['name']} become partners.",
     )
 
 
@@ -1309,6 +1317,9 @@ def _kill(pawn_id, pawn, cause):
         "epitaph": f"Here lies {pawn['name']}, taken by {cause}.",
     }
     state.world_state["graveyard"].append(entry)
+    for other in state.world_state["pawns"].values():
+        if pawn_id in other.get("partners", []):
+            other["partners"].remove(pawn_id)
     pawn["status"] = "dead"
     pawn["vitals"]["hp"] = 0
     del state.world_state["pawns"][pawn_id]
