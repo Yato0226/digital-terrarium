@@ -171,6 +171,13 @@ DEFAULT_BIOME = {
     "modifiers": dict(DEFAULT_MODIFIERS),
 }
 
+
+def default_biome():
+    """Fresh biome dict with its own modifiers (no shared nested-dict aliasing)."""
+    biome = dict(DEFAULT_BIOME)
+    biome["modifiers"] = dict(DEFAULT_MODIFIERS)
+    return biome
+
 GRID_SIZE = 5
 CAMP_POS = (2, 2)
 DEFAULT_GRID = [
@@ -184,7 +191,7 @@ DEFAULT_GRID = [
 world_state = {
     "tick": 1,
     "history": [],
-    "biome": dict(DEFAULT_BIOME),
+    "biome": default_biome(),
     "graveyard": [],
     "grid": [row[:] for row in DEFAULT_GRID],
     "pawns": {},
@@ -267,7 +274,7 @@ def reset_world():
     global pending_chronicle, pending_monument
     world_state["tick"] = 1
     world_state["history"] = []
-    world_state["biome"] = dict(DEFAULT_BIOME)
+    world_state["biome"] = default_biome()
     world_state["graveyard"] = []
     world_state["grid"] = [row[:] for row in DEFAULT_GRID]
     world_state["wildlife"] = []
@@ -408,7 +415,7 @@ def load_state():
         if "biome" in loaded:
             world_state["biome"] = loaded["biome"]
         else:
-            world_state["biome"] = dict(DEFAULT_BIOME)
+            world_state["biome"] = default_biome()
         world_state["biome"].setdefault("granary", False)
         world_state["biome"].setdefault("palisade", 0)
         world_state["biome"].setdefault("flood", 0)

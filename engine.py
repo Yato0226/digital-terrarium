@@ -147,6 +147,14 @@ RAID_STEAL = 5              # food stolen per raid before fleeing
 RAID_DEFEND_DAMAGE = 4      # high-combat counter-strike at the camp
 RAIDER_EMOJI = "🥷"
 
+# Stage 9 autonomous world engine: dynamic synthesis & balance patches.
+MODIFIER_MIN = 0.7           # strict Python-enforced clamp bounds
+MODIFIER_MAX = 1.3
+CUSTOM_RECIPE_TIER_MIN = 4   # synthesized blueprints sit above static tools
+QUEST_MAX = 3                # concurrent world prophecies
+QUEST_REWARD_MORALE = 15
+QUEST_MORALE_CAP = 25        # upper bound an Architect may propose per quest
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -874,6 +882,112 @@ def _step_raiders():
     return result
 
 
+def _clamp_modifier(v):
+    """Clamp a balance multiplier within the strict Python-enforced bounds."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return 1.0
+    return max(MODIFIER_MIN, min(MODIFIER_MAX, v))
+
+
+def _modifier(key):
+    """Clamped balance multiplier from biome.modifiers (defensive vs bad saves)."""
+    mods = state.world_state["biome"].get("modifiers") or {}
+    return _clamp_modifier(mods.get(key, 1.0))
+
+
+def _all_recipes():
+    """Static + synthesized blueprints, normalised to {materials, slot, tier}."""
+    out = {}
+    for name, recipe in RECIPES.items():
+        out[name] = {
+            "materials": {res: cost for res, cost in recipe.items() if res != "slot"},
+            "slot": recipe["slot"],
+            "tier": TOOL_TIER[name],
+        }
+    for name, recipe in state.world_state.get("custom_recipes", {}).items():
+        out[name] = {
+            "materials": dict(recipe.get("materials", {})),
+            "slot": recipe.get("slot", "main_hand"),
+            "tier": int(recipe.get("tier", 1)),
+        }
+    return out
+
+
+def _custom_tool_bonus(pawn, key):
+    """Sum of a synthesized tool's bonus for key (combat/woodcutting/scouting/fiber)."""
+    total = 0
+    for item in (pawn["gear"]["main_hand"], pawn["gear"]["body"]):
+        recipe = state.world_state.get("custom_recipes", {}).get(item)
+        if recipe:
+            total += recipe.get("bonus", {}).get(key, 0)
+    return total
+
+
+def _colony_resource(resource):
+    """Total of a resource currently held in colonists' rucksacks."""
+    return sum(
+        p["inventory"].get(resource, 0)
+        for p in state.world_state["pawns"].values()
+        if p["status"] == "active"
+    )
+
+
+def _complete_quest(q, actor=None):
+    """Pay a prophecy's reward (colony morale, optional title) and clear it."""
+    quests = state.world_state.get("active_quests", [])
+    if q in quests:
+        quests.remove(q)
+    morale = q.get("reward_morale", QUEST_REWARD_MORALE)
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active":
+            p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + morale)
+    title = q.get("reward_title")
+    if title and actor:
+        target = state.world_state["pawns"].get(actor)
+        if target:
+            target["title"] = title
+    return events.add_event(
+        "quest_complete",
+        actor=actor,
+        data={"quest": q.get("id"), "title": q.get("title"), "reward_morale": morale},
+        description=(
+            f"The prophecy of {q.get('title', 'the quest')} comes to pass — "
+            f"the colony is uplifted (+{morale} morale)."
+        ),
+    )
+
+
+def _quest_progress(kind, actor=None, amount=1, **tags):
+    """Advance matching quests; complete and emit any that reach their goal."""
+    result = []
+    for q in list(state.world_state.get("active_quests", [])):
+        if q.get("kind") != kind:
+            continue
+        if kind == "hunt" and q.get("species") != tags.get("species"):
+            continue
+        q["progress"] = q.get("progress", 0) + amount
+        if q["progress"] >= q.get("needed", 1):
+            result.append(_complete_quest(q, actor))
+    return result
+
+
+def _check_quests():
+    """Evaluate time/count-based prophecies each tick (survive, stockpile)."""
+    result = []
+    tick = state.world_state["tick"]
+    for q in list(state.world_state.get("active_quests", [])):
+        if q.get("kind") == "survive":
+            created_day = q.get("created_tick", tick) // TICKS_PER_DAY
+            q["progress"] = tick // TICKS_PER_DAY - created_day
+        elif q.get("kind") == "stockpile":
+            q["progress"] = _colony_resource(q.get("resource", "food"))
+        if q["progress"] >= q.get("needed", 1):
+            result.append(_complete_quest(q))
+    return result
+
+
 def _tick_fires():
     """Burn down each active fire, damage occupants, and regrow scorched earth."""
     result = []
@@ -1183,6 +1297,7 @@ def _do_chop(pawn, pawn_id):
     wood = 3 + pawn["skills"]["woodcutting"] // 3 + random.choice([0, 1])
     if pawn["gear"]["main_hand"] == "Stone Axe":
         wood *= 2
+    wood += _custom_tool_bonus(pawn, "woodcutting")
     if _tradition() == FORESTERS_TAG:
         wood += FORESTERS_CHOP_BONUS
     wood = _inspire_bonus(pawn, wood)
@@ -1193,6 +1308,7 @@ def _do_chop(pawn, pawn_id):
     pawn["counters"]["trees_felled"] += 1
     _traditions_inc("trees_felled", 1)
     _gain_skill(pawn, "woodcutting")
+    _quest_progress("chop", actor=pawn_id)
     if _adjacent_to_fire(*pawn["pos"]):
         x, y = pawn["pos"]
         state.world_state["grid"][y][x] = FIREBREAK_TILE
@@ -1301,6 +1417,7 @@ def _do_forage(pawn, pawn_id):
         )
     skill = pawn["skills"]["scouting"]
     food = 2 + skill // 4 + random.choice([0, 1])
+    food += _custom_tool_bonus(pawn, "scouting")
     if "Pacifist" in pawn.get("traits", []):
         food += 2
     food = _inspire_bonus(pawn, food)
@@ -1310,7 +1427,7 @@ def _do_forage(pawn, pawn_id):
     _goal_nudge(pawn, food, resource="food")
     fiber_gain = 0
     if _tile_at(*pawn["pos"]) == "🫐" and random.random() < 0.35:
-        fiber_gain = 1
+        fiber_gain = 1 + _custom_tool_bonus(pawn, "fiber")
         pawn["inventory"]["fiber"] += fiber_gain
         _goal_nudge(pawn, 1, resource="fiber")
     _gain_skill(pawn, "scouting")
@@ -1326,27 +1443,25 @@ def _do_forage(pawn, pawn_id):
 
 
 def _try_craft(pawn, pawn_id):
-    """Auto-craft the highest-tier affordable tool not yet owned."""
+    """Auto-craft the highest-tier affordable tool (static or synthesized) not yet owned."""
     inv = pawn["inventory"]
     gear = pawn["gear"]
     candidates = []
-    for name, recipe in RECIPES.items():
+    for name, recipe in _all_recipes().items():
         slot = recipe["slot"]
         if gear[slot] is not None:
             continue
         if all(
             inv.get(res, 0) >= cost
-            for res, cost in recipe.items()
-            if res != "slot"
+            for res, cost in recipe["materials"].items()
         ):
-            candidates.append(name)
+            candidates.append((name, recipe["tier"]))
     if not candidates:
         return None
-    best = max(candidates, key=lambda name: TOOL_TIER[name])
-    recipe = RECIPES[best]
-    for res, cost in recipe.items():
-        if res != "slot":
-            inv[res] -= cost
+    best, _ = max(candidates, key=lambda c: c[1])
+    recipe = _all_recipes()[best]
+    for res, cost in recipe["materials"].items():
+        inv[res] -= cost
     gear[recipe["slot"]] = best
     return best
 
@@ -1573,6 +1688,7 @@ def _do_attack(pawn, pawn_id, target):
             5
             + pawn["skills"]["combat"] // 2
             + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+            + _custom_tool_bonus(pawn, "combat")
             + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
         )
         animal["hp"] -= damage
@@ -1589,6 +1705,7 @@ def _do_attack(pawn, pawn_id, target):
             pawn["inventory"]["food"] += spec["food_yield"]
             pawn["inventory"]["fiber"] += spec["fiber_yield"]
             _goal_nudge(pawn, spec["food_yield"], resource="food")
+            _quest_progress("hunt", actor=pawn_id, species=animal["species"])
             return events.add_event(
                 "hunt",
                 actor=pawn_id,
@@ -1649,6 +1766,7 @@ def _do_attack(pawn, pawn_id, target):
             5
             + pawn["skills"]["combat"] // 2
             + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+            + _custom_tool_bonus(pawn, "combat")
             + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
         )
         raider["hp"] -= damage
@@ -1726,6 +1844,7 @@ def _do_attack(pawn, pawn_id, target):
         + pawn["skills"]["combat"] // 2
         - tpawn["skills"]["combat"] // 4
         + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+        + _custom_tool_bonus(pawn, "combat")
         + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
     )
     tpawn["vitals"]["hp"] = _clamp(tpawn["vitals"]["hp"] - damage)
@@ -1780,6 +1899,7 @@ def _attack_visitor(pawn, pawn_id, visitor):
         5
         + pawn["skills"]["combat"] // 2
         + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+        + _custom_tool_bonus(pawn, "combat")
         + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
     )
     visitor["hp"] -= damage
@@ -2510,6 +2630,7 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         + (0 if day else 3)
         + WEATHER_COLD[biome["weather"]]
     )
+    cold = round(cold * _modifier("cold"))
     if pawn["gear"]["body"] == "Warm Coat":
         cold = max(0, cold - COAT_INSULATION)
     if _tradition() == HUNTERS_TAG:
@@ -2574,7 +2695,7 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         v["morale"] = _clamp(v["morale"] + (2 if not day else -2))
     if "Brawler" in traits:
         tool = pawn["gear"].get("main_hand")
-        if tool and tool != "Flint Spear":
+        if tool and tool != "Flint Spear" and _custom_tool_bonus(pawn, "combat") <= 0:
             v["morale"] = _clamp(v["morale"] - 5)
     if "Pyromaniac" in traits and near_fire:
         v["morale"] = _clamp(v["morale"] + 5)
@@ -2907,16 +3028,17 @@ def tick_environment():
         biome["food_stock"] = _clamp(biome["food_stock"] - 2)
 
     ws = state.world_state["wildlife"]
-    if len(ws) < WILDLIFE_MAX and random.random() < 0.3:
+    spawn_mod = _modifier("spawn")
+    if len(ws) < WILDLIFE_MAX and random.random() < 0.3 * spawn_mod:
         palisade_lvl = biome.get("palisade", 0)
         if new_season in ("Winter", "Autumn"):
-            pred_chance = 0.25 * (1 - palisade_lvl * 0.3)
+            pred_chance = 0.25 * (1 - palisade_lvl * 0.3) * spawn_mod
             if random.random() < pred_chance:
                 species = random.choice(PREDATOR_SPECIES)
                 ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
                 result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
         else:
-            if random.random() < 0.3:
+            if random.random() < 0.3 * spawn_mod:
                 species = random.choice(PREY_SPECIES)
                 ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
                 result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
@@ -3109,6 +3231,7 @@ def tick_environment():
     ):
         result += _spawn_raid()
     result += _step_raiders()
+    result += _check_quests()
 
     if day != prev_day:
         result.append(
@@ -3130,6 +3253,7 @@ def tick_environment():
 
     if new_season != "Winter":
         growth = REGROWTH_SPRING if new_season == "Spring" else REGROWTH
+        growth = max(0, round(growth * _modifier("regrowth")))
         if biome["wood_stock"] < 100:
             biome["wood_stock"] = _clamp(biome["wood_stock"] + growth)
         if biome["food_stock"] < 100:

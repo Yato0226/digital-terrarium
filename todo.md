@@ -99,10 +99,10 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 2. Synthesis & Quest Engine — `engine.py`
 
-- [ ] `_try_craft` checks both static `RECIPES` and `custom_recipes`, choosing the highest-tier affordable item.
-- [ ] Custom tool bonuses seamlessly apply to `_do_attack` (combat) and `_do_forage` (scouting/fiber).
-- [ ] Prophecy/Quest tracker in `resolve_actions` / `tick_environment`: evaluates conditions (e.g. kill species in season, stockpile threshold) → grants colony morale, custom titles, logs `quest_complete` event, and clears the quest.
-- [ ] Balance multipliers apply safely to `REGROWTH`, `WEATHER_COLD`, and predator spawn rolls.
+- [x] `_try_craft` checks both static `RECIPES` and `custom_recipes`, choosing the highest-tier affordable item.
+- [x] Custom tool bonuses seamlessly apply to `_do_attack` (combat) and `_do_forage` (scouting/fiber).
+- [x] Prophecy/Quest tracker in `resolve_actions` / `tick_environment`: evaluates conditions (e.g. kill species in season, stockpile threshold) → grants colony morale, custom titles, logs `quest_complete` event, and clears the quest.
+- [x] Balance multipliers apply safely to `REGROWTH`, `WEATHER_COLD`, and predator spawn rolls.
 
 ### 3. The Architect LLM Routine — `core.py`
 
