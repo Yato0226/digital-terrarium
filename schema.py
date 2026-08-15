@@ -4,7 +4,7 @@ from pydantic import Field, create_model
 
 import state
 
-ACTIONS = ("Chop", "Rest", "Scout", "Attack")
+ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move")
 
 
 def build_models():
@@ -27,9 +27,21 @@ def build_models():
             str,
             Field(description="1-2 sentence description of what the pawn does this tick."),
         ),
+        quote=(
+            Optional[str],
+            Field(default=None, description="One line of outward speech to the group."),
+        ),
+        inner_monologue=(
+            Optional[str],
+            Field(default=None, description="What the pawn privately thinks — may contradict the quote."),
+        ),
+        direction=(
+            Optional[Literal[("N", "S", "E", "W")]],
+            Field(default=None, description="Direction — only for the Move action."),
+        ),
         target=(
             Optional[Literal[tuple(pawn_ids)]],
-            Field(default=None, description="Target pawn id — ONLY for Attack."),
+            Field(default=None, description="Target pawn id — only for Attack or Share."),
         ),
     )
     fields = {

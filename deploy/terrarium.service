@@ -1,0 +1,18 @@
+[Unit]
+Description=Digital Terrarium bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=terrarium
+WorkingDirectory=/opt/terrarium
+ExecStart=/opt/terrarium/venv/bin/python main.py
+Restart=always
+RestartSec=5
+# SIGINT -> KeyboardInterrupt -> main.py's finally -> save_state()
+ExecStop=/bin/kill -INT $MAINPID
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

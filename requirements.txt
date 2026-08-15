@@ -1,5 +1,5 @@
 discord.py>=2.3
-ollama
+google-genai
 pydantic
 requests
 python-dotenv
