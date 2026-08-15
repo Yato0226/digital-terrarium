@@ -204,3 +204,123 @@ def test_monument_after_complete_build_falls_back():
     assert state.world_state["monument"]["done"] is True
     _do_build(pawn, pawn_id)
     assert state.world_state["monument"]["wood"] == MONUMENT_WOOD_NEEDED
+
+
+# --- Stage 6 Part 2: Agriculture / Farm Plots ---
+
+MEADOW = (1, 1)
+
+
+def _till(pawn_id, pawn):
+    pawn["pos"] = [MEADOW[0], MEADOW[1]]
+    pawn["vitals"]["energy"] = 100
+    return engine._do_interact(pawn, pawn_id, "till soil")
+
+
+def _harvest(pawn_id, pawn):
+    pawn["pos"] = [MEADOW[0], MEADOW[1]]
+    pawn["vitals"]["energy"] = 100
+    return engine._do_interact(pawn, pawn_id, "harvest")
+
+
+def test_till_converts_meadow_to_farm_plot():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    assert state.world_state["grid"][MEADOW[1]][MEADOW[0]] == engine.FARM_TILE
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    assert entry["farm"] == 0
+
+
+def test_till_requires_meadow():
+    pawn_id, pawn = _pawn_with(True)
+    pawn["pos"] = [2, 2]  # Camp tile
+    ev = engine._do_interact(pawn, pawn_id, "till soil")
+    assert state.world_state["grid"][2][2] != engine.FARM_TILE
+    assert "no soil to farm here" in ev["description"]
+
+
+def test_farm_grows_in_spring():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    biome = state.world_state["biome"]
+    biome["season"] = "Spring"
+    for _ in range(19):
+        engine._grow_farms()
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    assert entry["farm"] == 19
+    engine._grow_farms()
+    assert entry["farm"] == engine.FARM_GROW_TICKS
+    assert any(
+        h["type"] == "farm_ready" for h in state.world_state["history"]
+    )
+
+
+def test_farm_halts_in_winter():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    state.world_state["biome"]["season"] = "Winter"
+    engine._grow_farms()
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    assert entry["farm"] == 0
+
+
+def test_farm_halts_in_autumn():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    state.world_state["biome"]["season"] = "Autumn"
+    engine._grow_farms()
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    assert entry["farm"] == 0
+
+
+def test_harvest_ripe_plot_pays_without_depleting_stock():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    entry["farm"] = engine.FARM_GROW_TICKS
+    food_before = pawn["inventory"]["food"]
+    fiber_before = pawn["inventory"]["fiber"]
+    stock_before = state.world_state["biome"]["food_stock"]
+    ev = _harvest(pawn_id, pawn)
+    assert pawn["inventory"]["food"] == food_before + engine.FARM_HARVEST_FOOD
+    assert pawn["inventory"]["fiber"] == fiber_before + engine.FARM_HARVEST_FIBER
+    assert state.world_state["biome"]["food_stock"] == stock_before
+    assert entry["farm"] == 0
+    assert ev["type"] == "harvest"
+
+
+def test_harvest_unripe_plot_yields_nothing():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    entry["farm"] = 5
+    food_before = pawn["inventory"]["food"]
+    ev = _harvest(pawn_id, pawn)
+    assert pawn["inventory"]["food"] == food_before
+    assert "still growing" in ev["description"]
+
+
+def test_harvest_crops_verb_works():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    entry = state.world_state["tiles"][f"{MEADOW[0]},{MEADOW[1]}"]
+    entry["farm"] = engine.FARM_GROW_TICKS
+    pawn["pos"] = [MEADOW[0], MEADOW[1]]
+    pawn["vitals"]["energy"] = 100
+    ev = engine._do_interact(pawn, pawn_id, "gather crops")
+    assert ev["type"] == "harvest"
+
+
+def test_plant_seeds_verb_tills():
+    pawn_id, pawn = _pawn_with(True)
+    pawn["pos"] = [MEADOW[0], MEADOW[1]]
+    pawn["vitals"]["energy"] = 100
+    engine._do_interact(pawn, pawn_id, "plant seeds")
+    assert state.world_state["grid"][MEADOW[1]][MEADOW[0]] == engine.FARM_TILE
+
+
+def test_farm_plot_render_shows_wheat():
+    pawn_id, pawn = _pawn_with(True)
+    _till(pawn_id, pawn)
+    pawn["pos"] = [0, 0]
+    assert engine.FARM_TILE in engine.render_grid()

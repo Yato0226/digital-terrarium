@@ -19,6 +19,7 @@ TILE_COLORS = {
     "🪨": (140, 140, 140), # Quarry
     "🔥": (224, 92, 42),   # Burning
     "🌫️": (52, 52, 58),    # Ash / scorched earth
+    "🌾": (206, 176, 82),  # Farm plot
 }
 PAWN_COLOR = (240, 240, 240)
 WILDLIFE_COLOR = (222, 111, 111)

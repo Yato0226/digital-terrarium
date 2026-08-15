@@ -29,6 +29,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Visitors & travelers** — every ~150 ticks a wandering NPC (Merchant, Lost Wanderer, or Bard) walks in from the grid edge, lingers by the campfire, and leaves: share food to barter, court or invite them to stay to recruit a colonist, or rob them and feel the guilt
 - **Fortifications** — build a Granary (stops Summer food decay) and a Palisade (deters predators)
 - **Megaprojects** — once the camp is fully fortified, `Build` raises the **Ancestral Monolith** (20 wood + 15 stone, 5/5 per action): it permanently anchors colony morale (never below 10) and warms the camp (`!monument` shows its LLM-carved dedication)
+- **Farming** — till a Meadow (`🫐`) into a **Farm Plot** (`🌾`) with `Interact` ("till soil" / "plant seeds" / "farm"); it ripens over 20 ticks in Spring/Summer, then `Interact` to harvest a guaranteed 15 food + 5 fiber without depleting wild stocks
 - **Reproduction & lineage** — pawns have a sex (♂/♀); mutually bonded pairs Mate (relationship ≥ 25), pregnancies come to term, newborns mature into colonists (capped at 10), and `!tree` shows couples, kinship, and rivalries
 - **Aging & old age** — pawns age tick by tick; elders (👴) tire faster, heal less, and eventually die of old age, freeing a colony slot
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)

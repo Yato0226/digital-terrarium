@@ -108,6 +108,13 @@ MONUMENT_STONE_PER_BUILD = 5
 MONUMENT_MORALE_FLOOR = 10
 MONUMENT_INSULATION = 2
 
+# Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
+FARM_TILE = "🌾"
+FARM_GROW_TICKS = 20
+FARM_HARVEST_FOOD = 15
+FARM_HARVEST_FIBER = 5
+FARM_GROW_SEASONS = ("Spring", "Summer")
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -311,6 +318,7 @@ INTERACT_WORDS = {
     "train": ("train", "practice", "spar", "exercise", "lift", "stretch", "drill"),
     "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
     "recruit": ("invite", "recruit", "welcome", "hire", "persuade", "settle", "ask to stay", "stay"),
+    "farm": ("till", "plant", "farm", "seed", "sow", "hoe", "plough", "plow", "cultivat", "harvest", "reap", "crop"),
     "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
     "heirloom": ("claim", "inherit", "bequeath", "receive"),
     "extinguish": ("extinguish", "quench", "douse"),
@@ -690,6 +698,27 @@ def _tick_fires():
                         "regrowth",
                         data={"pos": [x, y], "tile": grid[y][x]},
                         description=f"Scorched earth at ({x},{y}) regrows as {grid[y][x]}.",
+                    )
+                )
+    return result
+
+
+def _grow_farms():
+    """Farm plots ripen over FARM_GROW_TICKS, but only in Spring/Summer."""
+    result = []
+    growing = state.world_state["biome"]["season"] in FARM_GROW_SEASONS
+    tiles = state.world_state.setdefault("tiles", {})
+    for key, entry in list(tiles.items()):
+        if "farm" not in entry:
+            continue
+        if growing and entry["farm"] < FARM_GROW_TICKS:
+            entry["farm"] += 1
+            if entry["farm"] == FARM_GROW_TICKS:
+                result.append(
+                    events.add_event(
+                        "farm_ready",
+                        data={"pos": [int(p) for p in key.split(",")]},
+                        description=f"The farm plot at ({key}) is ripe for harvest.",
                     )
                 )
     return result
@@ -1728,6 +1757,35 @@ def _do_interact(pawn, pawn_id, flavor):
             _adjust_relationship(partner, pawn_id, 10)
             _goal_nudge(pawn, 1, kind="social", target_id=partner["id"])
             effects.append(f"closer to {partner['name']}")
+    elif _in_words(verb, INTERACT_WORDS["farm"]):
+        tile = _tile_at(*pawn["pos"])
+        key = f"{pawn['pos'][0]},{pawn['pos'][1]}"
+        entry = state.world_state.setdefault("tiles", {}).get(key)
+        if tile == FARM_TILE and entry and "farm" in entry:
+            if entry["farm"] >= FARM_GROW_TICKS:
+                pawn["inventory"]["food"] += FARM_HARVEST_FOOD
+                pawn["inventory"]["fiber"] += FARM_HARVEST_FIBER
+                entry["farm"] = 0
+                _goal_nudge(pawn, FARM_HARVEST_FOOD, resource="food")
+                _goal_nudge(pawn, FARM_HARVEST_FIBER, resource="fiber")
+                _gain_skill(pawn, "scouting")
+                return events.add_event(
+                    "harvest",
+                    actor=pawn_id,
+                    data={"food": FARM_HARVEST_FOOD, "fiber": FARM_HARVEST_FIBER},
+                    description=(
+                        f"{pawn['name']} harvests the farm plot "
+                        f"(+{FARM_HARVEST_FOOD} food, +{FARM_HARVEST_FIBER} fiber)."
+                    ),
+                )
+            effects.append(f"the farm plot is still growing ({entry['farm']}/{FARM_GROW_TICKS})")
+        elif tile == "🫐":
+            state.world_state["grid"][pawn["pos"][1]][pawn["pos"][0]] = FARM_TILE
+            state.world_state.setdefault("tiles", {})[key] = {"farm": 0}
+            _gain_skill(pawn, "scouting")
+            effects.append("tills a farm plot 🌾")
+        else:
+            effects.append("no soil to farm here")
     elif _in_words(verb, INTERACT_WORDS["gather"]):
         tile = _tile_at(*pawn["pos"])
         if tile in FORAGE_TILES:
@@ -2650,6 +2708,8 @@ def tick_environment():
             biome["wood_stock"] = _clamp(biome["wood_stock"] + growth)
         if biome["food_stock"] < 100:
             biome["food_stock"] = _clamp(biome["food_stock"] + growth)
+
+    result += _grow_farms()  # farm plots ripen in Spring/Summer, dormant otherwise
 
     for pawn_id, pawn in state.world_state["pawns"].items():
         if pawn.get("mental_break"):

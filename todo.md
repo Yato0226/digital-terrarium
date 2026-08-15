@@ -52,8 +52,8 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 2. Agriculture / Garden Plots (Meadow Transformation)
 
-- [ ] Meadow (`🫐`) tiles accept `Interact` `flavor="till soil"` / `"plant seeds"` / `"farm"` → tile converts to `🌾 Farm Plot`.
-- [ ] Grows over 20 ticks (Spring/Summer only); guaranteed harvest of 15 Food + 5 Fiber without depleting natural biome stocks; halts in Winter.
+- [x] Meadow (`🫐`) tiles accept `Interact` `flavor="till soil"` / `"plant seeds"` / `"farm"` → tile converts to `🌾 Farm Plot`.
+- [x] Grows over 20 ticks (Spring/Summer only); guaranteed harvest of 15 Food + 5 Fiber without depleting natural biome stocks; halts in Winter.
 
 ---
 

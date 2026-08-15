@@ -51,6 +51,7 @@ Rules:
 - Wildlife roams the map (see the Wildlife section): prey (🦌 Deer, 🐇 Rabbit) flee the colony and yield food + fiber when hunted; predators (🐺 Wolf, 🐻 Bear) stalk the pawn furthest from camp and can bite — but never kill outright (like pawn combat, they only incapacitate). Taming a same-tile animal via Interact (e.g. "tame the deer") turns it into a pet that stays at camp and lifts everyone's morale.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
+- Farming: on a Meadow (🫐) tile, Interact with "till soil" / "plant seeds" / "farm" to convert it into a Farm Plot (🌾). It grows over 20 ticks in Spring/Summer (dormant in Winter); when ripe, Interact with "harvest" / "farm" to reap 15 food + 5 fiber — a guaranteed yield that does not deplete the wild food stock.
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
 - Morale below 20 is dangerous and morale at 0 triggers a mental break (berserk rampage, paranoid hiding, or apathetic wandering) — the pawn is uncontrollable until it subsides or the Creator whispers to it.
 - The Creator may give direct orders or whispers; orders are absolute and must appear in your output.
@@ -99,6 +100,18 @@ def build_prompt():
             f" | 🗿 Monolith under construction "
             f"({monument['wood']}/{engine.MONUMENT_WOOD_NEEDED} wood, "
             f"{monument['stone']}/{engine.MONUMENT_STONE_NEEDED} stone)"
+        )
+
+    farms = [
+        (k, e["farm"])
+        for k, e in state.world_state.setdefault("tiles", {}).items()
+        if "farm" in e
+    ]
+    if farms:
+        ripe = sum(1 for _, g in farms if g >= engine.FARM_GROW_TICKS)
+        biome_line += (
+            f" | 🌾 {len(farms)} farm plot(s), {ripe} ripe — "
+            f"Interact to harvest"
         )
 
     wild_lines = []
