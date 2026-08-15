@@ -39,6 +39,8 @@ def post_to_discord(data):
                 + "```\n"
                 f"🔥 Campfire {biome['campfire']} | 🏠 Shelter {biome['shelter']} | "
                 f"🌲 Wood {biome['wood_stock']} | 🍎 Food {biome['food_stock']}"
+                "\n📋 HP=hit points · E=energy · H=hunger · W=warmth · M=morale · "
+                "W=wood · F=food · S=stone · Fb=fiber · gear=main/body"
             )[:1024],
             "inline": False,
         }

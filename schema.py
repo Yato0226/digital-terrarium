@@ -55,7 +55,7 @@ def build_models():
     fields = {
         "world_event": (
             str,
-            Field(description="A short global status update for the terrarium"),
+            Field(description="A 2-3 sentence atmospheric summary of this tick — what the season, weather, and colony are doing."),
         ),
     }
     for pid in pawn_ids:

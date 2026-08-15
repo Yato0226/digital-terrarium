@@ -25,6 +25,7 @@ Rules:
 - Morale below 20 is dangerous and morale at 0 triggers a mental break (berserk rampage, paranoid hiding, or apathetic wandering) — the pawn is uncontrollable until it subsides or the Creator whispers to it.
 - The Creator may give direct orders or whispers; orders are absolute and must appear in your output.
 - Keep choices coherent and flavorful. Write a short 1-2 sentence narrative per pawn.
+- Write the 'world_event' as a 2-3 sentence atmospheric summary of the tick: the season, weather, and what the colony as a whole is up to. Make it vivid but truthful to the situation — no numbers, no invented events.
 Return ONLY valid JSON matching the required schema."""
 
 
