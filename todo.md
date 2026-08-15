@@ -78,10 +78,10 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 *Theme: high-stakes defensive events during late-game prosperity.*
 
-- [ ] **Scavenger Raid (Autumn):** if the colony holds ≥30 combined food+wood, 1–2 hostile `scavenger_N` spawn at the grid edge.
-- [ ] **Raider AI:** move directly to Camp to steal food from the Granary.
-- [ ] **Defenses:** Palisade level slows bandit movement; tamed predators (`Wolf`/`Bear`) intercept bandits on the camp tile; high-combat pawns defend the stocks.
-- [ ] Bandits flee once damaged or after stealing 5 food.
+- [x] **Scavenger Raid (Autumn):** if the colony holds ≥30 combined food+wood, 1–2 hostile `scavenger_N` spawn at the grid edge.
+- [x] **Raider AI:** move directly to Camp to steal food from the Granary.
+- [x] **Defenses:** Palisade level slows bandit movement; tamed predators (`Wolf`/`Bear`) intercept bandits on the camp tile; high-combat pawns defend the stocks.
+- [x] Bandits flee once damaged or after stealing 5 food.
 
 ---
 

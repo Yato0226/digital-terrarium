@@ -37,9 +37,10 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Seasonal chronicle** — a lorekeeper LLM writes a title and paragraph whenever the season turns (`!chronicle`)
 - **Emergent traditions** — the engine tallies colony history and auto-assigns a **Tradition Tag** on a season change: *Hunters of the North* (10+ predators slain → double hunting XP, colder-tolerant), *Children of the Forest* (100+ trees felled → +1 wood per chop, shelter decays half as fast), or *Kindred of the Hearth* (20+ rations shared → socials grant +8 morale). Tags persist once earned (`!tradition` shows the tag, its effects, and the counters)
 - **Festivals & rites** — on the first day of Winter and Summer, a bountiful larder (15+ camp food) means a **Solstice Feast**: everyone gains +15 morale and a Festive moodlet. When a beloved pawn dies (high average relationships, marked 💖 in `!graveyard`), survivors can `Interact` at the Camp or Ruins to *bury*, *mourn*, or *eulogize* — halving the grief of everyone gathered
+- **Scavenger raids** — a wealthy colony (30+ food+wood on hand) attracts Autumn raids: 1–2 hostile scavengers march on the camp to loot the granary (5 food, then they flee). Palisades slow their approach; tamed predators and high-combat pawns at the camp drive them off or cut them down before they steal; wounding one sends it running
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
-- **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife & visitors, read the chronicle
+- **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the daily embed
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 
@@ -81,6 +82,7 @@ python main.py
 | `!tree` | Show couples, kinship, and rivalries |
 | `!wildlife` | List the fauna roaming the terrarium |
 | `!visitors` | List the wandering travelers at the edge of the world |
+| `!raiders` | List the hostile scavengers menacing the colony |
 | `!heirlooms` | List the relics of the fallen |
 | `!monument` | Inspect the Ancestral Monolith (progress / completed dedication) |
 | `!tradition` | Inspect the colony's emergent Tradition Tag (or its progress toward one) |

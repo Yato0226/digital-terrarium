@@ -43,6 +43,8 @@ VISITOR_NAMES = {
     "Bard": ["Lark the Minstrel", "Singing Sable", "Fiddle Fen", "Chanter Cora", "Busk Bodhi"],
 }
 
+RAIDER_NAMES = ["Brigand", "Marauder", "Looter", "Cutpurse", "Highwayman", "Rustler"]
+
 TRAITS = ("Night Owl", "Brawler", "Pyromaniac", "Pacifist", "Iron Stomach")
 
 TRAIT_EMOJI = {
@@ -79,6 +81,15 @@ def next_visitor_id():
         if v["id"].startswith("visit_")
     ]
     return f"visit_{max(nums, default=0) + 1}"
+
+
+def next_raider_id():
+    nums = [
+        int(r["id"].split("_")[1])
+        for r in world_state.get("raiders", [])
+        if r["id"].startswith("scavenger_")
+    ]
+    return f"scavenger_{max(nums, default=0) + 1}"
 
 
 def next_heirloom_id():
@@ -118,6 +129,23 @@ def make_visitor(kind, pos=None):
         "state": "arriving",  # arriving | visiting | leaving
         "ticks_left": 0,
         "inventory": {"stone": 0, "fiber": 0, "food": 0},
+        "spawn_tick": world_state["tick"],
+    }
+
+
+def make_raider(pos=None):
+    """Hostile scavenger: marches to the camp, steals food, and flees."""
+    if pos is None:
+        pos = [CAMP_POS[0], CAMP_POS[1]]
+    return {
+        "id": next_raider_id(),
+        "kind": "Scavenger",
+        "name": random.choice(RAIDER_NAMES),
+        "pos": [pos[0], pos[1]],
+        "hp": 45,
+        "state": "marching",  # marching | fleeing
+        "slowed": 0,
+        "stolen": 0,
         "spawn_tick": world_state["tick"],
     }
 
@@ -164,6 +192,7 @@ world_state = {
     "extinct": False,
     "tiles": {},
     "visitors": [],
+    "raiders": [],
     "monument": {"wood": 0, "stone": 0, "done": False, "inscription": None},
     "traditions": {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
 }
@@ -242,6 +271,7 @@ def reset_world():
     world_state["extinct"] = False
     world_state["tiles"] = {}
     world_state["visitors"] = []
+    world_state["raiders"] = []
     world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None}
     world_state["traditions"] = {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
     pending_chronicle = None
@@ -396,6 +426,7 @@ def load_state():
         else:
             world_state.setdefault("tiles", {})
         world_state.setdefault("visitors", [])
+        world_state.setdefault("raiders", [])
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

@@ -58,6 +58,7 @@ def post_to_discord(data):
                 f"{_biome_infra_txt(biome)}"
                 f"{_wildlife_txt()}"
                 f"{_visitors_txt()}"
+                f"{_raiders_txt()}"
                 "\n📋 HP=hit points · E=energy · H=hunger · W=warmth · M=morale · "
                 "W=wood · F=food · S=stone · Fb=fiber · gear=main/body"
             )[:1024],
@@ -184,6 +185,20 @@ def _visitors_txt():
             f"({v['kind']}, {v['state']})"
         )
     return "\n🚶 " + " | ".join(parts)
+
+
+def _raiders_txt():
+    raiders = state.world_state.get("raiders", [])
+    if not raiders:
+        return ""
+    parts = []
+    for r in raiders:
+        parts.append(
+            f"🥷 {r['name']} ({r['state']}"
+            + (f", {r['stolen']} stolen" if r["stolen"] else "")
+            + ")"
+        )
+    return "\n⚠️ " + " | ".join(parts)
 
 
 async def _eulogize_fallen(dead_tick):

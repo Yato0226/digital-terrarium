@@ -40,6 +40,7 @@ Rules:
 - If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id — or, for an Attack, a wildlife id or visitor id listed in the Wildlife/Visitors sections. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
 
 - Visitors (see the Visitors section) are wandering travelers who walk to the campfire, linger, and leave. Sharing food with one is a trade: a Merchant barters stone, a Wanderer offers fiber. Courting a visitor (Mate) or Interacting to invite them to stay (e.g. "invite to stay", "recruit") can recruit them as a colonist — unless the colony is full. Attacking a visitor plunders their goods, but gentle pawns are haunted by Guilt.
+- Raiders (see the Raiders section) are hostile scavengers who march on the camp to steal food in Autumn when the colony grows wealthy. They can be fought with Attack like any target — a wound sends them fleeing, and the camp's defenders (tamed predators and high-combat pawns) drive them off the stores automatically.
 - Personal goals: a pawn may carry a goal (shown as "Goal: ... (progress/needed)"). Help it pursue that goal. If a pawn has NO goal, you may propose one in 'new_goal' (e.g. "gather 10 wood", "befriend Chief", "build a shelter", "survive 5 days") — the engine decides if it fits and tracks its progress; completing a goal lifts morale and grants skill XP.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
@@ -142,6 +143,14 @@ def build_prompt():
             f"the {v['kind']} at {v['pos']} — {v['state']}"
         )
     vis_txt = "\n".join(vis_lines) if vis_lines else "none"
+
+    raid_lines = []
+    for r in state.world_state.get("raiders", []):
+        stolen_txt = f", {r['stolen']} food stolen" if r["stolen"] else ""
+        raid_lines.append(
+            f"🥷 {r['name']} ({r['id']}) at {r['pos']} — {r['state']}{stolen_txt}"
+        )
+    raid_txt = "\n".join(raid_lines) if raid_lines else "none"
 
     pawn_lines = []
     for pid, pawn in state.world_state["pawns"].items():
@@ -256,6 +265,9 @@ Wildlife:
 
 Visitors:
 {vis_txt}
+
+Raiders:
+{raid_txt}
 
 Current status:
 {pawn_status}

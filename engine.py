@@ -137,6 +137,16 @@ FESTIVE_MOODLET_TICKS = 15
 RITE_TILES = (BUILD_TILE, RUIN_TILE)  # Camp or Ruins
 BELOVED_RELATIONSHIP = 25   # avg relationship to survivors for "beloved"
 
+# Stage 8 scavenger raids.
+RAID_SEASON = "Autumn"
+RAID_INTERVAL = 100         # tick cadence; raid lands on Autumn's first tick
+RAID_WEALTH_THRESHOLD = 30  # combined food+wood held by the colony
+RAID_MAX = 2                # raiders in the world at once
+RAID_HP = 45
+RAID_STEAL = 5              # food stolen per raid before fleeing
+RAID_DEFEND_DAMAGE = 4      # high-combat counter-strike at the camp
+RAIDER_EMOJI = "🥷"
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -687,6 +697,183 @@ def _step_visitors():
     return result
 
 
+def _raider_by_id(rid):
+    return next(
+        (r for r in state.world_state.get("raiders", []) if r["id"] == rid),
+        None,
+    )
+
+
+def _edge_tiles():
+    return [
+        [x, y]
+        for y in range(GRID_SIZE)
+        for x in range(GRID_SIZE)
+        if _on_edge(x, y)
+    ]
+
+
+def _colony_wealth():
+    """Food + wood currently held by the colony (stores plus rucksacks)."""
+    biome = state.world_state["biome"]
+    food = biome["food_stock"]
+    wood = 0
+    for p in state.world_state["pawns"].values():
+        food += p["inventory"]["food"]
+        wood += p["inventory"]["wood"]
+    return food + wood
+
+
+def _spawn_raid():
+    """Autumn scavenger raid on a prosperous colony: 1-2 hostiles at the edge."""
+    raiders = state.world_state.setdefault("raiders", [])
+    out = []
+    edge = _edge_tiles()
+    for _ in range(random.randint(1, 2)):
+        if len(raiders) >= RAID_MAX:
+            break
+        r = state.make_raider(random.choice(edge))
+        raiders.append(r)
+        out.append(
+            events.add_event(
+                "raid",
+                data={"id": r["id"], "action": "arrive", "name": r["name"]},
+                description=(
+                    f"A {r['name']} appears at the edge of the world, "
+                    f"eyeing the colony's stores!"
+                ),
+            )
+        )
+    return out
+
+
+def _raid_steal(r, biome):
+    """Steal from the granary stock first, then from pawn rucksacks."""
+    amount = RAID_STEAL
+    taken = 0
+    take = min(amount, biome["food_stock"])
+    biome["food_stock"] = _clamp(biome["food_stock"] - take)
+    taken += take
+    if taken < RAID_STEAL:
+        for p in state.world_state["pawns"].values():
+            avail = p["inventory"]["food"]
+            take = min(RAID_STEAL - taken, avail)
+            p["inventory"]["food"] -= take
+            taken += take
+            if taken >= RAID_STEAL:
+                break
+    return taken
+
+
+def _raid_defense(r, result):
+    """Tamed predators and high-combat pawns defend the stores at the camp."""
+    damage = 0
+    for w in state.world_state["wildlife"]:
+        if w["state"] == "tamed" and WILDLIFE[w["species"]]["kind"] == "predator":
+            damage += WILDLIFE[w["species"]]["bite_damage"]
+    defenders = [
+        p
+        for p in state.world_state["pawns"].values()
+        if p["status"] == "active" and p["pos"] == list(CAMP_POS)
+    ]
+    if defenders:
+        best = max(defenders, key=lambda p: p["skills"]["combat"])
+        damage += RAID_DEFEND_DAMAGE + best["skills"]["combat"] // 2
+        if best["gear"]["main_hand"] == "Flint Spear":
+            damage += SPEAR_DAMAGE
+    if damage <= 0:
+        return False
+    r["hp"] -= damage
+    if r["hp"] <= 0:
+        state.world_state["raiders"].remove(r)
+        result.append(
+            events.add_event(
+                "raid",
+                data={"id": r["id"], "action": "repelled", "name": r["name"]},
+                description=(
+                    f"The {r['name']} is cut down at the camp "
+                    f"by the colony's defenders!"
+                ),
+            )
+        )
+        return True
+    r["state"] = "fleeing"
+    result.append(
+        events.add_event(
+            "raid",
+            data={"id": r["id"], "action": "repelled", "name": r["name"], "damage": damage},
+            description=(
+                f"The {r['name']} takes {damage} damage from the defenders "
+                f"and turns to flee!"
+            ),
+        )
+    )
+    return True
+
+
+def _step_raiders():
+    """Raider AI: march to the camp, steal from the granary, then flee."""
+    result = []
+    raiders = state.world_state.setdefault("raiders", [])
+    biome = state.world_state["biome"]
+    for r in list(raiders):
+        if r["state"] == "fleeing":
+            if _on_edge(*r["pos"]):
+                raiders.remove(r)
+                result.append(
+                    events.add_event(
+                        "raid",
+                        data={"id": r["id"], "action": "fled", "name": r["name"], "stolen": r["stolen"]},
+                        description=(
+                            f"The {r['name']} slips back into the wilds"
+                            + (f" with {r['stolen']} food stolen" if r["stolen"] else "")
+                            + "."
+                        ),
+                    )
+                )
+                continue
+            target = min(_edge_tiles(), key=lambda t: _manhattan(r["pos"], t))
+            r["pos"] = _walk_toward(r["pos"], target)
+            if _on_edge(*r["pos"]):
+                raiders.remove(r)
+                result.append(
+                    events.add_event(
+                        "raid",
+                        data={"id": r["id"], "action": "fled", "name": r["name"], "stolen": r["stolen"]},
+                        description=(
+                            f"The {r['name']} slips back into the wilds"
+                            + (f" with {r['stolen']} food stolen" if r["stolen"] else "")
+                            + "."
+                        ),
+                    )
+                )
+            continue
+        if r["pos"] == list(CAMP_POS):
+            if _raid_defense(r, result):
+                continue
+            stolen = _raid_steal(r, biome)
+            r["stolen"] += stolen
+            r["state"] = "fleeing"
+            result.append(
+                events.add_event(
+                    "raid",
+                    data={"id": r["id"], "action": "steal", "name": r["name"], "food": stolen},
+                    description=(
+                        f"The {r['name']} loots {stolen} food from the stores "
+                        f"and makes off!"
+                    ),
+                )
+            )
+            continue
+        if r["slowed"] > 0:
+            r["slowed"] -= 1
+            continue
+        r["pos"] = _walk_toward(r["pos"], list(CAMP_POS))
+        if biome.get("palisade", 0) >= 1:
+            r["slowed"] = biome["palisade"]
+    return result
+
+
 def _tick_fires():
     """Burn down each active fire, damage occupants, and regrow scorched earth."""
     result = []
@@ -818,6 +1005,10 @@ def render_grid():
         x, y = v["pos"]
         occupants.setdefault((x, y), {"pawns": 0, "animals": []})
         occupants[(x, y)]["animals"].append(VISITOR_TYPES[v["kind"]]["emoji"])
+    for r in state.world_state.get("raiders", []):
+        x, y = r["pos"]
+        occupants.setdefault((x, y), {"pawns": 0, "animals": []})
+        occupants[(x, y)]["animals"].append(RAIDER_EMOJI)
     lines = []
     for y in range(len(grid)):
         cells = []
@@ -1434,6 +1625,55 @@ def _do_attack(pawn, pawn_id, target):
                 data={"damage": damage, "species": animal["species"], "bite": spec["kind"] == "predator"},
                 description=desc,
             )
+
+    raider = _raider_by_id(target)
+    if raider is not None:
+        if _manhattan(pawn["pos"], raider["pos"]) > 1:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "too_far"},
+                description=f"{pawn['name']} is too far from the {raider['name']} to strike.",
+            )
+        if not _pay_cost(pawn, "Attack"):
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=target,
+                data={"reason": "low_energy"},
+                description=f"{pawn['name']} is too exhausted to fight the {raider['name']}.",
+            )
+        damage = max(
+            1,
+            5
+            + pawn["skills"]["combat"] // 2
+            + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+            + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
+        )
+        raider["hp"] -= damage
+        pawn["counters"]["damage_dealt"] += damage
+        _gain_skill(pawn, "combat")
+        if raider["hp"] <= 0:
+            state.world_state["raiders"].remove(raider)
+            return events.add_event(
+                "raid",
+                actor=pawn_id,
+                target=target,
+                data={"id": target, "action": "slain", "name": raider["name"], "damage": damage},
+                description=f"{pawn['name']} cuts down the {raider['name']} with {damage} damage!",
+            )
+        raider["state"] = "fleeing"
+        return events.add_event(
+            "attack",
+            actor=pawn_id,
+            target=target,
+            data={"damage": damage, "raider": raider["name"]},
+            description=(
+                f"{pawn['name']} wounds the {raider['name']} for {damage} damage "
+                f"— it turns and flees!"
+            ),
+        )
 
     tvis = _visitor_by_id(target)
     if tvis is not None:
@@ -2859,6 +3099,16 @@ def tick_environment():
             )
         )
     result += _step_visitors()
+
+    # Raiders (Stage 8): prosperous colonies attract Autumn scavenger raids.
+    if (
+        new_season == RAID_SEASON
+        and tick % RAID_INTERVAL == 0
+        and not state.world_state.get("raiders")
+        and _colony_wealth() >= RAID_WEALTH_THRESHOLD
+    ):
+        result += _spawn_raid()
+    result += _step_raiders()
 
     if day != prev_day:
         result.append(

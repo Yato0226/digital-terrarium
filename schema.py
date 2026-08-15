@@ -20,6 +20,7 @@ def build_models():
         pawn_ids
         + [w["id"] for w in state.world_state["wildlife"]]
         + [v["id"] for v in state.world_state.get("visitors", [])]
+        + [r["id"] for r in state.world_state.get("raiders", [])]
     )
 
     AgentDecision = create_model(
@@ -46,7 +47,7 @@ def build_models():
         ),
         target=(
             Optional[Literal[tuple(target_ids)]],
-            Field(default=None, description="Target pawn id (Attack/Share/Mate), wildlife id (Attack/tame), or visitor id (Share/barter, Mate/recruit, Attack/plunder) — never self."),
+            Field(default=None, description="Target pawn id (Attack/Share/Mate), wildlife id (Attack/tame), visitor id (Share/barter, Mate/recruit, Attack/plunder), or raider id (Attack) — never self."),
         ),
         flavor=(
             Optional[str],

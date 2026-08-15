@@ -197,8 +197,10 @@ Culture also has its rituals. On the first tick of a new Winter or Summer, if th
 
 The colony is no longer fully isolated: roughly every 150 ticks a transient \texttt{visitor} (Merchant with rare stone/fiber stocks, Lost Wanderer, or Wandering Bard) spawns on a random edge tile of the $5\times5$ grid. Visitor AI is a tiny deterministic state machine --- \texttt{arriving} walks greedily toward the Camp, \texttt{visiting} lingers 3--5 ticks (a Bard plays by the fire for $+5$ colony-wide morale), and \texttt{leaving} walks back off the edge and despawns. The schema's \texttt{target} literal extends to \texttt{visitor\_ids} as well, wiring three social verbs into the engine: \texttt{Share} of 2 food barters 3 stone from a Merchant (or fiber from a Wanderer); \texttt{Mate} targeting a visitor, or an \texttt{Interact} ``invite to stay''/``recruit'' flavor, makes a sociability-scaled recruitment roll ($0.3 + \texttt{sociability} \times 0.05$) that turns the wanderer into a permanent colonist under \texttt{MAX\_PAWNS}; and \texttt{Attack} plunders the visitor's inventory on death while stamping a \texttt{Guilt} moodlet ($-5$) on pawns below the aggression threshold.
 
+Prosperity, however, draws wolves of another kind. In Autumn, once the colony holds $\geq 30$ combined food+wood across its stores and rucksacks, the engine's \texttt{tick\_environment} spawns a \textbf{Scavenger Raid}: 1--2 hostile \texttt{scavenger\_N} entities appear at random edge tiles and march greedily toward the Camp (\texttt{\_step\_raiders}). A standing palisade slows their approach --- each raider carries a \texttt{slowed} counter set to the palisade level between moves. On the Camp tile they must first run the colony's defenses: every tamed Wolf/Bear at the camp intercepts, biting the intruder for its \texttt{bite\_damage}, and the highest-combat pawn on the Camp tile counter-strikes ($4 + \texttt{combat}//2$, plus spear bonus). A raider wounded there turns and flees empty-handed; one dropped to 0 HP is cut down. Only against an undefended camp does the raider loot --- \texttt{\_raid\_steal} takes 5 \texttt{food\_stock} (falling back to pawn rucksacks) --- after which it flees. Wounding a raider at any range sends it running, so the \texttt{Attack} action's \texttt{target} literal extends to \texttt{raider\_ids} too, and the \texttt{!raiders} god command lists active raiders and their stolen spoils.
+
 \subsection{Discord ``God'' Interface}
-Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exposes a god layer that manipulates the world directly (Table~\ref{tab:god}). Commands that mutate \texttt{world\_state} are serialised against the tick loop via an \texttt{asyncio.Lock}, and a \texttt{!pause}/\texttt{!resume} pair gates the scheduler. Enforced orders (\texttt{!order}) are injected into the prompt and overridden in code; whispers (\texttt{!say}) are injected into the prompt \emph{and} grant a deterministic $+15$ morale, letting the Creator pull an agent out of a mental break. \texttt{!graveyard} reads the permanent record of the fallen, \texttt{!tree} renders kinship and rivalries, \texttt{!wildlife} lists the fauna, \texttt{!visitors} lists the wandering travelers, \texttt{!heirlooms} lists the relics of the fallen, \texttt{!monument} inspects the Ancestral Monolith, \texttt{!tradition} shows the colony's emergent Tradition Tag and its counters, and \texttt{!chronicle} reads the seasonal lore. Human watchers (not just the god) can also adopt a pawn from any channel via \texttt{!adopt} --- the mapping persists, \texttt{!my} shows the adopted ward, \texttt{!unadopt} releases it, and milestone events (birth, fulfilled goal, mental break, death) are delivered to the adopter as a direct message over the gateway, routed through a notifier hook (\texttt{core.notifier}) that \texttt{bot.on\_ready} registers, so \texttt{engine.py} stays free of Discord logic.
+Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exposes a god layer that manipulates the world directly (Table~\ref{tab:god}). Commands that mutate \texttt{world\_state} are serialised against the tick loop via an \texttt{asyncio.Lock}, and a \texttt{!pause}/\texttt{!resume} pair gates the scheduler. Enforced orders (\texttt{!order}) are injected into the prompt and overridden in code; whispers (\texttt{!say}) are injected into the prompt \emph{and} grant a deterministic $+15$ morale, letting the Creator pull an agent out of a mental break. \texttt{!graveyard} reads the permanent record of the fallen, \texttt{!tree} renders kinship and rivalries, \texttt{!wildlife} lists the fauna, \texttt{!visitors} lists the wandering travelers, \texttt{!raiders} lists the hostile scavengers, \texttt{!heirlooms} lists the relics of the fallen, \texttt{!monument} inspects the Ancestral Monolith, \texttt{!tradition} shows the colony's emergent Tradition Tag and its counters, and \texttt{!chronicle} reads the seasonal lore. Human watchers (not just the god) can also adopt a pawn from any channel via \texttt{!adopt} --- the mapping persists, \texttt{!my} shows the adopted ward, \texttt{!unadopt} releases it, and milestone events (birth, fulfilled goal, mental break, death) are delivered to the adopter as a direct message over the gateway, routed through a notifier hook (\texttt{core.notifier}) that \texttt{bot.on\_ready} registers, so \texttt{engine.py} stays free of Discord logic.
 
 \begin{table}[htbp]
 \centering
@@ -214,7 +216,7 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
 \texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
 \texttt{!graveyard} & List the fallen with epithets and epitaphs (💖 marks the beloved) \\
-\texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} & Family tree / roaming fauna / travelers \\
+\texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} / \texttt{!raiders} & Family tree / roaming fauna / travelers / hostile scavengers \\
 \texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} & Relics of the fallen / the monolith / emergent tradition / seasonal lore \\
 \texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
 \texttt{!status} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Inspect, force, or gate the simulation \\
@@ -223,15 +225,16 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \end{table}
 
 \subsection{Implementation Code}
-Listing~\ref{lst:schema} shows the per-tick dynamic schema; Listing~\ref{lst:engine} the deterministic resolution core; Listing~\ref{lst:tick} the tick orchestration. Together they implement the AI Director pattern. Note that \texttt{Literal[tuple(pawn\_ids + wildlife\_ids + visitor\_ids)]} is used deliberately: on Python 3.10 the starred \texttt{Literal[*ids]} unpacking form is unavailable, and the tuple form is equivalent per PEP~586.
+Listing~\ref{lst:schema} shows the per-tick dynamic schema; Listing~\ref{lst:engine} the deterministic resolution core; Listing~\ref{lst:tick} the tick orchestration. Together they implement the AI Director pattern. Note that \texttt{Literal[tuple(pawn\_ids + wildlife\_ids + visitor\_ids + raider\_ids)]} is used deliberately: on Python 3.10 the starred \texttt{Literal[*ids]} unpacking form is unavailable, and the tuple form is equivalent per PEP~586.
 
-\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses \texttt{Literal[tuple(pawn\_ids + wildlife\_ids + visitor\_ids)]} for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
+\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses \texttt{Literal[tuple(pawn\_ids + wildlife\_ids + visitor\_ids + raider\_ids)]} for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
 def build_models():
     pawn_ids = [pid for pid, p in world_state["pawns"].items()
                 if p["status"] == "active"]            # roster-aware
     target_ids = (pawn_ids
                   + [w["id"] for w in world_state["wildlife"]]
-                  + [v["id"] for v in world_state.get("visitors", [])])
+                  + [v["id"] for v in world_state.get("visitors", [])]
+                  + [r["id"] for r in world_state.get("raiders", [])])
     AgentDecision = create_model(
         "AgentDecision",
         action=(Literal["Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact"],
@@ -243,7 +246,7 @@ def build_models():
         direction=(Optional[Literal["N", "S", "E", "W"]], Field(
             default=None, description="Direction - only for Move")),
         target=(Optional[Literal[tuple(target_ids)]], Field(
-            default=None, description="Target pawn id (Attack/Share/Mate), wildlife id (Attack, taming), or visitor id (Share, Mate/recruit, Attack)")),
+            default=None, description="Target pawn id (Attack/Share/Mate), wildlife id (Attack, taming), visitor id (Share, Mate/recruit, Attack), or raider id (Attack)"))),
         flavor=(Optional[str], Field(default=None,
                                      description="Free-form verb - only for Interact")),
         new_goal=(Optional[str], Field(default=None,
@@ -255,7 +258,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts &amp; funerary rites (Grief halving), wildfires, and seasonal disasters}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), scavenger raids (steal, defend, flee), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts &amp; funerary rites (Grief halving), wildfires, and seasonal disasters}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]
@@ -324,6 +327,14 @@ def resolve_actions(intents):
                         add_moodlet(pawn, "Guilt", -5, 15)
                 else:
                     visitor["state"] = "leaving"      # survivors flee
+                continue
+            if target in RAIDER_IDS:       # fight off a scavenger
+                dmg = max(1, 5 + pawn["skills"]["combat"] // 2)
+                raider = raiders[target]; raider["hp"] -= dmg
+                if raider["hp"] <= 0:
+                    del raiders[target]; add_event("raid", action="slain")
+                else:
+                    raider["state"] = "fleeing"       # wounded raiders flee
                 continue
             if not target_pawn_active(target):
                 add_event("failed", reason="illegal_target"); continue
@@ -415,6 +426,14 @@ def tick_environment():             # the world ages after pawns act
     if tick % VISITOR_INTERVAL == 0 and not visitors:
         visitors.append(make_visitor(choice(KINDS), edge_tile()))
     step_visitors()
+    # scavenger raids (Stage 8): a wealthy colony (>=30 food+wood) draws
+    # 1-2 hostile raiders on an Autumn's first tick. They march to the Camp,
+    # slowed by the palisade; tamed predators and high-combat pawns defend
+    # the stores, else the raider steals 5 food and flees. Wounded raiders flee
+    if season == "Autumn" and tick % 100 == 0 and not raiders \
+            and colony_wealth() >= 30:
+        spawn_raid(1 + randrange(2))
+    step_raiders()
     if biome["season"] == "Summer" and biome["granary"]:
         ...                            # granary halts food_stock decay
     predator_chance -= 0.2 * biome["palisade"]  # palisade deters predators
@@ -583,7 +602,7 @@ Daily Quota Utilisation (RPD) & $\approx$ 10\% of 14.4K at a 60 s tick \\
 The following qualitative results were observed over continuous runs:
 
 \begin{enumerate}
-\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 273-test offline suite (\texttt{tests/}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
+\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 321-test offline suite (\texttt{tests/}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
 \item \textbf{Enforcement Rate}: every illegal intent (energy shortfall, self-attack, missing/unknown target) was rejected by the engine and recorded as a \texttt{failed} event; at no point did a hallucinated stat alter the world, because the model never emits numeric deltas.
 \item \textbf{Intervention Correctness}: \texttt{!order} always produced the commanded action even when the model proposed otherwise; \texttt{!say} influenced narrative flavour only, as designed.
 \item \textbf{Emergent Dynamics}: relationship deltas after combat produced visible grudge cycles (repeated mutual attacks) in the event history, demonstrating that the model reads and reacts to the rendered relationship state.
@@ -592,13 +611,13 @@ The following qualitative results were observed over continuous runs:
 \end{enumerate}
 
 \section{Conclusion}
-The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 301-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
+The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 321-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
 
 \subsection{Future Work: Roadmap}
-The design remains a staged roadmap beyond the community/lore layer of Stage 3, the hazard/visitor layers of Stages 4--5, the megaproject/farming layer of Stage 6, and the culture/ritual layer of Stage 7. Each stage keeps the AI Director pattern --- the LLM proposes intent only, while pure-Python deterministic rules own all numbers, state stays flat, and every mechanic remains offline-testable:
+The design remains a staged roadmap beyond the community/lore layer of Stage 3, the hazard/visitor layers of Stages 4--5, the megaproject/farming layer of Stage 6, the culture/ritual layer of Stage 7, and the raid/defense layer of Stage 8. Each stage keeps the AI Director pattern --- the LLM proposes intent only, while pure-Python deterministic rules own all numbers, state stays flat, and every mechanic remains offline-testable:
 
 \begin{enumerate}
-\item \textbf{Stage 8 --- Bandits, Raids \& Hostile Outcasts}: prosperous colonies attract Scavenger Raids in Autumn (1--2 hostiles targeting the Granary), countered by Palisade level, tamed predator interceptors, and high-combat defenders; raiders flee once damaged or after stealing enough food.
+\item \textbf{Stage 9 --- The Autonomous World Engine (Dynamic Synthesis \& Balance Patches)}: inspired by VRMMO autonomous game masters, the engine gains dynamic recipe discovery (\texttt{custom\_recipes} checked alongside static \texttt{RECIPES}), procedural world prophecies and multi-tick quest tracking (\texttt{active\_quests}), bounded tuning multipliers (\texttt{biome.modifiers} for regrowth/cold/spawn rates), and an automated Discord ``Patch Notes'' announcement (\texttt{patch\_version} incremented each cycle) --- all without rewriting raw \texttt{.py} code, keeping the deterministic engine as the sole source of truth.
 \end{enumerate}
 
 \appendix

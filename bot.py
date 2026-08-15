@@ -404,6 +404,25 @@ async def visitors_cmd(ctx):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="raiders")
+@is_god_channel()
+async def raiders_cmd(ctx):
+    """!raiders — list the hostile scavengers menacing the colony."""
+    rs = state.world_state.get("raiders", [])
+    if not rs:
+        await ctx.send("🥷 No raiders are about — the camp is safe.")
+        return
+    lines = ["⚠️ **Raiders:**"]
+    for r in rs:
+        lines.append(
+            f"- 🥷 **{r['name']}** (`{r['id']}`) HP {r['hp']} @ {r['pos']} "
+            f"({r['state']}"
+            + (f", {r['stolen']} food stolen" if r["stolen"] else "")
+            + ")"
+        )
+    await ctx.send("\n".join(lines))
+
+
 @bot.command(name="heirlooms")
 @is_god_channel()
 async def heirlooms_cmd(ctx):
