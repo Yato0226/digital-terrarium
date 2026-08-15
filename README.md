@@ -35,6 +35,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)
 - **Permadeath** — freeze in a Blizzard, starve, or reach old age → pawn is enshrined in the Graveyard with a tombstone and eulogy
 - **Seasonal chronicle** — a lorekeeper LLM writes a title and paragraph whenever the season turns (`!chronicle`)
+- **Emergent traditions** — the engine tallies colony history and auto-assigns a **Tradition Tag** on a season change: *Hunters of the North* (10+ predators slain → double hunting XP, colder-tolerant), *Children of the Forest* (100+ trees felled → +1 wood per chop, shelter decays half as fast), or *Kindred of the Hearth* (20+ rations shared → socials grant +8 morale). Tags persist once earned (`!tradition` shows the tag, its effects, and the counters)
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife & visitors, read the chronicle
@@ -81,6 +82,7 @@ python main.py
 | `!visitors` | List the wandering travelers at the edge of the world |
 | `!heirlooms` | List the relics of the fallen |
 | `!monument` | Inspect the Ancestral Monolith (progress / completed dedication) |
+| `!tradition` | Inspect the colony's emergent Tradition Tag (or its progress toward one) |
 | `!chronicle` | Read the seasonal chronicle of the terrarium |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
 | `!adopt <name\|pawn_id>` | Bond with a pawn — you'll be DM'd about its milestones (any channel) |

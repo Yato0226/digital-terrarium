@@ -477,6 +477,35 @@ async def monument_cmd(ctx):
     )
 
 
+@bot.command(name="tradition")
+@is_god_channel()
+async def tradition_cmd(ctx):
+    """!tradition — inspect the colony's emergent tradition and its history."""
+    t = state.world_state.setdefault(
+        "traditions", {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
+    )
+    effects = {
+        engine.HUNTERS_TAG: "+2 combat XP when hunting; cold penalties −1",
+        engine.FORESTERS_TAG: "+1 wood from Chop; shelter degrades half as fast",
+        engine.KINDRED_TAG: "social Interact grants +8 morale instead of +5",
+    }
+    if t.get("tag"):
+        msg = (
+            f"🏛️ **{t['tag']}**\n*{effects[t['tag']]}*\n\n"
+            f"Colony history: {t['predators_slain']} predators slain, "
+            f"{t['trees_felled']} trees felled, {t['rations_shared']} rations shared."
+        )
+    else:
+        msg = (
+            "🏛️ No tradition yet — a way of life emerges from survival. "
+            f"Thresholds: {engine.HUNTERS_THRESHOLD} predators slain, "
+            f"{engine.FORESTERS_THRESHOLD} trees felled, "
+            f"{engine.KINDRED_THRESHOLD} rations shared. "
+            f"So far: {t['predators_slain']} / {t['trees_felled']} / {t['rations_shared']}."
+        )
+    await ctx.send(msg)
+
+
 @bot.command(name="adopt")
 async def adopt(ctx, pawn_id: str):
     """!adopt <name|pawn_id> — bond with a pawn; you'll be DM'd about its milestones (any channel)."""

@@ -153,6 +153,9 @@ def _biome_infra_txt(biome):
     )
     if monument.get("done"):
         parts.append(" | 🗿 Monolith")
+    tradition = state.world_state.setdefault("traditions", {}).get("tag")
+    if tradition:
+        parts.append(f" | 🏛️ {tradition}")
     return "".join(parts)
 
 

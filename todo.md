@@ -63,9 +63,9 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 1. Emergent Traditions (Culture Engine)
 
-- [ ] Engine evaluates historical counters each season and auto-assigns a **Tradition Tag**: *Hunters of the North* (>10 predators slain → +2 combat XP when hunting; cold-weather penalties reduced by 1).
-- [ ] *Children of the Forest* (>100 trees felled → +1 wood yield from Chop; shelter degrades slower).
-- [ ] *Kindred of the Hearth* (>20 rations shared → social interactions grant +8 morale instead of +5).
+- [x] Engine evaluates historical counters each season and auto-assigns a **Tradition Tag**: *Hunters of the North* (>10 predators slain → +2 combat XP when hunting; cold-weather penalties reduced by 1).
+- [x] *Children of the Forest* (>100 trees felled → +1 wood yield from Chop; shelter degrades slower).
+- [x] *Kindred of the Hearth* (>20 rations shared → social interactions grant +8 morale instead of +5).
 
 ### 2. Communal Festivals & Rituals
 

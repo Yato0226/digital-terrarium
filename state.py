@@ -165,6 +165,7 @@ world_state = {
     "tiles": {},
     "visitors": [],
     "monument": {"wood": 0, "stone": 0, "done": False, "inscription": None},
+    "traditions": {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
 }
 
 
@@ -242,6 +243,7 @@ def reset_world():
     world_state["tiles"] = {}
     world_state["visitors"] = []
     world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    world_state["traditions"] = {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
     pending_chronicle = None
     pending_monument = None
     failed_intents.clear()
@@ -401,6 +403,14 @@ def load_state():
         monument.setdefault("stone", 0)
         monument.setdefault("done", False)
         monument.setdefault("inscription", None)
+        traditions = world_state.setdefault(
+            "traditions",
+            {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
+        )
+        traditions.setdefault("tag", None)
+        traditions.setdefault("predators_slain", 0)
+        traditions.setdefault("trees_felled", 0)
+        traditions.setdefault("rations_shared", 0)
         if not world_state["pawns"]:
             if world_state["graveyard"]:
                 # Real extinction: keep the dataset and stay paused.

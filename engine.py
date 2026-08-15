@@ -115,6 +115,18 @@ FARM_HARVEST_FOOD = 15
 FARM_HARVEST_FIBER = 5
 FARM_GROW_SEASONS = ("Spring", "Summer")
 
+# Stage 7 emergent traditions (colony-wide culture tags).
+HUNTERS_TAG = "Hunters of the North"
+FORESTERS_TAG = "Children of the Forest"
+KINDRED_TAG = "Kindred of the Hearth"
+HUNTERS_THRESHOLD = 10      # predators slain
+FORESTERS_THRESHOLD = 100   # trees felled
+KINDRED_THRESHOLD = 20      # rations shared
+HUNTERS_COMBAT_XP = 2       # hunting XP while hunting
+HUNTERS_COLD_REDUCTION = 1  # cold-weather penalties reduced
+FORESTERS_CHOP_BONUS = 1    # wood yield from Chop
+KINDRED_SOCIAL_MORALE = 8   # social Interact morale (base 5)
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -301,6 +313,28 @@ def _pay_cost(pawn, action):
 
 def _gain_skill(pawn, skill):
     pawn["skills"][skill] = _clamp(pawn["skills"][skill] + 1, 0, SKILL_MAX)
+
+
+def _tradition():
+    """The colony's current tradition tag, or None."""
+    return state.world_state.setdefault("traditions", {}).get("tag")
+
+
+def _traditions_inc(key, amount=1):
+    """Accumulate a colony-wide historical counter (survives pawn deaths)."""
+    traditions = state.world_state.setdefault(
+        "traditions",
+        {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
+    )
+    traditions.setdefault(key, 0)
+    traditions[key] += amount
+
+
+def _shelter_damage(amount):
+    """Children of the Forest: shelter degrades only half as fast."""
+    if _tradition() == FORESTERS_TAG:
+        return amount // 2
+    return amount
 
 
 def _inspire_bonus(pawn, amount):
@@ -653,7 +687,7 @@ def _tick_fires():
         if "burn" in entry:
             if entry["regrow_to"] == BUILD_TILE:
                 biome["campfire"] = _clamp(biome["campfire"] - CAMP_BURN_CAMPFIRE)
-                biome["shelter"] = _clamp(biome["shelter"] - CAMP_BURN_SHELTER)
+                biome["shelter"] = _clamp(biome["shelter"] - _shelter_damage(CAMP_BURN_SHELTER))
             else:
                 biome["wood_stock"] = _clamp(biome["wood_stock"] - FIRE_WOOD_DRAIN)
             for pawn in state.world_state["pawns"].values():
@@ -947,12 +981,15 @@ def _do_chop(pawn, pawn_id):
     wood = 3 + pawn["skills"]["woodcutting"] // 3 + random.choice([0, 1])
     if pawn["gear"]["main_hand"] == "Stone Axe":
         wood *= 2
+    if _tradition() == FORESTERS_TAG:
+        wood += FORESTERS_CHOP_BONUS
     wood = _inspire_bonus(pawn, wood)
     wood = min(biome["wood_stock"], wood)
     biome["wood_stock"] -= wood
     pawn["inventory"]["wood"] += wood
     _goal_nudge(pawn, wood, resource="wood")
     pawn["counters"]["trees_felled"] += 1
+    _traditions_inc("trees_felled", 1)
     _gain_skill(pawn, "woodcutting")
     if _adjacent_to_fire(*pawn["pos"]):
         x, y = pawn["pos"]
@@ -1338,9 +1375,15 @@ def _do_attack(pawn, pawn_id, target):
         )
         animal["hp"] -= damage
         pawn["counters"]["damage_dealt"] += damage
-        _gain_skill(pawn, "combat")
+        if _tradition() == HUNTERS_TAG:
+            for _ in range(HUNTERS_COMBAT_XP):
+                _gain_skill(pawn, "combat")
+        else:
+            _gain_skill(pawn, "combat")
         if animal["hp"] <= 0:
             state.world_state["wildlife"].remove(animal)
+            if spec["kind"] == "predator":
+                _traditions_inc("predators_slain", 1)
             pawn["inventory"]["food"] += spec["food_yield"]
             pawn["inventory"]["fiber"] += spec["fiber_yield"]
             _goal_nudge(pawn, spec["food_yield"], resource="food")
@@ -1669,6 +1712,7 @@ def _do_share(pawn, pawn_id, target):
     pawn["inventory"]["food"] -= SHARE_FOOD
     tpawn["inventory"]["food"] += SHARE_FOOD
     pawn["counters"]["rations_shared"] += 1
+    _traditions_inc("rations_shared", 1)
     _goal_nudge(pawn, 1, kind="social", target_id=target)
     _adjust_relationship(pawn, target, 25)
     _adjust_relationship(tpawn, pawn_id, 25)
@@ -1711,6 +1755,7 @@ def _share_with_visitor(pawn, pawn_id, visitor):
         )
     pawn["inventory"]["food"] -= BARTER_FOOD_COST
     pawn["counters"]["rations_shared"] += BARTER_FOOD_COST
+    _traditions_inc("rations_shared", BARTER_FOOD_COST)
     pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
     gains = []
     if visitor["kind"] == "Merchant":
@@ -1749,8 +1794,9 @@ def _do_interact(pawn, pawn_id, flavor):
     effects = []
     desc = _verb_phrase(pawn["name"], verb)
     if _in_words(verb, INTERACT_WORDS["social"]):
-        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
-        effects.append("+5 morale")
+        social_morale = KINDRED_SOCIAL_MORALE if _tradition() == KINDRED_TAG else 5
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + social_morale)
+        effects.append(f"+{social_morale} morale")
         partner = _tilemate(pawn, pawn_id)
         if partner:
             _adjust_relationship(pawn, partner["id"], 10)
@@ -2169,6 +2215,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
     )
     if pawn["gear"]["body"] == "Warm Coat":
         cold = max(0, cold - COAT_INSULATION)
+    if _tradition() == HUNTERS_TAG:
+        cold = max(0, cold - HUNTERS_COLD_REDUCTION)
     near_camp = _manhattan(pawn["pos"], CAMP_POS) <= CAMP_RANGE
     near_fire = lit and near_camp
     monument = state.world_state.setdefault(
@@ -2315,7 +2363,7 @@ def _resolve_break(pawn, pawn_id):
                 description=desc,
             )
         biome = state.world_state["biome"]
-        biome["shelter"] = _clamp(biome["shelter"] - 5)
+        biome["shelter"] = _clamp(biome["shelter"] - _shelter_damage(5))
         return events.add_event(
             "break",
             actor=pawn_id,
@@ -2362,7 +2410,7 @@ def _resolve_break(pawn, pawn_id):
                 description=f"{pawn['name']} burns 2 stocks of wood in a manic frenzy!",
             )
         else:
-            biome["shelter"] = _clamp(biome["shelter"] - 5)
+            biome["shelter"] = _clamp(biome["shelter"] - _shelter_damage(5))
             return events.add_event(
                 "break",
                 actor=pawn_id,
@@ -2455,6 +2503,30 @@ def _kill(pawn_id, pawn, cause):
     )
 
 
+def _evaluate_tradition():
+    """Assign the colony's first tradition tag once its history crosses a threshold."""
+    traditions = state.world_state.setdefault(
+        "traditions",
+        {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},
+    )
+    if traditions.get("tag"):
+        return None
+    if traditions.get("predators_slain", 0) > HUNTERS_THRESHOLD:
+        tag = HUNTERS_TAG
+    elif traditions.get("trees_felled", 0) > FORESTERS_THRESHOLD:
+        tag = FORESTERS_TAG
+    elif traditions.get("rations_shared", 0) > KINDRED_THRESHOLD:
+        tag = KINDRED_TAG
+    else:
+        return None
+    traditions["tag"] = tag
+    return events.add_event(
+        "tradition",
+        data={"tag": tag},
+        description=f"The colony has found its way of life: {tag}.",
+    )
+
+
 def tick_environment():
     result = []
     biome = state.world_state["biome"]
@@ -2465,6 +2537,7 @@ def tick_environment():
     biome["day"] = day
 
     new_season = SEASONS[(tick // SEASON_TICKS) % len(SEASONS)]
+    prev_season = biome["season"]
     if new_season != biome["season"]:
         state.pending_chronicle = new_season
         result.append(
@@ -2486,6 +2559,11 @@ def tick_environment():
         state.world_state["wildlife"] = new_wild
 
     biome["season"] = new_season
+
+    if new_season != prev_season:
+        tradition_event = _evaluate_tradition()
+        if tradition_event:
+            result.append(tradition_event)
 
     if new_season == "Summer" and not biome.get("granary"):
         biome["food_stock"] = _clamp(biome["food_stock"] - 2)

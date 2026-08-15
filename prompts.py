@@ -114,6 +114,17 @@ def build_prompt():
             f"Interact to harvest"
         )
 
+    traditions = state.world_state.setdefault(
+        "traditions", {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
+    )
+    tradition_txt = traditions.get("tag") or "none yet"
+    if not traditions.get("tag"):
+        tradition_txt += (
+            f" (predators slain {traditions['predators_slain']}, "
+            f"trees felled {traditions['trees_felled']}, "
+            f"rations shared {traditions['rations_shared']})"
+        )
+
     wild_lines = []
     for w in state.world_state["wildlife"]:
         spec = engine.WILDLIFE[w["species"]]
@@ -230,6 +241,8 @@ def build_prompt():
 Recent terrarium history: {history}
 
 Biome: {biome_line}{fallen_line}
+
+Tradition: {tradition_txt}
 
 Map:
 {map_view}
