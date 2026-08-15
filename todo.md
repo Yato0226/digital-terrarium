@@ -19,9 +19,9 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 2. Seasonal Disasters & Environmental Anomalies
 
-- [ ] **Flash floods (Spring Rain):** River tiles (`🌊`) temporarily expand to adjacent Meadow tiles for 3 ticks — foraging impossible, but +5 food stock deposited when the water recedes.
-- [ ] **Aurora Borealis (Winter Night):** clear Winter nights have a chance to trigger an Aurora — +10 colony-wide morale and an atmospheric LLM prompt line.
-- [ ] **Toxic Miasma / Spore Bloom (Autumn):** Swamps/Ruins emit toxic spores for 2 ticks — pawns on those tiles lose 5 HP unless wearing a `Warm Coat` (protective wrapping).
+- [x] **Flash floods (Spring Rain):** River tiles (`🌊`) temporarily expand to adjacent Meadow tiles for 3 ticks — foraging impossible, but +5 food stock deposited when the water recedes.
+- [x] **Aurora Borealis (Winter Night):** clear Winter nights have a chance to trigger an Aurora — +10 colony-wide morale and an atmospheric LLM prompt line.
+- [x] **Toxic Miasma / Spore Bloom (Autumn):** Swamps/Ruins emit toxic spores for 2 ticks — pawns on those tiles lose 5 HP unless wearing a `Warm Coat` (protective wrapping).
 
 ---
 

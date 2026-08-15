@@ -97,6 +97,10 @@ DEFAULT_BIOME = {
     "food_stock": 100,
     "granary": False,
     "palisade": 0,
+    "flood": 0,
+    "flooded": [],
+    "miasma": 0,
+    "aurora": False,
 }
 
 GRID_SIZE = 5
@@ -318,9 +322,16 @@ def load_state():
         world_state["pawns"] = {
             pid: _migrate_pawn(pid, p) for pid, p in loaded.get("pawns", {}).items()
         }
-        world_state.setdefault("biome", dict(DEFAULT_BIOME))
+        if "biome" in loaded:
+            world_state["biome"] = loaded["biome"]
+        else:
+            world_state["biome"] = dict(DEFAULT_BIOME)
         world_state["biome"].setdefault("granary", False)
         world_state["biome"].setdefault("palisade", 0)
+        world_state["biome"].setdefault("flood", 0)
+        world_state["biome"].setdefault("flooded", [])
+        world_state["biome"].setdefault("miasma", 0)
+        world_state["biome"].setdefault("aurora", False)
         world_state.setdefault("graveyard", [])
         world_state.setdefault("grid", [row[:] for row in DEFAULT_GRID])
         world_state.setdefault("wildlife", [])

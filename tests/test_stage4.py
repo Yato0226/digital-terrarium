@@ -275,3 +275,161 @@ def test_old_save_without_tiles_loads_cleanly(monkeypatch, tmp_path):
     state.load_state()
     assert state.world_state["tiles"] == {}
     assert "pawn_1" in state.world_state["pawns"]
+
+
+# --- Seasonal disasters & anomalies (Stage 4 part 2) ---
+
+
+def _set_tick_weather(season, weather, tick):
+    state.world_state["tick"] = tick
+    state.world_state["biome"]["season"] = season
+    state.world_state["biome"]["weather"] = weather
+    for p in state.world_state["pawns"].values():
+        p["born_tick"] = tick
+
+
+def test_flood_spring_rain_floods_meadows(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Spring", "Rain", 41)
+    engine.tick_environment()
+    assert state.world_state["biome"]["flood"] > 0
+    assert grid()[3][1] == "🌊"  # Meadow (1,3) adjacent to the river flooded
+    assert grid()[1][1] == "🫐"  # Meadow (1,1) untouched
+    assert any(e["type"] == "flood" for e in state.world_state["history"])
+
+
+def test_flood_recedes_and_deposits_food(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Spring", "Rain", 41)
+    state.world_state["biome"]["food_stock"] = 40
+    state.world_state["biome"]["flood"] = 1
+    state.world_state["biome"]["flooded"] = [[1, 3]]
+    grid()[3][1] = "🌊"
+    engine.tick_environment()
+    assert grid()[3][1] == "🫐"
+    assert state.world_state["biome"]["flood"] == 0
+    assert not state.world_state["biome"]["flooded"]
+    assert state.world_state["biome"]["food_stock"] >= 40 + engine.FLOOD_FOOD_BONUS
+    assert any(e["type"] == "flood_recedes" for e in state.world_state["history"])
+
+
+def test_forage_blocked_during_flood():
+    p = pawn("pawn_1")
+    p["pos"] = [1, 3]
+    p["vitals"]["energy"] = 100
+    state.world_state["biome"]["flood"] = 2
+    state.world_state["biome"]["flooded"] = [[1, 3]]
+    grid()[3][1] = "🌊"
+    evs = engine.resolve_actions({"pawn_1": ("Forage", None)})
+    assert any(e["type"] == "failed" and e["data"].get("reason") == "flooded" for e in evs)
+
+
+def test_forage_allowed_after_flood_recedes():
+    p = pawn("pawn_1")
+    p["pos"] = [1, 3]
+    p["vitals"]["energy"] = 100
+    state.world_state["biome"]["food_stock"] = 50
+    grid()[3][1] = "🫐"
+    evs = engine.resolve_actions({"pawn_1": ("Forage", None)})
+    assert any(e["type"] == "forage" for e in evs)
+
+
+def test_aurora_winter_night_lifts_morale(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Winter", "Clear", 315)  # 315 % 20 == 15 -> night
+    for p in state.world_state["pawns"].values():
+        p["vitals"]["morale"] = 50
+    engine.tick_environment()
+    assert state.world_state["biome"]["aurora"] is True
+    for p in state.world_state["pawns"].values():
+        assert p["vitals"]["morale"] >= 60
+    assert any(e["type"] == "aurora" for e in state.world_state["history"])
+
+
+def test_aurora_not_on_winter_day(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Winter", "Clear", 300)  # 300 % 20 == 0 -> day
+    engine.tick_environment()
+    assert state.world_state["biome"]["aurora"] is False
+
+
+def test_prompt_reports_aurora():
+    state.world_state["biome"]["aurora"] = True
+    assert "Aurora" in prompts.build_prompt()
+
+
+def test_miasma_autumn_hurts_unprotected_pawns(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Autumn", "Rain", 201)
+    p = pawn("pawn_1")
+    p["pos"] = [1, 2]  # Ruins (grid[2][1])
+    p["vitals"]["hp"] = 50
+    engine.tick_environment()
+    assert state.world_state["biome"]["miasma"] > 0
+    assert p["vitals"]["hp"] == 45
+    assert any(e["type"] == "miasma_damage" for e in state.world_state["history"])
+
+
+def test_miasma_warm_coat_protects():
+    p = pawn("pawn_1")
+    p["pos"] = [1, 2]  # Ruins (grid[2][1])
+    p["vitals"]["hp"] = 50
+    p["gear"]["body"] = "Warm Coat"
+    state.world_state["biome"]["miasma"] = 1
+    engine.tick_environment()
+    assert p["vitals"]["hp"] == 50
+    assert not any(e["type"] == "miasma_damage" for e in state.world_state["history"])
+
+
+def test_miasma_clears_after_countdown(monkeypatch):
+    monkeypatch.setattr(engine, "WEATHER_CHANGE_CHANCE", 0.0)
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    _set_tick_weather("Autumn", "Rain", 201)
+    state.world_state["biome"]["miasma"] = 1
+    engine.tick_environment()
+    assert state.world_state["biome"]["miasma"] == 0
+    assert any(e["type"] == "miasma_clear" for e in state.world_state["history"])
+
+
+def test_disaster_biome_fields_survive_reload(monkeypatch, tmp_path):
+    monkeypatch.setattr(state, "STATE_FILE", str(tmp_path / "state.json"))
+    state.world_state["biome"]["flood"] = 2
+    state.world_state["biome"]["flooded"] = [[1, 3]]
+    state.world_state["biome"]["miasma"] = 1
+    state.world_state["biome"]["aurora"] = True
+    state.save_state()
+    state.world_state["biome"] = dict(state.DEFAULT_BIOME)
+    state.load_state()
+    assert state.world_state["biome"]["flood"] == 2
+    assert state.world_state["biome"]["flooded"] == [[1, 3]]
+    assert state.world_state["biome"]["miasma"] == 1
+    assert state.world_state["biome"]["aurora"] is True
+
+
+def test_old_save_without_disaster_biome_loads_cleanly(monkeypatch, tmp_path):
+    monkeypatch.setattr(state, "STATE_FILE", str(tmp_path / "state.json"))
+    state.world_state["pawns"] = {"pawn_1": state.make_pawn("pawn_1", "Lumberjack")}
+    data = json.loads(json.dumps(state.world_state))
+    biome = data["biome"]
+    for key in ("flood", "flooded", "miasma", "aurora"):
+        biome.pop(key, None)
+    with open(str(tmp_path / "state.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f)
+    state.world_state["biome"] = dict(state.DEFAULT_BIOME)
+    state.load_state()
+    assert state.world_state["biome"]["flood"] == 0
+    assert state.world_state["biome"]["flooded"] == []
+    assert state.world_state["biome"]["miasma"] == 0
+    assert state.world_state["biome"]["aurora"] is False
+    assert "pawn_1" in state.world_state["pawns"]

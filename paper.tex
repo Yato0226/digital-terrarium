@@ -247,7 +247,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), and wildfires}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), wildfires, and seasonal disasters}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]
@@ -387,6 +387,18 @@ def tick_environment():             # the world ages after pawns act
         biome["wood_stock"] = clamp(biome["wood_stock"] - 10)
         for p in pawns_on(x, y): p["vitals"]["hp"] -= 5
         ignite_adjacent(FOREST, chance=0.5); ignite_adjacent(CAMP, chance=0.25)
+    # seasonal disasters (Stage 4): Spring downpours flood the riverbanks for
+    # 3 ticks (adjacent Meadow -> water; Forage impossible, then +5 food stock
+    # as it recedes); clear Winter nights may bring an Aurora (+10 morale);
+    # damp Autumn air brews toxic spores around the Ruins (5 HP/tick unless a
+    # Warm Coat is worn)
+    if season == "Spring" and weather == "Rain" and rand() < FLOOD_CHANCE:
+        flood_adjacent_meadows(); biome["flood"] = 3
+    if season == "Winter" and weather == "Clear" and not day and rand() < 0.1:
+        for p in pawns: p["vitals"]["morale"] = clamp(p["vitals"]["morale"] + 10)
+    if season == "Autumn" and weather in ("Rain", "Storm") and rand() < 0.15:
+        for p in pawns_on(RUIN_TILE):
+            if p["gear"]["body"] != "Warm Coat": p["vitals"]["hp"] -= 5
     # moodlets: decay by one tick and sum into net morale (e.g. Grief)
     net_morale = 0
     for m in pawn["moodlets"]:

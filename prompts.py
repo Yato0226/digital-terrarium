@@ -23,6 +23,7 @@ REASON_HINTS = {
     "target_down": "the target is down",
     "off_grid": "is at the edge of the world",
     "pacifist": "is a pacifist and cannot fight",
+    "flooded": "is surrounded by floodwater",
 }
 
 ELDER_DAYS = engine.ELDER_AGE // engine.TICKS_PER_DAY
@@ -39,7 +40,7 @@ Rules:
 - Heirlooms: when a titled pawn dies holding a tool, it leaves an heirloom (e.g. "Willow's Flint Spear"). A pawn can Interact to claim one (e.g. "claim Willow's Flint Spear") to inherit its skill bonus and a proud moodlet. Owned heirlooms appear in the status as 🏆.
 - Reproduction: pawns have a sex (M/F). A 'Mate' action succeeds only on the same tile with an opposite-sex pawn they've bonded with (relationship 25+ in BOTH directions — the bond must be mutual and maintained, since relationships fade several steps every day). A successful Mate makes the pair official: both are recorded as partners, and partners can keep mating without re-earning the bond (a pawn may have several partners, but close kin — siblings, half-siblings, or a parent and child — can never court; the engine blocks it). A successful pairing makes the female pregnant for one full day, then she gives birth to a newborn who must mature through two days of childhood before courting. The colony caps at 10 — a full colony refuses new life.
 - Pawns age. Newborns are children (Child) for two days. Elders (roughly {ELDER_DAYS}+ days old) tire faster, recover less from rest, and eventually die of old age — the colony mourns them.
-- The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp. Wildfires can start from storm lightning or Summer heat — a 🔥 Burning tile hurts anyone inside and spreads to adjacent Forest (and threatens the Camp); it burns out into 🌫️ scorched earth that regrows over time. A pawn can Interact to extinguish an adjacent fire (e.g. "douse the flames") or Chop a firebreak to stop it spreading.
+- The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp. Wildfires can start from storm lightning or Summer heat — a 🔥 Burning tile hurts anyone inside and spreads to adjacent Forest (and threatens the Camp); it burns out into 🌫️ scorched earth that regrows over time. A pawn can Interact to extinguish an adjacent fire (e.g. "douse the flames") or Chop a firebreak to stop it spreading. The land also suffers seasonal hazards: Spring downpours can flood the riverbanks (🌊 floodwater covers adjacent Meadow — foraging impossible until the water recedes, then it deposits wild food); clear Winter nights may bring the ✨ Aurora Borealis (lifts everyone's morale); damp Autumn air brews ☠️ toxic spores around the Ruins (5 HP per tick unless a pawn wears a Warm Coat).
 - Wildlife roams the map (see the Wildlife section): prey (🦌 Deer, 🐇 Rabbit) flee the colony and yield food + fiber when hunted; predators (🐺 Wolf, 🐻 Bear) stalk the pawn furthest from camp and can bite — but never kill outright (like pawn combat, they only incapacitate). Taming a same-tile animal via Interact (e.g. "tame the deer") turns it into a pet that stays at camp and lifts everyone's morale.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
@@ -73,6 +74,12 @@ def build_prompt():
     ]
     if fires:
         biome_line += f" | 🔥 Fire at {', '.join(fires)}"
+    if biome.get("flood", 0) > 0:
+        biome_line += f" | 🌊 Flash flood ({biome['flood']}t)"
+    if biome.get("miasma", 0) > 0:
+        biome_line += f" | ☠️ Toxic spores ({biome['miasma']}t)"
+    if biome.get("aurora"):
+        biome_line += " | ✨ Aurora Borealis"
 
     wild_lines = []
     for w in state.world_state["wildlife"]:

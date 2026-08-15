@@ -42,6 +42,7 @@ FEASIBILITY_REASONS = {
     "target_down",
     "off_grid",
     "pacifist",
+    "flooded",
 }
 
 GRID_SIZE = state.GRID_SIZE
@@ -69,6 +70,17 @@ HEATWAVE_FIRE_CHANCE = 0.10
 HIGH_WOOD = 60
 CAMP_BURN_CAMPFIRE = 10
 CAMP_BURN_SHELTER = 10
+
+# Seasonal disasters & environmental anomalies (Stage 4 part 2).
+RIVER_TILE = "🌊"
+FLOOD_TICKS = 3
+FLOOD_CHANCE = 0.15
+FLOOD_FOOD_BONUS = 5
+AURORA_CHANCE = 0.1
+AURORA_MORALE = 10
+MIASMA_TICKS = 2
+MIASMA_CHANCE = 0.15
+MIASMA_DAMAGE = 5
 
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
@@ -428,6 +440,56 @@ def _nearest_burning_tile(x, y):
         if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and grid[ny][nx] == BURNING_TILE:
             return (nx, ny)
     return None
+
+
+def _is_flooded(x, y):
+    biome = state.world_state["biome"]
+    return biome.get("flood", 0) > 0 and [x, y] in biome.get("flooded", [])
+
+
+def _trigger_flood():
+    """Spring downpours swell the river; adjacent Meadow tiles flood for a few ticks."""
+    grid = state.world_state["grid"]
+    biome = state.world_state["biome"]
+    flooded = []
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            if grid[y][x] != RIVER_TILE:
+                continue
+            for dx, dy in DIRS.values():
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and grid[ny][nx] == FIREBREAK_TILE:
+                    if [nx, ny] not in flooded:
+                        flooded.append([nx, ny])
+                        grid[ny][nx] = RIVER_TILE
+    biome["flood"] = FLOOD_TICKS
+    biome["flooded"] = flooded
+    return flooded
+
+
+def _tick_miasma():
+    """Toxic spores from the Ruins: -5 HP unless a Warm Coat covers the face."""
+    result = []
+    for pawn in state.world_state["pawns"].values():
+        if pawn["status"] != "active" or _tile_at(*pawn["pos"]) != RUIN_TILE:
+            continue
+        if pawn["gear"]["body"] == "Warm Coat":
+            continue
+        pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] - MIASMA_DAMAGE)
+        desc = f"Toxic spores sting {pawn['name']} (-{MIASMA_DAMAGE} HP)!"
+        if pawn["vitals"]["hp"] <= 0:
+            pawn["vitals"]["hp"] = 0
+            pawn["status"] = "incapacitated"
+            desc += f" {pawn['name']} collapses!"
+        result.append(
+            events.add_event(
+                "miasma_damage",
+                actor=pawn["id"],
+                data={"damage": MIASMA_DAMAGE},
+                description=desc,
+            )
+        )
+    return result
 
 
 def _tick_fires():
@@ -807,6 +869,13 @@ def _do_forage(pawn, pawn_id):
             actor=pawn_id,
             data={"reason": "wrong_tile"},
             description=f"{pawn['name']} finds nothing edible here.",
+        )
+    if _is_flooded(*pawn["pos"]):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "flooded"},
+            description=f"{pawn['name']} wades through floodwater and finds nothing to forage.",
         )
     biome = state.world_state["biome"]
     if biome["food_stock"] <= 0:
@@ -2023,6 +2092,77 @@ def tick_environment():
                                 description=f"The Summer heatwave sets the forest ablaze at ({x},{y})!",
                             )
                         )
+
+    # Seasonal disasters (Stage 4 part 2): flash floods, aurora, toxic miasma.
+    biome["aurora"] = False
+    if (
+        new_season == "Spring"
+        and biome["weather"] == "Rain"
+        and not biome.get("flood")
+        and random.random() < FLOOD_CHANCE
+    ):
+        flooded = _trigger_flood()
+        result.append(
+            events.add_event(
+                "flood",
+                data={"flooded": flooded},
+                description="The river bursts its banks and floods the low meadows!",
+            )
+        )
+    if (
+        new_season == "Winter"
+        and biome["weather"] == "Clear"
+        and not day
+        and random.random() < AURORA_CHANCE
+    ):
+        biome["aurora"] = True
+        for pawn in state.world_state["pawns"].values():
+            if pawn["status"] == "active":
+                pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + AURORA_MORALE)
+        result.append(
+            events.add_event(
+                "aurora",
+                description="Aurora Borealis dances across the clear winter sky, lifting every heart.",
+            )
+        )
+    if (
+        new_season == "Autumn"
+        and biome["weather"] in ("Rain", "Storm")
+        and not biome.get("miasma")
+        and random.random() < MIASMA_CHANCE
+    ):
+        biome["miasma"] = MIASMA_TICKS
+        result.append(
+            events.add_event(
+                "miasma",
+                data={"ticks": MIASMA_TICKS},
+                description="Toxic spores bloom from the ruins and seep across the map.",
+            )
+        )
+    if biome.get("flood", 0) > 0:
+        biome["flood"] -= 1
+        if biome["flood"] <= 0:
+            for x, y in biome.get("flooded", []):
+                if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE and grid[y][x] == RIVER_TILE:
+                    grid[y][x] = FIREBREAK_TILE
+            biome["flooded"] = []
+            biome["food_stock"] = _clamp(biome["food_stock"] + FLOOD_FOOD_BONUS)
+            result.append(
+                events.add_event(
+                    "flood_recedes",
+                    description=(
+                        f"The floodwaters recede, leaving behind wild food "
+                        f"(+{FLOOD_FOOD_BONUS} stock)."
+                    ),
+                )
+            )
+    if biome.get("miasma", 0) > 0:
+        result += _tick_miasma()
+        biome["miasma"] -= 1
+        if biome["miasma"] <= 0:
+            result.append(
+                events.add_event("miasma_clear", description="The toxic spores disperse.")
+            )
 
     if day != prev_day:
         result.append(
