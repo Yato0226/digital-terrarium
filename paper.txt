@@ -11,6 +11,7 @@
 \usepackage{listings}
 \usepackage{hyperref}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{caption}
 \usepackage{float}
 \usepackage{tikz}
@@ -60,6 +61,7 @@ The production environment operates within a Linux Container (LXC) hosted on a P
 \caption{Host and Container Resource Allocations}
 \label{tab:hardware}
 \begin{tabular}{@{}ll@{}}
+\small
 \toprule
 \textbf{Component} & \textbf{Specification / Allocation} \\
 \midrule
@@ -189,7 +191,7 @@ Interact & 5 & any free-form verb in \texttt{flavor}; engine buckets it by keywo
 \caption*{\scriptsize All yields receive a $+10\%$ bonus while morale is above 80 (``Inspired''). Personal goals (\texttt{goal}) are proposed by the LLM in \texttt{new\_goal}, parsed and tracked by the engine, advanced by matching deeds, and pay $+15$ morale and skill XP on completion.}
 \end{table}
 
-Beyond the colonists, the world itself is alive. A \texttt{wildlife} roster holds non-pawn entities (Deer/Rabbit = prey, Wolf/Bear = predator; each carrying \texttt{hp}, \texttt{food\_yield}, \texttt{fiber\_yield}, and \texttt{bite\_damage}). \texttt{tick\_environment} spawns them season-gated --- predators in Winter/Autumn, prey in Spring/Summer, capped at three --- and runs deterministic AI: prey flee the nearest pawn within two tiles (and occasionally wander off), while predators stalk the pawn furthest from the Camp and bite to \emph{incapacitate}, never kill, consistent with combat. Because the per-tick schema's \texttt{target} literal extends to \texttt{pawn\_ids + wildlife\_ids}, the \texttt{Attack} action accepts wildlife targets: killing an animal converts it to \texttt{food} and \texttt{fiber} --- no new ``meat'' resource is introduced. Alternatively a pawn may tame a same-tile animal with an \texttt{Interact} ``tame''/``feed'' flavor; a scouting-scaled roll ($0.5 + \texttt{scouting} \times 0.02$) brings the pet to the Camp, where it grants the whole colony a passive $+2$ morale. Two further \texttt{Build} upgrades harden the camp: a \texttt{granary} stops Summer \texttt{food\_stock} decay, and a \texttt{palisade} (up to level 3) lowers the predator spawn chance. Once the camp is fully fortified --- shelter and campfire at 100, granary built, palisade maxed --- \texttt{Build} switches to a colony megaproject: the Ancestral Monolith, raised in increments of 5 wood + 5 stone up to 20/15. Its completion is permanent: colony morale is anchored at a floor of 10 (mental breaks can no longer be morale-driven) and a $+2$ warmth aura covers the Camp tile. A one-sentence dedication is written by an outside-lock LLM call (the same pattern as the seasonal chronicle) and surfaced by the \texttt{!monument} god command. Beyond megaprojects, the colony can cultivate: an \texttt{Interact} with a ``till soil'' / ``plant seeds'' / ``farm'' flavor on a Meadow tile (\texttt{🫐}) converts it into a Farm Plot (\texttt{🌾}) tracked in the shared tile overlay; the plot ripens over 20 ticks in Spring and Summer (dormant in Autumn/Winter), and a further \texttt{Interact} to ``harvest'' yields a guaranteed 15 food + 5 fiber into the farmer's inventory --- a renewable food source that never depletes the wild \texttt{food\_stock}.
+Beyond the colonists, the world itself is alive. A \texttt{wildlife} roster holds non-pawn entities (Deer/Rabbit = prey, Wolf/Bear = predator; each carrying \texttt{hp}, \texttt{food\_yield}, \texttt{fiber\_yield}, and \texttt{bite\_damage}). \texttt{tick\_environment} spawns them season-gated --- predators in Winter/Autumn, prey in Spring/Summer, capped at three --- and runs deterministic AI: prey flee the nearest pawn within two tiles (and occasionally wander off), while predators stalk the pawn furthest from the Camp and bite to \emph{incapacitate}, never kill, consistent with combat. Because the per-tick schema's \texttt{target} literal extends to \texttt{pawn\_ids + wildlife\_ids}, the \texttt{Attack} action accepts wildlife targets: killing an animal converts it to \texttt{food} and \texttt{fiber} --- no new ``meat'' resource is introduced. Alternatively a pawn may tame a same-tile animal with an \texttt{Interact} ``tame''/``feed'' flavor; a scouting-scaled roll ($0.5 + \texttt{scouting} \times 0.02$) brings the pet to the Camp, where it grants the whole colony a passive $+2$ morale. Two further \texttt{Build} upgrades harden the camp: a \texttt{granary} stops Summer \texttt{food\_stock} decay, and a \texttt{palisade} (up to level 3) lowers the predator spawn chance. Once the camp is fully fortified --- shelter and campfire at 100, granary built, palisade maxed --- \texttt{Build} switches to a colony megaproject: the Ancestral Monolith, raised in increments of 5 wood + 5 stone up to 20/15. Its completion is permanent: colony morale is anchored at a floor of 10 (mental breaks can no longer be morale-driven) and a $+2$ warmth aura covers the Camp tile. A one-sentence dedication is written by an outside-lock LLM call (the same pattern as the seasonal chronicle) and surfaced by the \texttt{!monument} god command. Beyond megaprojects, the colony can cultivate: an \texttt{Interact} with a ``till soil'' / ``plant seeds'' / ``farm'' flavor on a Meadow (blueberry) tile converts it into a Farm Plot (wheat) tracked in the shared tile overlay; the plot ripens over 20 ticks in Spring and Summer (dormant in Autumn/Winter), and a further \texttt{Interact} to ``harvest'' yields a guaranteed 15 food + 5 fiber into the farmer's inventory --- a renewable food source that never depletes the wild \texttt{food\_stock}.
 
 As the colony's history accumulates, it becomes a culture: a \texttt{traditions} block in \texttt{world\_state} tallies colony-wide counters --- predators slain, trees felled, and rations shared --- that survive individual pawn deaths. On each season change the engine's \texttt{\_evaluate\_tradition} checks the thresholds (10, 100, 20, in priority order) and, once one is crossed, permanently stamps a \textbf{Tradition Tag}: \emph{Hunters of the North} (double combat XP on hunting kills, and cold-weather penalties reduced by 1), \emph{Children of the Forest} ($+1$ wood yield from every \texttt{Chop}, and shelter damage from fires and mental breaks halved --- the only ways shelter degrades), or \emph{Kindred of the Hearth} (social \texttt{Interact} grants $+8$ morale instead of $+5$). Tags are sticky once earned, appear in the prompt and the Discord embed, and are inspected via the \texttt{!tradition} god command, which also shows the live counters en route to the next tag.
 
@@ -206,7 +208,8 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \centering
 \caption{God Commands (bot.py)}
 \label{tab:god}
-\begin{tabular}{@{}ll@{}}
+\begin{small}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.30\linewidth}>{\raggedright\arraybackslash}p{0.62\linewidth}@{}}
 \toprule
 \textbf{Command} & \textbf{Effect} \\
 \midrule
@@ -215,13 +218,14 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \texttt{!god \textless id\textgreater \textless stat\textgreater \textless v\textgreater}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
 \texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
 \texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
-\texttt{!graveyard} & List the fallen with epithets and epitaphs (💖 marks the beloved) \\
+\texttt{!graveyard} & List the fallen with epithets and epitaphs (a heart marks the beloved) \\
 \texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} / \texttt{!raiders} & Family tree / roaming fauna / travelers / hostile scavengers \\
 \texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} & Relics of the fallen / the monolith / emergent tradition / seasonal lore \\
 \texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
 \texttt{!status} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Inspect, force, or gate the simulation \\
 \bottomrule
 \end{tabular}
+\end{small}
 \end{table}
 
 \subsection{Implementation Code}
@@ -258,7 +262,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), scavenger raids (steal, defend, flee), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts &amp; funerary rites (Grief halving), wildfires, seasonal disasters, and Stage 9 synthesis (custom recipes, quests, clamped balance modifiers)}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), scavenger raids (steal, defend, flee), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts \& funerary rites (Grief halving), wildfires, seasonal disasters, and Stage 9 synthesis (custom recipes, quests, clamped balance modifiers)}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]

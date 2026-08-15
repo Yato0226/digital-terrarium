@@ -119,7 +119,7 @@ Also enable **LXC → Options → Start at boot** so the bot returns when the ho
 |---|---|
 | `terrarium_state.json` | Auto-saved world state (gitignored) |
 | `terrarium_log.jsonl` | Append-only structured event log — the dataset (gitignored) |
-| `paper.tex` | The accompanying paper (pdflatex, compiles on Overleaf) |
+| `paper.txt` | The accompanying paper (pdflatex; rename to `main.tex` on Overleaf) |
 
 ## Development
 
