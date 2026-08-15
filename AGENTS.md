@@ -48,7 +48,6 @@ LLM-driven "digital terrarium" simulation: Gemma (hosted via the Gemini API) nar
 ## Paper (paper.tex)
 
 - `paper.tex` is a **pdflatex document for Overleaf**, not prose/markdown. Keep edits valid LaTeX (escaping `%`, `&`, `#`, math as needed); don't reformat it as markdown.
-- CI builds the PDF via `.github/workflows/paper.yml` (runs pdflatex when `paper.tex` changes; the PDF is uploaded as the `paper` artifact on the Actions tab).
 - Its `lstlisting` blocks are condensed excerpts of the real modules (in `§Implementation Code`) — keep them in sync when `schema.py`/`engine.py`/`core.py` mechanics change.
 - Figures are pure TikZ (`\usetikzlibrary{arrows.meta, positioning}`) — no external image files, so the paper compiles on Overleaf without uploads. Keep them in sync with the architecture (Fig 1), per-tick flow (Fig 2), and season cycle (Fig 3).
 - Tables and claims in the paper must match the implementation (see Architecture/engine above); it's the paper's executable-source-of-truth counterpart.
