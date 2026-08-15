@@ -4,7 +4,7 @@ LLM-driven "digital terrarium" simulation: Gemma (hosted via the Gemini API) nar
 
 ## Commands
 
-- Verify everything: `ruff check . && python -m pytest tests -q` (201 tests, fully offline — no API/Discord needed; tests never import `llm.py`).
+- Verify everything: `ruff check . && python -m pytest tests -q` (370 tests, fully offline — no API/Discord needed; tests never import `llm.py`).
 - Syntax check a single file: `python -m py_compile <file>.py`.
 - Run the live bot: `python main.py` — requires `.env` with `DISCORD_BOT_TOKEN` (and webhook if embeds wanted) plus a `GEMINI_API_KEY` from Google AI Studio. No local Ollama. Bot needs **Message Content Intent** enabled in the Discord Developer Portal.
 - Auto-start on the LXC: `deploy/terrarium.service` (systemd, `Restart=always`, SIGINT for clean state save) → copy to `/etc/systemd/system/`, `systemctl daemon-reload && systemctl enable --now terrarium`, logs via `journalctl -u terrarium -f`. `WorkingDirectory` must be the project dir (state/log/.env are relative paths). On Proxmox also set **LXC → Options → Start at boot** so the bot returns when the host powers on.
