@@ -57,6 +57,7 @@ def post_to_discord(data):
                 f"🌲 Wood {biome['wood_stock']} | 🍎 Food {biome['food_stock']}"
                 f"{_biome_infra_txt(biome)}"
                 f"{_wildlife_txt()}"
+                f"{_visitors_txt()}"
                 "\n📋 HP=hit points · E=energy · H=hunger · W=warmth · M=morale · "
                 "W=wood · F=food · S=stone · Fb=fiber · gear=main/body"
             )[:1024],
@@ -162,6 +163,19 @@ def _wildlife_txt():
         else:
             parts.append(f"{spec['emoji']} {w['species']} @{w['pos']}")
     return "\n🐾 " + " | ".join(parts)
+
+
+def _visitors_txt():
+    visitors = state.world_state.get("visitors", [])
+    if not visitors:
+        return ""
+    parts = []
+    for v in visitors:
+        parts.append(
+            f"{engine.VISITOR_TYPES[v['kind']]['emoji']} {v['name']} "
+            f"({v['kind']}, {v['state']})"
+        )
+    return "\n🚶 " + " | ".join(parts)
 
 
 async def _eulogize_fallen(dead_tick):

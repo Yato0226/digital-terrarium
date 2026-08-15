@@ -26,6 +26,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Traits & moodlets** — deterministic psychological layers rolled at spawn/birth (Night Owl, Brawler, Pyromaniac, Pacifist, Iron Stomach); transient moodlets (Grief, Frostbitten) decay and can tip a pawn into a mental break
 - **Free-form `Interact` + personal goals** — pawns can do almost anything (socialize, gather, craft, relax, train) and pursue LLM-proposed personal goals (gather wood, befriend the Chief, survive the season) that pay morale and skill XP
 - **Wildlife & hunting** — season-gated prey/predators roam the map: hunt them for food+fiber, or tame them into camp pets that lift morale; predators bite to incapacitate, never kill
+- **Visitors & travelers** — every ~150 ticks a wandering NPC (Merchant, Lost Wanderer, or Bard) walks in from the grid edge, lingers by the campfire, and leaves: share food to barter, court or invite them to stay to recruit a colonist, or rob them and feel the guilt
 - **Fortifications** — build a Granary (stops Summer food decay) and a Palisade (deters predators)
 - **Reproduction & lineage** — pawns have a sex (♂/♀); mutually bonded pairs Mate (relationship ≥ 25), pregnancies come to term, newborns mature into colonists (capped at 10), and `!tree` shows couples, kinship, and rivalries
 - **Aging & old age** — pawns age tick by tick; elders (👴) tire faster, heal less, and eventually die of old age, freeing a colony slot
@@ -34,7 +35,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Seasonal chronicle** — a lorekeeper LLM writes a title and paragraph whenever the season turns (`!chronicle`)
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
-- **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, read the chronicle
+- **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife & visitors, read the chronicle
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the daily embed
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 
@@ -75,6 +76,7 @@ python main.py
 | `!list` | List all pawns with full stats for easy targeting |
 | `!tree` | Show couples, kinship, and rivalries |
 | `!wildlife` | List the fauna roaming the terrarium |
+| `!visitors` | List the wandering travelers at the edge of the world |
 | `!heirlooms` | List the relics of the fallen |
 | `!chronicle` | Read the seasonal chronicle of the terrarium |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |

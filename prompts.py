@@ -32,7 +32,9 @@ SYSTEM_PROMPT = f"""You are the AI Director of a digital terrarium — a tiny en
 Your job: decide what each ACTIVE pawn WANTS to do this tick. You propose intent; the engine resolves the real consequences.
 Rules:
 - Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn or hunt a wild animal — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25), or Interact (do anything — set 'flavor' to whatever the pawn is doing, e.g. fishing, carving, meditating, comforting a friend, taming a nearby animal; the engine decides the effects by context).
-- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id — or, for an Attack, a wildlife id listed in the Wildlife section. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
+- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id — or, for an Attack, a wildlife id or visitor id listed in the Wildlife/Visitors sections. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. If a pawn Interacts, you MUST set 'flavor' to the free-form verb. Never target yourself.
+
+- Visitors (see the Visitors section) are wandering travelers who walk to the campfire, linger, and leave. Sharing food with one is a trade: a Merchant barters stone, a Wanderer offers fiber. Courting a visitor (Mate) or Interacting to invite them to stay (e.g. "invite to stay", "recruit") can recruit them as a colonist — unless the colony is full. Attacking a visitor plunders their goods, but gentle pawns are haunted by Guilt.
 - Personal goals: a pawn may carry a goal (shown as "Goal: ... (progress/needed)"). Help it pursue that goal. If a pawn has NO goal, you may propose one in 'new_goal' (e.g. "gather 10 wood", "befriend Chief", "build a shelter", "survive 5 days") — the engine decides if it fits and tracks its progress; completing a goal lifts morale and grants skill XP.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
@@ -89,6 +91,14 @@ def build_prompt():
         else:
             wild_lines.append(f"{spec['emoji']} {w['species']} ({w['id']}) at {w['pos']}")
     wild_txt = "\n".join(wild_lines) if wild_lines else "none"
+
+    vis_lines = []
+    for v in state.world_state.get("visitors", []):
+        vis_lines.append(
+            f"{engine.VISITOR_TYPES[v['kind']]['emoji']} {v['name']} ({v['id']}) "
+            f"the {v['kind']} at {v['pos']} — {v['state']}"
+        )
+    vis_txt = "\n".join(vis_lines) if vis_lines else "none"
 
     pawn_lines = []
     for pid, pawn in state.world_state["pawns"].items():
@@ -195,6 +205,9 @@ Map:
 
 Wildlife:
 {wild_txt}
+
+Visitors:
+{vis_txt}
 
 Current status:
 {pawn_status}

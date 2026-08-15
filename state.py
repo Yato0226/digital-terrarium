@@ -32,6 +32,12 @@ JOB_POOL = [
     "Herbalist", "Cook", "Watchman", "Smith", "Gatherer", "Tanner",
 ]
 
+VISITOR_NAMES = {
+    "Merchant": ["Bartering Bex", "Trading Tomas", "Silver Quill", "Haggling Hilda", "Peddler Pike"],
+    "Wanderer": ["Lost Lila", "Wayfarer Wynn", "Roaming Rhea", "Stray Stellan", "Drifter Dara"],
+    "Bard": ["Lark the Minstrel", "Singing Sable", "Fiddle Fen", "Chanter Cora", "Busk Bodhi"],
+}
+
 TRAITS = ("Night Owl", "Brawler", "Pyromaniac", "Pacifist", "Iron Stomach")
 
 TRAIT_EMOJI = {
@@ -61,6 +67,15 @@ def next_wild_id():
     return f"wild_{max(nums, default=0) + 1}"
 
 
+def next_visitor_id():
+    nums = [
+        int(v["id"].split("_")[1])
+        for v in world_state.get("visitors", [])
+        if v["id"].startswith("visit_")
+    ]
+    return f"visit_{max(nums, default=0) + 1}"
+
+
 def next_heirloom_id():
     nums = [
         int(h["id"].split("_")[1])
@@ -82,6 +97,23 @@ def make_animal(species, pos=None, hp=100):
         "hp": hp,
         "spawn_tick": world_state["tick"],
         "tamed_by": None,
+    }
+
+
+def make_visitor(kind, pos=None):
+    """Transient wandering NPC: walks to camp, lingers, then walks off the grid."""
+    if pos is None:
+        pos = [CAMP_POS[0], CAMP_POS[1]]
+    return {
+        "id": next_visitor_id(),
+        "kind": kind,
+        "name": random.choice(VISITOR_NAMES.get(kind, ["Traveler"])),
+        "pos": [pos[0], pos[1]],
+        "hp": 60,
+        "state": "arriving",  # arriving | visiting | leaving
+        "ticks_left": 0,
+        "inventory": {"stone": 0, "fiber": 0, "food": 0},
+        "spawn_tick": world_state["tick"],
     }
 
 DEFAULT_PERSONALITY = {"bravery": 5, "aggression": 5, "curiosity": 5, "sociability": 5}
@@ -126,6 +158,7 @@ world_state = {
     "adoptions": {},
     "extinct": False,
     "tiles": {},
+    "visitors": [],
 }
 
 
@@ -201,6 +234,7 @@ def reset_world():
     world_state["adoptions"] = {}
     world_state["extinct"] = False
     world_state["tiles"] = {}
+    world_state["visitors"] = []
     pending_chronicle = None
     failed_intents.clear()
     world_state["pawns"] = {
@@ -351,6 +385,7 @@ def load_state():
             world_state["tiles"] = loaded["tiles"]
         else:
             world_state.setdefault("tiles", {})
+        world_state.setdefault("visitors", [])
         if not world_state["pawns"]:
             if world_state["graveyard"]:
                 # Real extinction: keep the dataset and stay paused.

@@ -82,6 +82,24 @@ MIASMA_TICKS = 2
 MIASMA_CHANCE = 0.15
 MIASMA_DAMAGE = 5
 
+# Stage 5 visitors & wandering nomads.
+VISITOR_INTERVAL = 150
+VISITOR_TYPES = {
+    "Merchant": {"emoji": "🧭", "hp": 60, "stock": {"stone": 10, "fiber": 10}},
+    "Wanderer": {"emoji": "🥾", "hp": 40, "stock": {"fiber": 2, "food": 2}},
+    "Bard": {"emoji": "🎻", "hp": 50, "stock": {}},
+}
+VISITOR_STAY_MIN = 3
+VISITOR_STAY_MAX = 5
+VISITOR_BARD_MORALE = 5
+BARTER_FOOD_COST = 2
+BARTER_STONE_GAIN = 3
+RECRUIT_BASE_CHANCE = 0.3
+RECRUIT_SOCIABILITY_FACTOR = 0.05
+GUILT_MOODLET_DELTA = -5
+GUILT_MOODLET_TICKS = 15
+AGGRESSION_GUILT_THRESHOLD = 6
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -284,6 +302,7 @@ INTERACT_WORDS = {
               "contemplate", "stargaze", "dream", "sunbathe", "reflect"),
     "train": ("train", "practice", "spar", "exercise", "lift", "stretch", "drill"),
     "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
+    "recruit": ("invite", "recruit", "welcome", "hire", "persuade", "settle", "ask to stay", "stay"),
     "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
     "heirloom": ("claim", "inherit", "bequeath", "receive"),
     "extinguish": ("extinguish", "quench", "douse"),
@@ -492,6 +511,121 @@ def _tick_miasma():
     return result
 
 
+def _visitor_by_id(vid):
+    return next(
+        (v for v in state.world_state.get("visitors", []) if v["id"] == vid),
+        None,
+    )
+
+
+def _on_edge(x, y):
+    return x in (0, GRID_SIZE - 1) or y in (0, GRID_SIZE - 1)
+
+
+def _walk_toward(pos, target):
+    """One greedy Manhattan step toward target, preferring horizontal moves."""
+    x, y = pos
+    tx, ty = target
+    if x < tx:
+        x += 1
+    elif x > tx:
+        x -= 1
+    elif y < ty:
+        y += 1
+    elif y > ty:
+        y -= 1
+    return [x, y]
+
+
+def _spawn_visitor():
+    """A wandering NPC steps onto the grid at a random edge tile."""
+    edge = [
+        [x, y]
+        for y in range(GRID_SIZE)
+        for x in range(GRID_SIZE)
+        if _on_edge(x, y)
+    ]
+    pos = random.choice(edge)
+    kind = random.choice(("Merchant", "Wanderer", "Bard"))
+    visitor = state.make_visitor(kind, pos)
+    visitor["hp"] = VISITOR_TYPES[kind]["hp"]
+    visitor["inventory"] = dict(VISITOR_TYPES[kind]["stock"])
+    state.world_state.setdefault("visitors", []).append(visitor)
+    return visitor
+
+
+def _step_visitors():
+    """Visitor AI: walk to camp, linger 3-5 ticks, then walk off the grid."""
+    result = []
+    visitors = state.world_state.setdefault("visitors", [])
+    for v in list(visitors):
+        if v["state"] == "arriving":
+            v["pos"] = _walk_toward(v["pos"], list(CAMP_POS))
+            if v["pos"] == list(CAMP_POS):
+                v["state"] = "visiting"
+                v["ticks_left"] = random.randint(VISITOR_STAY_MIN, VISITOR_STAY_MAX)
+                result.append(
+                    events.add_event(
+                        "visitor",
+                        data={"id": v["id"], "action": "arrive", "kind": v["kind"]},
+                        description=f"{v['name']}, the {v['kind']}, arrives at the campfire.",
+                    )
+                )
+        elif v["state"] == "visiting":
+            v["ticks_left"] -= 1
+            if v["kind"] == "Bard":
+                for pawn in state.world_state["pawns"].values():
+                    if pawn["status"] == "active":
+                        pawn["vitals"]["morale"] = _clamp(
+                            pawn["vitals"]["morale"] + VISITOR_BARD_MORALE
+                        )
+                result.append(
+                    events.add_event(
+                        "visitor",
+                        data={"id": v["id"], "action": "perform", "kind": v["kind"]},
+                        description=f"{v['name']}, the Bard, plays a tune by the fire.",
+                    )
+                )
+            if v["ticks_left"] <= 0:
+                v["state"] = "leaving"
+                result.append(
+                    events.add_event(
+                        "visitor",
+                        data={"id": v["id"], "action": "depart", "kind": v["kind"]},
+                        description=f"{v['name']}, the {v['kind']}, packs up and takes to the road.",
+                    )
+                )
+        else:  # leaving
+            if _on_edge(*v["pos"]):
+                visitors.remove(v)
+                result.append(
+                    events.add_event(
+                        "visitor",
+                        data={"id": v["id"], "action": "left", "kind": v["kind"]},
+                        description=f"{v['name']}, the {v['kind']}, wanders off the edge of the world.",
+                    )
+                )
+                continue
+            edge = [
+                [x, y]
+                for y in range(GRID_SIZE)
+                for x in range(GRID_SIZE)
+                if _on_edge(x, y)
+            ]
+            target = min(edge, key=lambda t: _manhattan(v["pos"], t))
+            v["pos"] = _walk_toward(v["pos"], target)
+            if _on_edge(*v["pos"]):
+                visitors.remove(v)
+                result.append(
+                    events.add_event(
+                        "visitor",
+                        data={"id": v["id"], "action": "left", "kind": v["kind"]},
+                        description=f"{v['name']}, the {v['kind']}, wanders off the edge of the world.",
+                    )
+                )
+    return result
+
+
 def _tick_fires():
     """Burn down each active fire, damage occupants, and regrow scorched earth."""
     result = []
@@ -598,6 +732,10 @@ def render_grid():
         x, y = w["pos"]
         occupants.setdefault((x, y), {"pawns": 0, "animals": []})
         occupants[(x, y)]["animals"].append(WILDLIFE[w["species"]]["emoji"])
+    for v in state.world_state.get("visitors", []):
+        x, y = v["pos"]
+        occupants.setdefault((x, y), {"pawns": 0, "animals": []})
+        occupants[(x, y)]["animals"].append(VISITOR_TYPES[v["kind"]]["emoji"])
     lines = []
     for y in range(len(grid)):
         cells = []
@@ -1156,6 +1294,10 @@ def _do_attack(pawn, pawn_id, target):
                 description=desc,
             )
 
+    tvis = _visitor_by_id(target)
+    if tvis is not None:
+        return _attack_visitor(pawn, pawn_id, tvis)
+
     tpawn = state.world_state["pawns"].get(target)
     if tpawn is None:
         return events.add_event(
@@ -1226,6 +1368,159 @@ def _do_attack(pawn, pawn_id, target):
     )
 
 
+def _attack_visitor(pawn, pawn_id, visitor):
+    """Attack a visitor: plunder their goods; gentle pawns feel Guilt."""
+    if _manhattan(pawn["pos"], visitor["pos"]) > 1:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "too_far"},
+            description=f"{pawn['name']} is too far from {visitor['name']} to strike.",
+        )
+    if "Pacifist" in pawn.get("traits", []):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "pacifist"},
+            description=f"{pawn['name']} is a pacifist and refuses to fight.",
+        )
+    if not _pay_cost(pawn, "Attack"):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted to attack.",
+        )
+    damage = max(
+        1,
+        5
+        + pawn["skills"]["combat"] // 2
+        + (SPEAR_DAMAGE if pawn["gear"]["main_hand"] == "Flint Spear" else 0)
+        + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
+    )
+    visitor["hp"] -= damage
+    pawn["counters"]["damage_dealt"] += damage
+    _gain_skill(pawn, "combat")
+    gentle = pawn["personality"].get("aggression", 5) < AGGRESSION_GUILT_THRESHOLD
+    if gentle:
+        _add_moodlet(pawn, "Guilt", GUILT_MOODLET_DELTA, GUILT_MOODLET_TICKS)
+    desc = f"{pawn['name']} attacks {visitor['name']}, the {visitor['kind']}, for {damage} damage."
+    if visitor["hp"] <= 0:
+        plunder = []
+        for res in ("stone", "fiber", "food"):
+            if visitor["inventory"].get(res, 0) > 0:
+                pawn["inventory"][res] += visitor["inventory"][res]
+                plunder.append(f"{visitor['inventory'][res]} {res}")
+                visitor["inventory"][res] = 0
+        state.world_state.get("visitors", []).remove(visitor)
+        if plunder:
+            desc += f" {pawn['name']} plunders {', '.join(plunder)}."
+        if gentle:
+            desc += " A shadow of guilt falls over them."
+        return events.add_event(
+            "attack",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"damage": damage, "plunder": plunder, "guilt": gentle},
+            description=desc,
+        )
+    visitor["state"] = "leaving"
+    if gentle:
+        desc += " A shadow of guilt falls over them."
+    return events.add_event(
+        "attack",
+        actor=pawn_id,
+        target=visitor["id"],
+        data={"damage": damage, "guilt": gentle},
+        description=desc,
+    )
+
+
+def _recruit_visitor(visitor, recruiter_id):
+    """Turn a visiting traveler into a permanent colonist, respecting MAX_PAWNS."""
+    if len(state.world_state["pawns"]) >= MAX_PAWNS:
+        return None
+    pawn_id = state.next_pawn_id()
+    pawn = state.make_pawn(
+        pawn_id,
+        visitor["name"],
+        hp=visitor["hp"],
+        energy=60,
+        personality=dict(state.DEFAULT_PERSONALITY),
+    )
+    pawn["job"] = "Wanderer"
+    pawn["pos"] = list(visitor["pos"])
+    state.world_state["pawns"][pawn_id] = pawn
+    state.world_state.get("visitors", []).remove(visitor)
+    recruiter = state.world_state["pawns"].get(recruiter_id)
+    if recruiter:
+        _adjust_relationship(pawn, recruiter_id, 20)
+        _adjust_relationship(recruiter, pawn_id, 20)
+    return pawn
+
+
+def _court_visitor(pawn, pawn_id, visitor):
+    """Mate targeting a visitor is a courtship — a sociable pawn may recruit them."""
+    if visitor["state"] != "visiting" or _manhattan(pawn["pos"], visitor["pos"]) > 0:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "not_same_tile"},
+            description=f"{pawn['name']} wants to court {visitor['name']}, but they are apart.",
+        )
+    if len(state.world_state["pawns"]) >= MAX_PAWNS:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "colony_full"},
+            description=f"{visitor['name']} would stay, but the colony is already at capacity.",
+        )
+    if not _pay_cost(pawn, "Mate"):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted to court.",
+        )
+    chance = _clamp(
+        RECRUIT_BASE_CHANCE + pawn["personality"]["sociability"] * RECRUIT_SOCIABILITY_FACTOR,
+        0.1,
+        0.95,
+    )
+    if random.random() < chance:
+        recruit = _recruit_visitor(visitor, pawn_id)
+        if recruit is None:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                target=visitor["id"],
+                data={"reason": "colony_full"},
+                description=f"{visitor['name']} would stay, but the colony is already at capacity.",
+            )
+        return events.add_event(
+            "recruit",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"name": recruit["name"]},
+            description=(
+                f"{pawn['name']} courts {visitor['name']}, who decides to stay and join the colony!"
+            ),
+        )
+    return events.add_event(
+        "failed",
+        actor=pawn_id,
+        target=visitor["id"],
+        data={"reason": "declined"},
+        description=f"{visitor['name']} kindly declines {pawn['name']}'s invitation.",
+    )
+
+
 def _do_share(pawn, pawn_id, target):
     if not target:
         return events.add_event(
@@ -1243,6 +1538,9 @@ def _do_share(pawn, pawn_id, target):
         )
     tpawn = state.world_state["pawns"].get(target)
     if tpawn is None:
+        tvis = _visitor_by_id(target)
+        if tvis is not None:
+            return _share_with_visitor(pawn, pawn_id, tvis)
         return events.add_event(
             "failed",
             actor=pawn_id,
@@ -1295,6 +1593,59 @@ def _do_share(pawn, pawn_id, target):
         target=target,
         data={"food": SHARE_FOOD},
         description=f"{pawn['name']} shares food with {tpawn['name']}.",
+    )
+
+
+def _share_with_visitor(pawn, pawn_id, visitor):
+    """Share food to a visitor: the Merchant barters stone; others trade a keepsake."""
+    if visitor["state"] != "visiting" or _manhattan(pawn["pos"], visitor["pos"]) > 1:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "too_far"},
+            description=f"{pawn['name']} cannot reach {visitor['name']}, the {visitor['kind']}.",
+        )
+    if pawn["inventory"]["food"] < BARTER_FOOD_COST:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "need_food"},
+            description=f"{pawn['name']} has nothing to trade.",
+        )
+    if not _pay_cost(pawn, "Share"):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=visitor["id"],
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted to trade.",
+        )
+    pawn["inventory"]["food"] -= BARTER_FOOD_COST
+    pawn["counters"]["rations_shared"] += BARTER_FOOD_COST
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
+    gains = []
+    if visitor["kind"] == "Merchant":
+        stone = min(BARTER_STONE_GAIN, visitor["inventory"].get("stone", 0))
+        visitor["inventory"]["stone"] -= stone
+        pawn["inventory"]["stone"] += stone
+        gains.append(f"{stone} stone")
+    elif visitor["kind"] == "Wanderer":
+        fiber = min(2, visitor["inventory"].get("fiber", 0))
+        visitor["inventory"]["fiber"] -= fiber
+        pawn["inventory"]["fiber"] += fiber
+        gains.append(f"{fiber} fiber")
+    gain_txt = ", ".join(gains) if gains else "a grateful smile"
+    return events.add_event(
+        "barter",
+        actor=pawn_id,
+        target=visitor["id"],
+        data={"food": BARTER_FOOD_COST, "gains": gains, "kind": visitor["kind"]},
+        description=(
+            f"{pawn['name']} shares {BARTER_FOOD_COST} food with {visitor['name']}, "
+            f"the {visitor['kind']}, and receives {gain_txt} in return."
+        ),
     )
 
 
@@ -1390,6 +1741,35 @@ def _do_interact(pawn, pawn_id, flavor):
                 effects.append("taming attempt failed")
         else:
             effects.append("no wild animal here to tame")
+    elif _in_words(verb, INTERACT_WORDS["recruit"]):
+        visitor = next(
+            (v for v in state.world_state.get("visitors", []) if v["pos"] == pawn["pos"]),
+            None,
+        )
+        if visitor is None:
+            effects.append("no traveler here to invite")
+        elif len(state.world_state["pawns"]) >= MAX_PAWNS:
+            effects.append("the colony is already full")
+        else:
+            chance = _clamp(
+                RECRUIT_BASE_CHANCE + pawn["personality"]["sociability"] * RECRUIT_SOCIABILITY_FACTOR,
+                0.1,
+                0.95,
+            )
+            if random.random() < chance:
+                recruit = _recruit_visitor(visitor, pawn_id)
+                effects.append(f"recruits {recruit['name']}")
+                return events.add_event(
+                    "recruit",
+                    actor=pawn_id,
+                    target=visitor["id"],
+                    data={"name": recruit["name"]},
+                    description=(
+                        f"{pawn['name']} invites {recruit['name']} to stay — "
+                        f"and {recruit['name']} joins the colony!"
+                    ),
+                )
+            effects.append(f"{visitor['name']} politely declines")
     elif _in_words(verb, INTERACT_WORDS["heirloom"]):
         claimed = _claim_heirloom(pawn, pawn_id, verb)
         if claimed:
@@ -1457,6 +1837,9 @@ def _do_mate(pawn, pawn_id, target):
         )
     tpawn = state.world_state["pawns"].get(target)
     if tpawn is None:
+        tvis = _visitor_by_id(target)
+        if tvis is not None:
+            return _court_visitor(pawn, pawn_id, tvis)
         return events.add_event(
             "failed",
             actor=pawn_id,
@@ -2163,6 +2546,18 @@ def tick_environment():
             result.append(
                 events.add_event("miasma_clear", description="The toxic spores disperse.")
             )
+
+    # Visitors (Stage 5): a wandering NPC may step onto the grid edge.
+    if len(state.world_state.get("visitors", [])) == 0 and tick % VISITOR_INTERVAL == 0:
+        v = _spawn_visitor()
+        result.append(
+            events.add_event(
+                "visitor",
+                data={"id": v["id"], "action": "spawn", "kind": v["kind"]},
+                description=f"A {v['kind']} named {v['name']} appears at the edge of the world.",
+            )
+        )
+    result += _step_visitors()
 
     if day != prev_day:
         result.append(

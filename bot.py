@@ -386,6 +386,23 @@ async def wildlife_cmd(ctx):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="visitors")
+@is_god_channel()
+async def visitors_cmd(ctx):
+    """!visitors — list the wandering travelers at the edge of the world."""
+    vs = state.world_state.get("visitors", [])
+    if not vs:
+        await ctx.send("🚶 No travelers are passing through right now.")
+        return
+    lines = ["🧭 **Visitors:**"]
+    for v in vs:
+        lines.append(
+            f"- {engine.VISITOR_TYPES[v['kind']]['emoji']} **{v['name']}** "
+            f"(`{v['id']}`) the {v['kind']} HP {v['hp']} @ {v['pos']} ({v['state']})"
+        )
+    await ctx.send("\n".join(lines))
+
+
 @bot.command(name="heirlooms")
 @is_god_channel()
 async def heirlooms_cmd(ctx):

@@ -31,11 +31,11 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 1. Transient Visitor Entities (`world_state["visitors"]`)
 
-- [ ] **Spawning:** once every ~150 ticks, a wandering NPC appears at the grid edge — Merchant (rare stocks: ~10 stone, ~10 fiber), Lost Wanderer (low HP/energy, seeks shelter), or Wandering Bard (performs at the campfire, +5 morale).
-- [ ] **Visitor AI:** pathfind directly to Camp `(2,2)`, stay 3–5 ticks, then walk off the edge and despawn.
-- [ ] `Share` food to a visitor → barter (e.g. give 2 food → receive 3 stone) or colony reputation.
-- [ ] `Mate` or `Interact` `flavor="invite to stay"` / `"recruit"`: a high-sociability pawn has a chance to permanently recruit the wanderer as a colonist (respects `MAX_PAWNS`).
-- [ ] `Attack` visitors → plunder their inventory, but non-aggressive pawns gain a `Guilt` moodlet (−5 morale).
+- [x] **Spawning:** once every ~150 ticks, a wandering NPC appears at the grid edge — Merchant (rare stocks: ~10 stone, ~10 fiber), Lost Wanderer (low HP/energy, seeks shelter), or Wandering Bard (performs at the campfire, +5 morale).
+- [x] **Visitor AI:** pathfind directly to Camp `(2,2)`, stay 3–5 ticks, then walk off the edge and despawn.
+- [x] `Share` food to a visitor → barter (e.g. give 2 food → receive 3 stone) or colony reputation.
+- [x] `Mate` or `Interact` `flavor="invite to stay"` / `"recruit"`: a high-sociability pawn has a chance to permanently recruit the wanderer as a colonist (respects `MAX_PAWNS`).
+- [x] `Attack` visitors → plunder their inventory, but non-aggressive pawns gain a `Guilt` moodlet (−5 morale).
 
 ---
 
