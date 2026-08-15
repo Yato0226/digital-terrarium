@@ -9,7 +9,7 @@ An LLM-driven multi-agent simulation that runs forever in a Discord server. An A
 Every tick (default 60 s):
 
 1. **Schema rebuild** — a Pydantic schema is generated from the live agent roster.
-2. **Decision** — the LLM proposes *intent only*: action, narrative, quote, inner monologue, direction, target.
+2. **Decision** — the LLM proposes *intent only*: action, narrative, quote, inner monologue, direction, target, free-form `flavor` verb, and optional personal goal.
 3. **Override** — god orders (`!order`) replace the model's proposal.
 4. **Resolve** — a deterministic engine (`engine.py`) validates, costs, and applies all consequences.
 5. **Persist & broadcast** — state saves, events log to `terrarium_log.jsonl`, an embed posts to Discord.
@@ -21,11 +21,19 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **AI director** — Gemma 4 (31B, fallback 26B MoE) decides for every pawn each tick, with per-tick structured JSON output
 - **5×5 living world** — seasons, weather, day/night, depletable wood/food stocks, campfire warmth
 - **Pawn biology & psyche** — HP, energy, hunger, warmth, morale, skills, relationships, gear, mental breaks
-- **Reproduction** — pawns have a sex (♂/♀); bonded pairs can Mate (same tile, relationship ≥ 25), pregnancies come to term, and newborns mature into full colonists (colony capped at 10)
+- **Traits & moodlets** — deterministic psychological layers rolled at spawn/birth (Night Owl, Brawler, Pyromaniac, Pacifist, Iron Stomach); transient moodlets (Grief, Frostbitten) decay and can tip a pawn into a mental break
+- **Free-form `Interact` + personal goals** — pawns can do almost anything (socialize, gather, craft, relax, train) and pursue LLM-proposed personal goals (gather wood, befriend the Chief, survive the season) that pay morale and skill XP
+- **Wildlife & hunting** — season-gated prey/predators roam the map: hunt them for food+fiber, or tame them into camp pets that lift morale; predators bite to incapacitate, never kill
+- **Fortifications** — build a Granary (stops Summer food decay) and a Palisade (deters predators)
+- **Reproduction & lineage** — pawns have a sex (♂/♀); mutually bonded pairs Mate (relationship ≥ 25), pregnancies come to term, newborns mature into colonists (capped at 10), and `!tree` shows couples, kinship, and rivalries
 - **Aging & old age** — pawns age tick by tick; elders (👴) tire faster, heal less, and eventually die of old age, freeing a colony slot
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)
 - **Permadeath** — freeze in a Blizzard, starve, or reach old age → pawn is enshrined in the Graveyard with a tombstone and eulogy
-- **God interface** — spawn, edit, order, whisper, pause/resume
+- **Seasonal chronicle** — a lorekeeper LLM writes a title and paragraph whenever the season turns (`!chronicle`)
+- **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
+- **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
+- **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, read the chronicle
+- **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the daily embed
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 
 ## Quick start
@@ -44,9 +52,11 @@ python main.py
 | `GEMINI_API_KEY` | ✅ | Key from [Google AI Studio](https://aistudio.google.com/) |
 | `DISCORD_WEBHOOK_URL` | 🟡 | Channel webhook for the embeds (optional — bot falls back to chat) |
 | `GOD_CHANNEL_NAME` | — | Restrict god commands to one channel (default: any) |
+| `BOT_COMMAND_PREFIX` | — | Command prefix (default `!`) |
 | `TICK_INTERVAL_SECONDS` | — | Seconds per tick (default 60) |
 | `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` | — | Primary/fallback model ids |
 | `LLM_TEMPERATURE` | — | Sampling temperature (default 0.7) |
+| `NOTIFY_USER_ID` | — | Discord user id pinged on total extinction (defaults to a configured id) |
 
 ## God commands (prefix `!`)
 
@@ -74,9 +84,7 @@ python main.py
 
 Pawns are targeted **by name** (case-insensitive) or by their `pawn_N` id. New pawns get an auto-generated name (e.g. `Willow`) and a flavor job (e.g. `the Forager`) from built-in pools, or you can set both explicitly (`!add Fern`, `!job Fern Hunter`).
 
-**Total extinction is possible**: if every pawn dies (blizzard freeze or starvation), the bot pings `NOTIFY_USER_ID`, pauses itself to stop API usage, and waits for you to `!add` new colonists and `!resume`.
-
-## Run as a service (Proxmox / LXC)
+**Total extinction is possible**: if every pawn dies (blizzard freeze or starvation), the bot pings `NOTIFY_USER_ID`, pauses itself to stop API usage, and waits for you to `!add` new colonists and `!resume`.## Run as a service (Proxmox / LXC)
 
 ```bash
 sudo useradd -r -m terrarium
@@ -95,12 +103,12 @@ Also enable **LXC → Options → Start at boot** so the bot returns when the ho
 |---|---|
 | `terrarium_state.json` | Auto-saved world state (gitignored) |
 | `terrarium_log.jsonl` | Append-only structured event log — the dataset (gitignored) |
-| `paper.txt` | The accompanying paper (pdflatex, compiles on Overleaf) |
+| `paper.tex` | The accompanying paper (pdflatex, compiles on Overleaf) |
 
 ## Development
 
 ```bash
-ruff check . && python -m pytest tests -q   # 70 tests, fully offline
+ruff check . && python -m pytest tests -q   # 201 tests, fully offline
 ```
 
 See `AGENTS.md` for the architecture, the engine's lockstep constraints (adding a stat/action touches multiple modules), and deployment notes.
