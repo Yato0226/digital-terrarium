@@ -54,6 +54,22 @@ BUILD_TILE = "🏕️"
 RUIN_TILE = "💀"
 QUARRY_TILE = "🪨"
 
+# Wildfire & dynamic tile lifecycle (Stage 4).
+BURNING_TILE = "🔥"
+ASH_TILE = "🌫️"
+FIREBREAK_TILE = "🫐"
+FIRE_TICKS = 3
+REGROW_TICKS = 40
+FIRE_WOOD_DRAIN = 10
+FIRE_DAMAGE = 5
+FIRE_SPREAD_CHANCE = 0.5
+FIRE_CAMP_SPREAD_CHANCE = 0.25
+LIGHTNING_CHANCE = 0.05
+HEATWAVE_FIRE_CHANCE = 0.10
+HIGH_WOOD = 60
+CAMP_BURN_CAMPFIRE = 10
+CAMP_BURN_SHELTER = 10
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -258,6 +274,7 @@ INTERACT_WORDS = {
     "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
     "gather": ("fish", "hunt", "gather", "pick", "collect", "dig", "search", "forage", "scavenge"),
     "heirloom": ("claim", "inherit", "bequeath", "receive"),
+    "extinguish": ("extinguish", "quench", "douse"),
 }
 
 GOAL_MORALE = 15
@@ -370,6 +387,139 @@ def _tile_at(x, y):
 
 def _manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _ignite(x, y):
+    """Set a Forest or Camp tile on fire. Returns True if it ignited."""
+    grid = state.world_state["grid"]
+    tile = grid[y][x]
+    if tile == BURNING_TILE:
+        return False
+    if tile not in FOREST_TILES and tile != BUILD_TILE:
+        return False
+    if tile == BUILD_TILE:
+        regrow_to = BUILD_TILE
+    elif random.random() < 0.5:
+        regrow_to = tile
+    else:
+        regrow_to = FIREBREAK_TILE
+    grid[y][x] = BURNING_TILE
+    state.world_state.setdefault("tiles", {})[f"{x},{y}"] = {
+        "burn": FIRE_TICKS,
+        "regrow_to": regrow_to,
+    }
+    return True
+
+
+def _adjacent_to_fire(x, y):
+    grid = state.world_state["grid"]
+    for dx, dy in DIRS.values():
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and grid[ny][nx] == BURNING_TILE:
+            return True
+    return False
+
+
+def _nearest_burning_tile(x, y):
+    """The nearest burning tile within Manhattan distance 1, or None."""
+    grid = state.world_state["grid"]
+    for dx, dy in ((0, 0), *DIRS.values()):
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and grid[ny][nx] == BURNING_TILE:
+            return (nx, ny)
+    return None
+
+
+def _tick_fires():
+    """Burn down each active fire, damage occupants, and regrow scorched earth."""
+    result = []
+    biome = state.world_state["biome"]
+    grid = state.world_state["grid"]
+    tiles = state.world_state.setdefault("tiles", {})
+    for key, entry in list(tiles.items()):
+        x, y = (int(p) for p in key.split(","))
+        if "burn" in entry:
+            if entry["regrow_to"] == BUILD_TILE:
+                biome["campfire"] = _clamp(biome["campfire"] - CAMP_BURN_CAMPFIRE)
+                biome["shelter"] = _clamp(biome["shelter"] - CAMP_BURN_SHELTER)
+            else:
+                biome["wood_stock"] = _clamp(biome["wood_stock"] - FIRE_WOOD_DRAIN)
+            for pawn in state.world_state["pawns"].values():
+                if pawn["status"] == "active" and pawn["pos"] == [x, y]:
+                    pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] - FIRE_DAMAGE)
+                    desc = f"{pawn['name']} is caught in the flames (-{FIRE_DAMAGE} HP)!"
+                    if pawn["vitals"]["hp"] <= 0:
+                        pawn["vitals"]["hp"] = 0
+                        pawn["status"] = "incapacitated"
+                        desc += f" {pawn['name']} collapses!"
+                    result.append(
+                        events.add_event(
+                            "fire_damage",
+                            actor=pawn["id"],
+                            data={"damage": FIRE_DAMAGE},
+                            description=desc,
+                        )
+                    )
+            entry["burn"] -= 1
+            if entry["burn"] <= 0:
+                if entry["regrow_to"] == BUILD_TILE:
+                    grid[y][x] = BUILD_TILE
+                    del tiles[key]
+                else:
+                    grid[y][x] = ASH_TILE
+                    entry.pop("burn", None)
+                    entry["regrow_in"] = REGROW_TICKS
+                    result.append(
+                        events.add_event(
+                            "fire_out",
+                            data={"pos": [x, y]},
+                            description=f"The fire at ({x},{y}) burns out, leaving scorched earth.",
+                        )
+                    )
+        elif "regrow_in" in entry:
+            entry["regrow_in"] -= 1
+            if entry["regrow_in"] <= 0:
+                grid[y][x] = entry["regrow_to"]
+                del tiles[key]
+                result.append(
+                    events.add_event(
+                        "regrowth",
+                        data={"pos": [x, y], "tile": grid[y][x]},
+                        description=f"Scorched earth at ({x},{y}) regrows as {grid[y][x]}.",
+                    )
+                )
+    return result
+
+
+def _spread_fire():
+    """Burning tiles may ignite adjacent Forest or Camp tiles."""
+    result = []
+    grid = state.world_state["grid"]
+    tiles = state.world_state.setdefault("tiles", {})
+    for key, entry in list(tiles.items()):
+        if "burn" not in entry:
+            continue
+        x, y = (int(p) for p in key.split(","))
+        for dx, dy in DIRS.values():
+            nx, ny = x + dx, y + dy
+            if not (0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE):
+                continue
+            cell = grid[ny][nx]
+            if cell in FOREST_TILES:
+                chance = FIRE_SPREAD_CHANCE
+            elif cell == BUILD_TILE:
+                chance = FIRE_CAMP_SPREAD_CHANCE
+            else:
+                continue
+            if random.random() < chance and _ignite(nx, ny):
+                result.append(
+                    events.add_event(
+                        "fire_spread",
+                        data={"pos": [nx, ny]},
+                        description=f"The fire spreads to ({nx},{ny})!",
+                    )
+                )
+    return result
 
 
 def render_grid():
@@ -567,6 +717,15 @@ def _do_chop(pawn, pawn_id):
     _goal_nudge(pawn, wood, resource="wood")
     pawn["counters"]["trees_felled"] += 1
     _gain_skill(pawn, "woodcutting")
+    if _adjacent_to_fire(*pawn["pos"]):
+        x, y = pawn["pos"]
+        state.world_state["grid"][y][x] = FIREBREAK_TILE
+        return events.add_event(
+            "chop",
+            actor=pawn_id,
+            data={"wood": wood, "firebreak": True},
+            description=f"{pawn['name']} chops a firebreak, gathering {wood} wood.",
+        )
     return events.add_event(
         "chop",
         actor=pawn_id,
@@ -1168,6 +1327,17 @@ def _do_interact(pawn, pawn_id, flavor):
             effects.append(f"claims {claimed['name']} (+{claimed.get('moodlet_delta', 5)} morale)")
         else:
             effects.append("no heirloom to claim")
+    elif _in_words(verb, INTERACT_WORDS["extinguish"]):
+        near = _nearest_burning_tile(*pawn["pos"])
+        if near:
+            key = f"{near[0]},{near[1]}"
+            entry = state.world_state.setdefault("tiles", {})[key]
+            state.world_state["grid"][near[1]][near[0]] = ASH_TILE
+            entry.pop("burn", None)
+            entry["regrow_in"] = REGROW_TICKS
+            effects.append(f"extinguishes the fire at ({near[0]},{near[1]})")
+        else:
+            effects.append("no fire nearby to extinguish")
     else:
         pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
         effects.append("+3 morale")
@@ -1585,6 +1755,18 @@ def _resolve_break(pawn, pawn_id):
             description=f"{pawn['name']} hides in the shadows, hoarding food.",
         )
     if kind == "firesetter":
+        grid = state.world_state["grid"]
+        x, y = pawn["pos"]
+        for dx, dy in ((0, 0), *DIRS.values()):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and grid[ny][nx] in FOREST_TILES:
+                if _ignite(nx, ny):
+                    return events.add_event(
+                        "break",
+                        actor=pawn_id,
+                        data={"break": "firesetter", "action": "ignite", "pos": [nx, ny]},
+                        description=f"{pawn['name']} maniacally sets the forest alight at ({nx},{ny})!",
+                    )
         biome = state.world_state["biome"]
         if biome["campfire"] > 0:
             biome["campfire"] = _clamp(biome["campfire"] - 10)
@@ -1812,6 +1994,35 @@ def tick_environment():
                 )
             )
         biome["weather"] = new_weather
+
+    # Wildfire lifecycle: burn existing fires, spread to neighbours, then ignite.
+    result += _tick_fires()
+    result += _spread_fire()
+    grid = state.world_state["grid"]
+    if biome["weather"] == "Storm":
+        for y in range(GRID_SIZE):
+            for x in range(GRID_SIZE):
+                if grid[y][x] in FOREST_TILES and random.random() < LIGHTNING_CHANCE:
+                    if _ignite(x, y):
+                        result.append(
+                            events.add_event(
+                                "fire_start",
+                                data={"pos": [x, y], "cause": "lightning"},
+                                description=f"Lightning strikes the forest at ({x},{y}) — fire!",
+                            )
+                        )
+    if biome["weather"] == "Heatwave" and biome["wood_stock"] >= HIGH_WOOD:
+        for y in range(GRID_SIZE):
+            for x in range(GRID_SIZE):
+                if grid[y][x] in FOREST_TILES and random.random() < HEATWAVE_FIRE_CHANCE:
+                    if _ignite(x, y):
+                        result.append(
+                            events.add_event(
+                                "fire_start",
+                                data={"pos": [x, y], "cause": "heatwave"},
+                                description=f"The Summer heatwave sets the forest ablaze at ({x},{y})!",
+                            )
+                        )
 
     if day != prev_day:
         result.append(

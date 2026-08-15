@@ -247,7 +247,7 @@ def build_models():
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, and fauna (hunt/tame, granary, palisade)}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), and wildfires}, label={lst:engine}]
 def resolve_actions(intents):
     for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
         pawn = world_state["pawns"][pawn_id]
@@ -379,6 +379,14 @@ def tick_environment():             # the world ages after pawns act
     if biome["season"] == "Summer" and biome["granary"]:
         ...                            # granary halts food_stock decay
     predator_chance -= 0.2 * biome["palisade"]  # palisade deters predators
+    # wildfires (Stage 4): storm lightning / Summer heatwave ignite Forest;
+    # burning tiles drain 10 wood/tick, hurt occupants (incapacitate, never
+    # kill), and spread to adjacent Forest/Camp; they burn out into ash that
+    # regrows after 40 ticks. Interact "extinguish" and Chop firebreaks stop it.
+    for (x, y) in burning_tiles():
+        biome["wood_stock"] = clamp(biome["wood_stock"] - 10)
+        for p in pawns_on(x, y): p["vitals"]["hp"] -= 5
+        ignite_adjacent(FOREST, chance=0.5); ignite_adjacent(CAMP, chance=0.25)
     # moodlets: decay by one tick and sum into net morale (e.g. Grief)
     net_morale = 0
     for m in pawn["moodlets"]:

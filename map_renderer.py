@@ -17,6 +17,8 @@ TILE_COLORS = {
     "🏕️": (198, 156, 60),  # Camp
     "💀": (120, 120, 120), # Ruins
     "🪨": (140, 140, 140), # Quarry
+    "🔥": (224, 92, 42),   # Burning
+    "🌫️": (52, 52, 58),    # Ash / scorched earth
 }
 PAWN_COLOR = (240, 240, 240)
 WILDLIFE_COLOR = (222, 111, 111)

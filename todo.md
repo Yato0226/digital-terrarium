@@ -11,11 +11,11 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 1. Wildfires & Fire Propagation
 
-- [ ] **Ignition triggers:** lightning during `Storm` (5% on a `🌲` Forest tile); Summer heatwave (10% if `wood_stock` high); Pyromaniac pawn during a `firesetter` break.
-- [ ] **Tile lifecycle:** `🌲 Forest` → `🔥 Burning` (3 ticks; drains 10 wood stock/tick; dangerous to enter) → `🌫️ Ash / Scorched Earth` → regrows to Meadow or Forest over 40 ticks.
-- [ ] `Interact` `flavor="extinguish"` / `"quench"` / `"douse"` on an adjacent tile puts out the fire before it spreads to adjacent Forest/Camp tiles.
-- [ ] `Chop` on an adjacent tile acts as a firebreak.
-- [ ] `map_renderer.py`: add colors for `"🔥"` (orange/red) and `"🌫️"` (dark charcoal).
+- [x] **Ignition triggers:** lightning during `Storm` (5% on a `🌲` Forest tile); Summer heatwave (10% if `wood_stock` high); Pyromaniac pawn during a `firesetter` break.
+- [x] **Tile lifecycle:** `🌲 Forest` → `🔥 Burning` (3 ticks; drains 10 wood stock/tick; dangerous to enter) → `🌫️ Ash / Scorched Earth` → regrows to Meadow or Forest over 40 ticks.
+- [x] `Interact` `flavor="extinguish"` / `"quench"` / `"douse"` on an adjacent tile puts out the fire before it spreads to adjacent Forest/Camp tiles.
+- [x] `Chop` on an adjacent tile acts as a firebreak.
+- [x] `map_renderer.py`: add colors for `"🔥"` (orange/red) and `"🌫️"` (dark charcoal).
 
 ### 2. Seasonal Disasters & Environmental Anomalies
 

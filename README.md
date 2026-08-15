@@ -20,6 +20,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 
 - **AI director** — Gemma 4 (31B, fallback 26B MoE) decides for every pawn each tick, with per-tick structured JSON output
 - **5×5 living world** — seasons, weather, day/night, depletable wood/food stocks, campfire warmth
+- **Wildfires & dynamic tiles** — lightning storms and Summer heatwaves can ignite the forest: 🔥 burning tiles hurt pawns, drain wood, and spread to nearby Forest and the Camp until they burn out into 🌫️ scorched earth that regrows over time. Pawns can `Interact` to douse an adjacent fire or `Chop` a firebreak
 - **Pawn biology & psyche** — HP, energy, hunger, warmth, morale, skills, relationships, gear, mental breaks
 - **Traits & moodlets** — deterministic psychological layers rolled at spawn/birth (Night Owl, Brawler, Pyromaniac, Pacifist, Iron Stomach); transient moodlets (Grief, Frostbitten) decay and can tip a pawn into a mental break
 - **Free-form `Interact` + personal goals** — pawns can do almost anything (socialize, gather, craft, relax, train) and pursue LLM-proposed personal goals (gather wood, befriend the Chief, survive the season) that pay morale and skill XP
@@ -108,7 +109,7 @@ Also enable **LXC → Options → Start at boot** so the bot returns when the ho
 ## Development
 
 ```bash
-ruff check . && python -m pytest tests -q   # 201 tests, fully offline
+ruff check . && python -m pytest tests -q   # 221 tests, fully offline
 ```
 
 See `AGENTS.md` for the architecture, the engine's lockstep constraints (adding a stat/action touches multiple modules), and deployment notes.

@@ -121,6 +121,7 @@ world_state = {
     "heirlooms": [],
     "adoptions": {},
     "extinct": False,
+    "tiles": {},
 }
 
 
@@ -195,6 +196,7 @@ def reset_world():
     world_state["heirlooms"] = []
     world_state["adoptions"] = {}
     world_state["extinct"] = False
+    world_state["tiles"] = {}
     pending_chronicle = None
     failed_intents.clear()
     world_state["pawns"] = {
@@ -334,6 +336,10 @@ def load_state():
             world_state["adoptions"] = loaded["adoptions"]
         else:
             world_state.setdefault("adoptions", {})
+        if "tiles" in loaded:
+            world_state["tiles"] = loaded["tiles"]
+        else:
+            world_state.setdefault("tiles", {})
         if not world_state["pawns"]:
             if world_state["graveyard"]:
                 # Real extinction: keep the dataset and stay paused.
