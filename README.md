@@ -61,7 +61,16 @@ python main.py
 | `!say <name\|pawn_id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
 | `!graveyard` | List the fallen with epitaphs |
 | `!list` | List all pawns with full stats for easy targeting |
+| `!tree` | Show couples, kinship, and rivalries |
+| `!wildlife` | List the fauna roaming the terrarium |
+| `!heirlooms` | List the relics of the fallen |
+| `!chronicle` | Read the seasonal chronicle of the terrarium |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
+| `!adopt <name\|pawn_id>` | Bond with a pawn — you'll be DM'd about its milestones (any channel) |
+| `!unadopt` | Release your adopted pawn (any channel) |
+| `!my` | Show your adopted pawn (any channel) |
+
+`!adopt`, `!unadopt`, and `!my` need no god channel: any Discord user can adopt one pawn (a second `!adopt` replaces the previous ward).
 
 Pawns are targeted **by name** (case-insensitive) or by their `pawn_N` id. New pawns get an auto-generated name (e.g. `Willow`) and a flavor job (e.g. `the Forager`) from built-in pools, or you can set both explicitly (`!add Fern`, `!job Fern Hunter`).
 
