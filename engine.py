@@ -86,6 +86,8 @@ REGROWTH = 1
 REGROWTH_SPRING = 2
 
 MATE_RELATIONSHIP = 25
+RIVAL_THRESHOLD = -25
+RELATIONSHIP_DECAY = 1  # per ingame day: bonds drift toward 0 each dawn
 CONCEPTION_CHANCE = 0.5
 PREGNANCY_TICKS = TICKS_PER_DAY  # 1 day (20 ticks)
 CHILD_MATURITY = 2 * TICKS_PER_DAY  # 2 days (40 ticks)
@@ -116,6 +118,32 @@ def is_elder(pawn):
 def _adjust_relationship(pawn, other_id, delta):
     rel = pawn["relationships"].get(other_id, 0)
     pawn["relationships"][other_id] = _clamp(rel + delta, -100, 100)
+
+
+def _decay_relationships():
+    """Once per ingame day, every relationship drifts one step toward 0."""
+    for pawn in state.world_state["pawns"].values():
+        rels = pawn["relationships"]
+        for other, value in list(rels.items()):
+            if value > 0:
+                rels[other] = max(0, value - RELATIONSHIP_DECAY)
+            elif value < 0:
+                rels[other] = min(0, value + RELATIONSHIP_DECAY)
+            else:
+                rels.pop(other, None)
+
+
+def _are_kin(a, b):
+    """True if two pawns share a parent or one is the direct parent of the other."""
+    if a["id"] == b["id"]:
+        return True
+    parents_a = {a.get("mother_id"), a.get("father_id")}
+    parents_b = {b.get("mother_id"), b.get("father_id")}
+    if (parents_a & parents_b) - {None}:
+        return True
+    if a["id"] in parents_b or b["id"] in parents_a:
+        return True
+    return False
 
 
 def _pay_cost(pawn, action):
@@ -280,6 +308,79 @@ def render_grid():
             else:
                 cells.append(f"[{grid[y][x]}]")
         lines.append("".join(cells))
+    return "\n".join(lines)
+
+
+def _pawn_by_id(pid):
+    """Living pawn or graveyard tombstone by id, else None."""
+    pawn = state.world_state["pawns"].get(pid)
+    if pawn:
+        return pawn
+    for g in state.world_state["graveyard"]:
+        if g["id"] == pid:
+            return g
+    return None
+
+
+def lineage_label(pawn):
+    """'child of Mother & Father' for pawns with known parents, else ''."""
+    parents = []
+    for key in ("mother_id", "father_id"):
+        p = _pawn_by_id(pawn.get(key))
+        if p:
+            parents.append(p["name"])
+    if not parents:
+        return ""
+    return "child of " + " & ".join(parents)
+
+
+def render_family_tree():
+    """Emoji view of the colony's couples, kinship, and rivalries."""
+    living = state.world_state["pawns"]
+    ids = list(living.keys())
+
+    def name_of(pid):
+        p = _pawn_by_id(pid)
+        if not p:
+            return "?"
+        return f"{p['name']} 🪦" if pid not in living else p["name"]
+
+    couples, rivals = [], []
+    for i, aid in enumerate(ids):
+        for bid in ids[i + 1 :]:
+            a, b = living[aid], living[bid]
+            mutual = min(a["relationships"].get(bid, 0), b["relationships"].get(aid, 0))
+            if mutual >= MATE_RELATIONSHIP:
+                couples.append((aid, bid))
+            elif mutual <= RIVAL_THRESHOLD:
+                rivals.append((aid, bid))
+
+    lines = ["🌳 **Family & Bonds**"]
+    if couples:
+        for aid, bid in couples:
+            a, b = living[aid], living[bid]
+            kids = [
+                name_of(kid)
+                for kid, p in living.items()
+                if {p.get("mother_id"), p.get("father_id")} == {aid, bid}
+            ]
+            kids_txt = f" — kids: {', '.join(kids)}" if kids else ""
+            lines.append(f"💞 **{a['name']}** ⇄ **{b['name']}**{kids_txt}")
+    kin = [
+        (p, lineage_label(p))
+        for p in living.values()
+        if lineage_label(p)
+    ]
+    if kin:
+        lines.append("\n👪 **Kin:**")
+        for p, label in sorted(kin, key=lambda t: t[0]["born_tick"]):
+            lines.append(f"- {p['name']}: {label}")
+    if rivals:
+        lines.append("\n💢 **Rivals:**")
+        for aid, bid in rivals:
+            lines.append(f"- **{living[aid]['name']}** ⇄ **{living[bid]['name']}**")
+    if not couples and not kin and not rivals:
+        lines.append("No bonds or lineage yet — a lonely terrarium.")
     return "\n".join(lines)
 
 
@@ -842,7 +943,15 @@ def _do_mate(pawn, pawn_id, target):
             data={"reason": "same_sex"},
             description=f"{pawn['name']} and {tpawn['name']} share a moment as friends.",
         )
-    if pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP:
+    if _are_kin(pawn, tpawn):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "too_close_kin"},
+            description=f"{pawn['name']} and {tpawn['name']} are too closely related.",
+        )
+    if pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP or tpawn["relationships"].get(pawn_id, 0) < MATE_RELATIONSHIP:
         return events.add_event(
             "failed",
             actor=pawn_id,
@@ -887,6 +996,7 @@ def _do_mate(pawn, pawn_id, target):
     _adjust_relationship(tpawn, pawn_id, 10)
     if random.random() < CONCEPTION_CHANCE:
         female["pregnant_ticks"] = PREGNANCY_TICKS
+        female["partner_id"] = pawn_id
         return events.add_event(
             "mate",
             actor=pawn_id,
@@ -931,6 +1041,9 @@ def _give_birth(mother, mother_id, result):
     )
     child["pos"] = list(mother["pos"])
     child["child_ticks"] = CHILD_MATURITY
+    child["mother_id"] = mother_id
+    child["father_id"] = mother.get("partner_id")
+    mother["partner_id"] = None
     state.world_state["pawns"][child_id] = child
     result.append(
         events.add_event(
@@ -1239,6 +1352,8 @@ def tick_environment():
                 description="Dawn breaks." if day else "Night falls.",
             )
         )
+        if day:
+            _decay_relationships()
 
     was_alive = biome["campfire"] > 0
     lit = _feed_campfire()

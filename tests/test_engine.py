@@ -517,6 +517,28 @@ def test_render_grid_shows_pawns():
     assert lines[1].startswith("[🌲][🧙]")
 
 
+def test_family_tree_renders_couples_kin_and_rivals():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["relationships"]["pawn_2"] = 60
+    p2["relationships"]["pawn_1"] = 60
+    kid = state.make_pawn(state.next_pawn_id(), "Sprout")
+    kid["mother_id"] = "pawn_2"
+    kid["father_id"] = "pawn_1"
+    state.world_state["pawns"][kid["id"]] = kid
+    rival = state.make_pawn(state.next_pawn_id(), "Gruff")
+    rival["relationships"]["pawn_1"] = -40
+    p1["relationships"][rival["id"]] = -40
+    state.world_state["pawns"][rival["id"]] = rival
+    tree = engine.render_family_tree()
+    assert "💞" in tree and "Lumberjack" in tree and "Scout" in tree
+    assert "Sprout" in tree and "child of Scout & Lumberjack" in tree
+    assert "💢" in tree and "Gruff" in tree
+
+
+def test_family_tree_empty_world():
+    assert "lonely" in engine.render_family_tree()
+
+
 def test_scout_ruins_rich_loot(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 1.0)
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
@@ -714,6 +736,38 @@ def test_mate_requires_bond():
     assert evs[0]["data"]["reason"] == "relationship_too_low"
 
 
+def test_mate_requires_mutual_relationship():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 0
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "relationship_too_low"
+
+
+def test_mate_mutual_relationship_succeeds(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "mate"
+    assert evs[0]["data"]["conceived"] is True
+
+
+def test_relationship_decay_once_per_day():
+    p1, p2 = pawn("pawn_1"), pawn("pawn_2")
+    p1["relationships"]["pawn_2"] = 50
+    p2["relationships"]["pawn_1"] = -40
+    state.world_state["tick"] = 15  # night: no decay
+    state.world_state["biome"]["day"] = 1
+    engine.tick_environment()
+    assert p1["relationships"]["pawn_2"] == 50
+    state.world_state["tick"] = 25  # dawn of the next day
+    state.world_state["biome"]["day"] = 0
+    engine.tick_environment()
+    assert p1["relationships"]["pawn_2"] == 49
+    assert p2["relationships"]["pawn_1"] == -39
+
+
 def test_mate_requires_same_tile():
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
     pawn("pawn_2")["pos"] = [2, 1]
@@ -724,6 +778,7 @@ def test_mate_requires_same_tile():
 
 def test_mate_mother_starving_rejected():
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
     pawn("pawn_2")["starving_ticks"] = 2
     evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert evs[0]["type"] == "failed"
@@ -750,6 +805,7 @@ def test_mate_child_target_rejected():
 
 def test_mate_energy_cost_enforced():
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
     pawn("pawn_1")["vitals"]["energy"] = 5
     evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert evs[0]["type"] == "failed"
@@ -760,6 +816,7 @@ def test_mate_energy_cost_enforced():
 def test_mate_conceives(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 0.0)
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
     evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert evs[0]["type"] == "mate"
     assert evs[0]["data"]["conceived"] is True
@@ -770,10 +827,46 @@ def test_mate_conceives(monkeypatch):
 def test_mate_without_conception(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 1.0)
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
     evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert evs[0]["type"] == "mate"
     assert evs[0]["data"]["conceived"] is False
     assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_conception_pins_father(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert pawn("pawn_2")["partner_id"] == "pawn_1"
+
+
+def test_mate_blocked_for_siblings():
+    pawn("pawn_1")["father_id"] = "dad"
+    pawn("pawn_2")["father_id"] = "dad"
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "too_close_kin"
+    assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_mate_blocked_parent_child():
+    pawn("pawn_2")["father_id"] = "pawn_1"
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "too_close_kin"
+
+
+def test_unrelated_pawns_can_mate():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "mate"
 
 
 def test_pregnancy_leads_to_birth():
@@ -789,6 +882,37 @@ def test_pregnancy_leads_to_birth():
     assert newborn[0]["child_ticks"] == engine.CHILD_MATURITY
     assert newborn[0]["vitals"]["hp"] == engine.NEWBORN_HP
     assert newborn[0]["vitals"]["energy"] == engine.NEWBORN_ENERGY
+
+
+def test_birth_records_parents():
+    mother = pawn("pawn_2")
+    mother["pregnant_ticks"] = 1
+    mother["partner_id"] = "pawn_1"
+    engine.tick_environment()
+    newborn = [p for p in state.world_state["pawns"].values() if p["id"] not in ("pawn_1", "pawn_2")]
+    assert len(newborn) == 1
+    assert newborn[0]["mother_id"] == "pawn_2"
+    assert newborn[0]["father_id"] == "pawn_1"
+    assert mother["partner_id"] is None
+    assert engine.lineage_label(newborn[0]) == "child of Scout & Lumberjack"
+
+
+def test_birth_keeps_father_through_delay():
+    while len(state.world_state["pawns"]) < engine.MAX_PAWNS:
+        pid = state.next_pawn_id()
+        state.world_state["pawns"][pid] = state.make_pawn(pid, f"Extra_{pid}")
+    mother = pawn("pawn_2")
+    mother["pregnant_ticks"] = 1
+    mother["partner_id"] = "pawn_1"
+    engine.tick_environment()
+    assert mother["pregnant_ticks"] == engine.PREGNANCY_TICKS
+    assert mother["partner_id"] == "pawn_1"
+    state.world_state["pawns"].popitem()
+    mother["pregnant_ticks"] = 1
+    engine.tick_environment()
+    kids = [p for p in state.world_state["pawns"].values() if p.get("mother_id") == "pawn_2"]
+    assert len(kids) == 1
+    assert kids[0]["father_id"] == "pawn_1"
 
 
 def test_birth_blocked_at_population_cap():
@@ -827,6 +951,7 @@ def test_mate_blocked_at_population_cap(monkeypatch):
         pid = state.next_pawn_id()
         state.world_state["pawns"][pid] = state.make_pawn(pid, f"Extra_{pid}")
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["relationships"]["pawn_1"] = 30
     evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
     assert evs[0]["type"] == "failed"
     assert evs[0]["data"]["reason"] == "population_cap"
@@ -1056,4 +1181,18 @@ def test_migrate_pawn_keeps_goal():
     assert out["goal"] == goal
     out = state._migrate_pawn("p2", {"name": "B"})
     assert out["goal"] is None
+
+
+def test_migrate_pawn_keeps_lineage():
+    out = state._migrate_pawn(
+        "p1",
+        {"name": "A", "mother_id": "m", "father_id": "f", "partner_id": "x"},
+    )
+    assert out["mother_id"] == "m"
+    assert out["father_id"] == "f"
+    assert out["partner_id"] == "x"
+    out = state._migrate_pawn("p2", {"name": "B"})
+    assert out["mother_id"] is None
+    assert out["father_id"] is None
+    assert out["partner_id"] is None
 

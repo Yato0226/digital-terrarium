@@ -75,6 +75,8 @@ def _pawn_line(pid, pawn):
     child = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
     elder = " 👴" if engine.is_elder(pawn) else ""
     age = f" | {engine.age_of(pawn) // engine.TICKS_PER_DAY} days old"
+    kin = engine.lineage_label(pawn)
+    kin_txt = f" | {kin}" if kin else ""
     gear = f" | 🛠️ {pawn['gear']['main_hand'] or '—'}, {pawn['gear']['body'] or '—'}"
     break_txt = f" | 🌀 {pawn['mental_break']}" if pawn.get("mental_break") else ""
     goal_txt = ""
@@ -91,7 +93,7 @@ def _pawn_line(pid, pawn):
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
         f"{gear} | Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}"
-        f"{age} | 📍 {tile} ({x},{y}){break_txt}{goal_txt} | {pawn['status']}"
+        f"{age} | 📍 {tile} ({x},{y}){kin_txt}{break_txt}{goal_txt} | {pawn['status']}"
     )
 
 
@@ -321,6 +323,13 @@ async def status(ctx):
         )
         lines.append(f"**Pending orders:** {pending}")
     await ctx.send("\n".join(lines))
+
+
+@bot.command(name="tree")
+@is_god_channel()
+async def family_tree(ctx):
+    """!tree — show couples, kinship, and rivalries."""
+    await ctx.send(engine.render_family_tree())
 
 
 @bot.command(name="tick")

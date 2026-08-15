@@ -17,7 +17,7 @@ Rules:
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
 - Pawns may add a 'quote' (spoken aloud to the group) and an 'inner_monologue' (their private thought — may contradict the quote). Reflect personality and vitals: starving pawns obsess over food, low-morale pawns turn paranoid or bitter, aggressive pawns sound threatening.
-- Reproduction: pawns have a sex (M/F). A 'Mate' action succeeds only on the same tile with an opposite-sex pawn they've bonded with (relationship 25+). A successful pairing makes the female pregnant for one full day, then she gives birth to a newborn who must mature through two days of childhood before courting. The colony caps at 10 — a full colony refuses new life.
+- Reproduction: pawns have a sex (M/F). A 'Mate' action succeeds only on the same tile with an opposite-sex pawn they've bonded with (relationship 25+ in BOTH directions — the bond must be mutual and maintained, since relationships fade a little every day). Close kin — siblings, half-siblings, or a parent and child — can never court (the engine blocks it). A successful pairing makes the female pregnant for one full day, then she gives birth to a newborn who must mature through two days of childhood before courting. The colony caps at 10 — a full colony refuses new life.
 - Pawns age. Newborns are children (Child) for two days. Elders (roughly {ELDER_DAYS}+ days old) tire faster, recover less from rest, and eventually die of old age — the colony mourns them.
 - The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical.
@@ -56,6 +56,7 @@ def build_prompt():
         stage_txt = ", Elder" if engine.is_elder(pawn) else ""
         preg_txt = ", Pregnant" if pawn.get("pregnant_ticks", 0) > 0 else ""
         child_txt = ", Child" if pawn.get("child_ticks", 0) > 0 else ""
+        kin_txt = f", {engine.lineage_label(pawn).capitalize()}" if engine.lineage_label(pawn) else ""
         rel_txt = f", Relationships {rel}" if rel else ""
         break_txt = f", Mental break: {pawn['mental_break']}" if pawn.get("mental_break") else ""
         goal_txt = ""
@@ -72,7 +73,7 @@ def build_prompt():
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
             f"Personality {pawn['personality']}{sex_txt}{age_txt}{stage_txt}{job_txt}"
-            f"{preg_txt}{child_txt}{title_txt}{break_txt}{goal_txt}{rel_txt}"
+            f"{preg_txt}{child_txt}{kin_txt}{title_txt}{break_txt}{goal_txt}{rel_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 
