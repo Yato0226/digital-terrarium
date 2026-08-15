@@ -60,8 +60,8 @@ The production environment operates within a Linux Container (LXC) hosted on a P
 \centering
 \caption{Host and Container Resource Allocations}
 \label{tab:hardware}
-\begin{tabular}{@{}ll@{}}
 \small
+\begin{tabular}{@{}ll@{}}
 \toprule
 \textbf{Component} & \textbf{Specification / Allocation} \\
 \midrule
