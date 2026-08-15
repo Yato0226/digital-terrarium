@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 import core
+import engine
 import state
 from config import BOT_COMMAND_PREFIX, GOD_CHANNEL_NAME
 
@@ -262,6 +263,27 @@ async def graveyard(ctx):
             f"on tick {entry.get('died_tick', '?')} (survived {survived} ticks)"
         )
         lines.append(f"  {entry.get('epitaph', '')}")
+    await ctx.send("\n".join(lines))
+
+
+@bot.command(name="list")
+@is_god_channel()
+async def list_pawns(ctx):
+    """!list — list all pawns by name for easy targeting."""
+    pawns = state.world_state["pawns"]
+    if not pawns:
+        await ctx.send("🪦 The terrarium is empty — spawn someone with `!add`.")
+        return
+    lines = [f"📜 **Pawns ({len(pawns)}):**"]
+    for i, (pid, pawn) in enumerate(pawns.items(), 1):
+        v = pawn["vitals"]
+        job = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
+        x, y = pawn["pos"]
+        tile = engine._tile_at(x, y) or "?"
+        lines.append(
+            f"{i}. **{pawn['name']}**{job} (`{pid}`) | HP {v['hp']} | E {v['energy']} | "
+            f"{tile} ({x},{y}) | {pawn['status']}"
+        )
     await ctx.send("\n".join(lines))
 
 

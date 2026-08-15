@@ -58,6 +58,7 @@ python main.py
 | `!order <name\|pawn_id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`) |
 | `!say <name\|pawn_id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
 | `!graveyard` | List the fallen with epitaphs |
+| `!list` | List all pawns by name for easy targeting |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
 
 Pawns are targeted **by name** (case-insensitive) or by their `pawn_N` id. New pawns get an auto-generated name (e.g. `Willow`) and a flavor job (e.g. `the Forager`) from built-in pools, or you can set both explicitly (`!add Fern`, `!job Fern Hunter`).
