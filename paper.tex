@@ -42,7 +42,7 @@
 \maketitle
 
 \begin{abstract}
-Running persistent LLM applications on a small home server requires keeping host RAM and compute footprints minimal without sacrificing model capability. This paper demonstrates the implementation of an autonomous multi-agent ecosystem (``Digital Terrarium'') running continuously in a low-resource environment. All language-model work is offloaded to Google's hosted Gemini API, which serves the open-weight Gemma 4 family, a 31B dense model (\texttt{gemma-4-31b-it}) as the primary narrator with automatic fallback to the 26B MoE variant (\texttt{gemma-4-26b-a4b-it}), so the host needs only a 2 GB LXC container on a Proxmox VE hypervisor and no local inference hardware. The system adopts an \emph{AI Director} pattern: the LLM proposes behavioural intent for each agent, while a deterministic Python engine owns all state consequences. Per-tick, `schema.py` rebuilds a Pydantic model from the current active-agent roster, embedding one `AgentDecision` field per pawn with `action`, `narrative`, `quote`, `inner_monologue`, `direction` (for Move), `target` (for Attack/Share/Mate, built from `Literal[tuple(pawn_ids)]` per PEP 586 Python 3.10 compatibility), a free-form `flavor` verb (for the open-ended `Interact` action), and a `new_goal` wish the engine may adopt into a tracked personal goal. This schema is passed to the Gemini API as a structured-output schema (`response_schema`), which both forces valid JSON and suppresses the model's reasoning channel. The response is validated again with Pydantic, and any failed parse skips mutation and increments the tick. Any `!order` placed by the god replaces the LLM's proposed action for that agent, Python enforces it, and the LLM merely narrates. The world is exposed through a Discord bot that lets a ``god'' spawn agents, edit stats, and issue enforced orders. With the model no longer resident on the host, memory is flat and Out-Of-Memory (OOM) faults are structurally impossible; daily quota headroom, structured-output reliability, and coherent agent interactions are evaluated over extended runs.
+Running persistent LLM applications on a small home server requires keeping host RAM and compute footprints minimal without sacrificing model capability. This paper demonstrates the implementation of an autonomous multi-agent ecosystem (``Digital Terrarium'') running continuously in a low-resource environment. All language-model work is offloaded to Google's hosted Gemini API, which serves the open-weight Gemma 4 family, a 31B dense model (\texttt{gemma-4-31b-it}) as the primary narrator with automatic fallback to the 26B MoE variant (\texttt{gemma-4-26b-a4b-it}), so the host needs only a 2 GB LXC container on a Proxmox VE hypervisor and no local inference hardware. The system adopts an \emph{AI Director} pattern: the LLM proposes behavioural intent for each agent, while a deterministic Python engine owns all state consequences. Per-tick, \texttt{schema.py} rebuilds a Pydantic model from the current active-agent roster, embedding one \texttt{AgentDecision} field per pawn with \texttt{action}, \texttt{narrative}, \texttt{quote}, \texttt{inner\_monologue}, \texttt{direction} (for Move), \texttt{target} (for Attack/Share/Mate, built from \texttt{Literal[tuple(pawn\_ids)]} per PEP 586 Python 3.10 compatibility), a free-form \texttt{flavor} verb (for the open-ended \texttt{Interact} action), and a \texttt{new\_goal} wish the engine may adopt into a tracked personal goal. This schema is passed to the Gemini API as a structured-output schema (\texttt{response\_schema}), which both forces valid JSON and suppresses the model's reasoning channel. The response is validated again with Pydantic, and any failed parse skips mutation and increments the tick. Any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, and the LLM merely narrates. The world is exposed through a Discord bot that lets a ``god'' spawn agents, edit stats, and issue enforced orders. With the model no longer resident on the host, memory is flat and Out-Of-Memory (OOM) faults are structurally impossible; daily quota headroom, structured-output reliability, and coherent agent interactions are evaluated over extended runs.
 \end{abstract}
 
 \section{Introduction}
@@ -104,7 +104,7 @@ Figure~\ref{fig:architecture} shows the overall system: the AI Director sits bet
     \draw[arrow] (llm) -- node[right, font=\scriptsize] {intent} (engine);
     \draw[arrow] (engine) -- (events);
 \end{tikzpicture}}%
-\caption{AI Director system architecture. The LLM proposes intent; a deterministic Python engine owns all consequences. Per-tick schema rebuild in `schema.py` is roster-aware via `Literal[tuple(pawn\_ids)]` (Python 3.10 compatibility). Slow I/O (eulogy LLM, Discord embed) runs outside the tick lock.}
+\caption{AI Director system architecture. The LLM proposes intent; a deterministic Python engine owns all consequences. Per-tick schema rebuild in \texttt{schema.py} is roster-aware via \texttt{Literal[tuple(pawn\_ids)]} (Python 3.10 compatibility). Slow I/O (eulogy LLM, Discord embed) runs outside the tick lock.}
 \label{fig:architecture}
 \end{figure}
 
@@ -200,11 +200,11 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \toprule
 \textbf{Command} & \textbf{Effect} \\
 \midrule
-\texttt{!add <name> [hp] [energy]} & Spawn a new agent \\
-\texttt{!remove <pawn\_id>}         & Remove an agent (never the last) \\
-\texttt{!god <id> <stat> <v>}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
-\texttt{!order <id> <action> [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
-\texttt{!say <id> <text>}           & Inject a whisper into the prompt; also +15 morale \\
+\texttt{!add \textless name\textgreater [hp] [energy]} & Spawn a new agent \\
+\texttt{!remove \textless pawn\_id\textgreater}         & Remove an agent (never the last) \\
+\texttt{!god \textless id\textgreater \textless stat\textgreater \textless v\textgreater}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
+\texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
+\texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
 \texttt{!graveyard}                 & List the fallen with epithets and epitaphs \\
 \texttt{!status} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Inspect, force, or gate the simulation \\
 \bottomrule
@@ -214,7 +214,7 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \subsection{Implementation Code}
 Listing~\ref{lst:schema} shows the per-tick dynamic schema; Listing~\ref{lst:engine} the deterministic resolution core; Listing~\ref{lst:tick} the tick orchestration. Together they implement the AI Director pattern. Note that \texttt{Literal[tuple(pawn\_ids)]} is used deliberately: on Python 3.10 the starred \texttt{Literal[*ids]} unpacking form is unavailable, and the tuple form is equivalent per PEP~586.
 
-\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses `Literal[tuple(pawn_ids)]` for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
+\begin{lstlisting}[style=python, caption={Dynamic LLM Output Schema (schema.py, condensed). Uses \texttt{Literal[tuple(pawn\_ids)]} for Python 3.10 compatibility (PEP 586)}, label={lst:schema}]
 def build_models():
     pawn_ids = [pid for pid, p in world_state["pawns"].items()
                 if p["status"] == "active"]            # roster-aware
@@ -426,7 +426,7 @@ Daily Quota Utilisation (RPD) & $\approx$ 10\% of 14.4K at a 60 s tick \\
 The following qualitative results were observed over continuous runs:
 
 \begin{enumerate}
-\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 96-test offline suite (`tests/test_engine.py`) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
+\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 96-test offline suite (\texttt{tests/test\_engine.py}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
 \item \textbf{Enforcement Rate}: every illegal intent (energy shortfall, self-attack, missing/unknown target) was rejected by the engine and recorded as a \texttt{failed} event; at no point did a hallucinated stat alter the world, because the model never emits numeric deltas.
 \item \textbf{Intervention Correctness}: \texttt{!order} always produced the commanded action even when the model proposed otherwise; \texttt{!say} influenced narrative flavour only, as designed.
 \item \textbf{Emergent Dynamics}: relationship deltas after combat produced visible grudge cycles (repeated mutual attacks) in the event history, demonstrating that the model reads and reacts to the rendered relationship state.
