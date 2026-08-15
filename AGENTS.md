@@ -53,8 +53,10 @@ LLM-driven "digital terrarium" simulation: Gemma (hosted via the Gemini API) nar
 ## Paper (paper.txt)
 
 - `paper.txt` is a **pdflatex document for Overleaf** (upload/rename it to `main.tex` there), not prose/markdown. Keep edits valid LaTeX (escaping `%`, `&`, `#`, math as needed); don't reformat it as markdown. No raw emoji or non-ASCII characters — pdflatex turns them into U+FFFD errors.
+- Run `python check_paper.py` after any paper edit: it flags non-ASCII/emoji (U+FFFD killers), unescaped `%`/`#`/`_` outside `lstlisting` blocks, and unresolved `\ref` targets. Two known false positives: `lst:*` refs resolve via lstlisting's `label={...}` key (not `\label{}`), and a `%` at a line start or as `\resizebox{...}{%`'s trailing join is a legitimate comment.
+- **booktabs gotcha**: `\toprule`/`\midrule` are `\noalign`s that must come immediately after `\begin{tabular}` (or a `\\` row end). Never put a font command like `\small` between `\begin{tabular}` and `\toprule` — put font sizing *before* `\begin{tabular}`, or use p-columns (`>{\raggedright\arraybackslash}p{...}`, needs `\usepackage{array}`) to fit wide tables instead.
 - Its `lstlisting` blocks are condensed excerpts of the real modules (in `§Implementation Code`) — keep them in sync when `schema.py`/`engine.py`/`core.py` mechanics change.
-- Figures are pure TikZ (`\usetikzlibrary{arrows.meta, positioning}`) — no external image files, so the paper compiles on Overleaf without uploads. Keep them in sync with the architecture (Fig 1), per-tick flow (Fig 2), and season cycle (Fig 3).
+- Figures are pure TikZ (`\usetikzlibrary{arrows.meta, positioning}`) — no external image files, so the paper compiles on Overleaf without uploads. Keep them in sync with the architecture (Fig 1), per-tick flow (Fig 2), season cycle (Fig 3), and world systems map (Fig 4).
 - Tables and claims in the paper must match the implementation (see Architecture/engine above); it's the paper's executable-source-of-truth counterpart.
 
 ## Roadmap (implemented through Stage 9; checklist in `todo.md`)
