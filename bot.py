@@ -82,12 +82,16 @@ def _pawn_line(pid, pawn):
     job = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
     gear = f" | 🛠️ {pawn['gear']['main_hand'] or '—'}, {pawn['gear']['body'] or '—'}"
     break_txt = f" | 🌀 {pawn['mental_break']}" if pawn.get("mental_break") else ""
+    sk = pawn["skills"]
+    x, y = pawn["pos"]
+    tile = engine._tile_at(x, y) or "?"
     return (
         f"**{pawn['name']}**{job}{title} (`{pid}`): HP {v['hp']} | Energy {v['energy']} | "
         f"Hunger {v['hunger']} | Warmth {v['warmth']} | Morale {v['morale']} | "
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
-        f"{gear}{break_txt} | {pawn['status']}"
+        f"{gear} | Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}"
+        f" | 📍 {tile} ({x},{y}){break_txt} | {pawn['status']}"
     )
 
 
@@ -269,21 +273,14 @@ async def graveyard(ctx):
 @bot.command(name="list")
 @is_god_channel()
 async def list_pawns(ctx):
-    """!list — list all pawns by name for easy targeting."""
+    """!list — list all pawns with full stats for easy targeting."""
     pawns = state.world_state["pawns"]
     if not pawns:
         await ctx.send("🪦 The terrarium is empty — spawn someone with `!add`.")
         return
     lines = [f"📜 **Pawns ({len(pawns)}):**"]
     for i, (pid, pawn) in enumerate(pawns.items(), 1):
-        v = pawn["vitals"]
-        job = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
-        x, y = pawn["pos"]
-        tile = engine._tile_at(x, y) or "?"
-        lines.append(
-            f"{i}. **{pawn['name']}**{job} (`{pid}`) | HP {v['hp']} | E {v['energy']} | "
-            f"{tile} ({x},{y}) | {pawn['status']}"
-        )
+        lines.append(f"{i}. {_pawn_line(pid, pawn)}")
     await ctx.send("\n".join(lines))
 
 
