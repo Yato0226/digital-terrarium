@@ -526,6 +526,27 @@ async def tradition_cmd(ctx):
     await ctx.send(msg)
 
 
+@bot.command(name="recipes")
+@is_god_channel()
+async def recipes_cmd(ctx):
+    """!recipes — list all known blueprints (base + synthesized)."""
+    await ctx.send(core.recipes_txt())
+
+
+@bot.command(name="quests", aliases=["prophecies"])
+@is_god_channel()
+async def quests_cmd(ctx):
+    """!quests / !prophecies — view the world's active objectives."""
+    await ctx.send(core.quests_txt())
+
+
+@bot.command(name="patchnotes")
+@is_god_channel()
+async def patchnotes_cmd(ctx):
+    """!patchnotes — read the latest autonomous balance notes from the Architect."""
+    await ctx.send(core.patchnotes_txt())
+
+
 @bot.command(name="adopt")
 async def adopt(ctx, pawn_id: str):
     """!adopt <name|pawn_id> — bond with a pawn; you'll be DM'd about its milestones (any channel)."""

@@ -15,6 +15,7 @@ god_whispers = {}  # pawn_id -> str
 failed_intents = {}
 
 MAX_CHRONICLE = 24  # keep the last N seasonal chronicle entries
+MAX_PATCHES = 8  # keep the last N Architect patch records for !patchnotes
 
 # Transient seasonal-chronicle signal (not persisted): set by engine.tick_environment
 # to the new season name when the season turns, consumed by core.run_tick after the
@@ -208,6 +209,7 @@ world_state = {
     "custom_recipes": {},
     "active_quests": [],
     "patch_version": "v1.0",
+    "patches": [],
 }
 
 
@@ -290,6 +292,7 @@ def reset_world():
     world_state["custom_recipes"] = {}
     world_state["active_quests"] = []
     world_state["patch_version"] = "v1.0"
+    world_state["patches"] = []
     pending_chronicle = None
     pending_monument = None
     failed_intents.clear()
@@ -449,6 +452,7 @@ def load_state():
         world_state.setdefault("custom_recipes", {})
         world_state.setdefault("active_quests", [])
         world_state.setdefault("patch_version", "v1.0")
+        world_state.setdefault("patches", [])
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

@@ -113,18 +113,18 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 4. Discord Interface & Commands — `bot.py`
 
-- [ ] Post formatted **"Terrarium Patch Notes vX.Y"** embed to Discord on new balance updates.
-- [ ] Add `!recipes` command to inspect all base and synthesized blueprints.
-- [ ] Add `!quests` / `!prophecies` command to view active world objectives and progress.
-- [ ] Add `!patchnotes` command to view the latest autonomous balance notes.
+- [x] Post formatted **"Terrarium Patch Notes vX.Y"** embed to Discord on new balance updates.
+- [x] Add `!recipes` command to inspect all base and synthesized blueprints.
+- [x] Add `!quests` / `!prophecies` command to view active world objectives and progress.
+- [x] Add `!patchnotes` command to view the latest autonomous balance notes.
 
 ### 5. Tests — `tests/test_stage9.py`
 
-- [ ] Dynamic recipes load, persist, and auto-craft via `Build`.
-- [ ] Custom equipment bonuses apply correctly to deterministic combat and foraging yields.
-- [ ] World prophecy completion awards expected morale, titles, and event logs.
-- [ ] Balance modifier deltas are strictly clamped within Python-enforced bounds regardless of LLM output.
-- [ ] Old save files load cleanly with default empty custom registries.
+- [x] Dynamic recipes load, persist, and auto-craft via `Build`.
+- [x] Custom equipment bonuses apply correctly to deterministic combat and foraging yields.
+- [x] World prophecy completion awards expected morale, titles, and event logs.
+- [x] Balance modifier deltas are strictly clamped within Python-enforced bounds regardless of LLM output.
+- [x] Old save files load cleanly with default empty custom registries.
 
 ---
 

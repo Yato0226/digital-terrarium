@@ -454,8 +454,75 @@ async def _run_architect():
             + (" — " + "; ".join(notes) if notes else "")
         ),
     )
+    patches = state.world_state.setdefault("patches", [])
+    patches.append(record)
+    if len(patches) > state.MAX_PATCHES:
+        state.world_state["patches"] = patches[-state.MAX_PATCHES:]
     state.save_state()
     return record
+
+
+def recipes_txt():
+    """All known blueprints (base + synthesized), for `!recipes`."""
+    recipes = engine._all_recipes()
+    lines = ["🛠️ **Blueprints:**"]
+    for name in sorted(recipes, key=lambda n: (recipes[n]["tier"], n)):
+        r = recipes[name]
+        mats = ", ".join(f"{k}×{v}" for k, v in sorted(r["materials"].items()))
+        slot = r["slot"]
+        custom = state.world_state.get("custom_recipes", {}).get(name)
+        bonus_txt = ""
+        if custom and custom.get("bonus"):
+            bonus = ", ".join(f"+{v} {k}" for k, v in sorted(custom["bonus"].items()))
+            bonus_txt = f" — {bonus}"
+        lines.append(
+            f"- **{name}** (tier {r['tier']}, {slot}): {mats}{bonus_txt}"
+        )
+    return "\n".join(lines)
+
+
+def quests_txt():
+    """Active world objectives with progress, for `!quests` / `!prophecies`."""
+    quests = state.world_state.get("active_quests", [])
+    if not quests:
+        return "🌠 No prophecies are stirring — the world waits."
+    lines = ["🌠 **Prophecies:**"]
+    for q in quests:
+        kind = q.get("kind", "?")
+        detail = ""
+        if kind == "hunt":
+            detail = f" slay {q.get('species')}"
+        elif kind == "stockpile":
+            detail = f" stockpile {q.get('resource')}"
+        elif kind == "survive":
+            detail = " survive"
+        elif kind == "chop":
+            detail = " chop"
+        title = q.get("title", "The Unwritten Prophecy")
+        morale = q.get("reward_morale", 0)
+        title_txt = f" **{title}** —" if title else ""
+        lines.append(
+            f"- {title_txt}{detail} {q.get('progress', 0)}/{q.get('needed')} "
+            f"(+{morale} morale"
+            + (f", title {q.get('reward_title')}" if q.get("reward_title") else "")
+            + ")"
+        )
+    return "\n".join(lines)
+
+
+def patchnotes_txt():
+    """Latest Architect patch records, for `!patchnotes`."""
+    patches = state.world_state.get("patches", [])
+    if not patches:
+        return "⚙️ No patches yet — the Architect reviews the world every 400 ticks."
+    lines = ["⚙️ **Terrarium Patch Notes**"]
+    for p in patches[-3:]:
+        lines.append(f"**{p.get('version')}** — {p.get('title') or 'balance pass'} (tick {p.get('tick')})")
+        if p.get("notes"):
+            lines.append("• " + "\n• ".join(p["notes"]))
+        if p.get("text"):
+            lines.append(f"> {p['text'][:300]}")
+    return "\n".join(lines)
 
 
 def _adoption_message(etype, name, description):

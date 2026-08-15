@@ -39,6 +39,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Festivals & rites** — on the first day of Winter and Summer, a bountiful larder (15+ camp food) means a **Solstice Feast**: everyone gains +15 morale and a Festive moodlet. When a beloved pawn dies (high average relationships, marked 💖 in `!graveyard`), survivors can `Interact` at the Camp or Ruins to *bury*, *mourn*, or *eulogize* — halving the grief of everyone gathered
 - **Scavenger raids** — a wealthy colony (30+ food+wood on hand) attracts Autumn raids: 1–2 hostile scavengers march on the camp to loot the granary (5 food, then they flee). Palisades slow their approach; tamed predators and high-combat pawns at the camp drive them off or cut them down before they steal; wounding one sends it running
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
+- **Autonomous world engine** — every 400 ticks (one year) an **Architect LLM** reviews the world's fortunes and emits a bounded balance patch (regrowth/cold/spawn multipliers clamped to `[0.7, 1.3]`), optionally synthesizing a new tool blueprint (crafted via `Build`, tier 4+) or seeding a **world prophecy** — a colony-wide quest (hunt, chop, stockpile, or survive) that pays shared morale and a custom title when completed. Patches post as ⚙️ *Terrarium Patch Notes* embeds (`!patchnotes`) and are queryable via `!recipes` and `!quests`
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the daily embed
@@ -87,6 +88,9 @@ python main.py
 | `!monument` | Inspect the Ancestral Monolith (progress / completed dedication) |
 | `!tradition` | Inspect the colony's emergent Tradition Tag (or its progress toward one) |
 | `!chronicle` | Read the seasonal chronicle of the terrarium |
+| `!recipes` | List all known blueprints (base + Architect-synthesized) |
+| `!quests` / `!prophecies` | View the world's active objectives and progress |
+| `!patchnotes` | Read the latest autonomous balance notes from the Architect |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
 | `!adopt <name\|pawn_id>` | Bond with a pawn — you'll be DM'd about its milestones (any channel) |
 | `!unadopt` | Release your adopted pawn (any channel) |

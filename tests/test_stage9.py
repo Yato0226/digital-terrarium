@@ -2,6 +2,7 @@ import random
 
 import pytest
 
+import core
 import engine
 import events
 import schema
@@ -594,3 +595,75 @@ def test_patch_schema_builds_and_validates():
     assert patch.patch_title == "A gentler winter"
     assert patch.cold_delta == -0.2
     assert patch.new_recipe is None and patch.new_quest is None
+
+
+# --- Stage 9 Part 4: Discord interface (builders + persistence, offline) -----
+
+
+def test_patches_registry_default_and_reset():
+    assert state.world_state["patches"] == []
+    state.world_state["patches"].append({"version": "v1.1"})
+    state.reset_world()
+    assert state.world_state["patches"] == []
+
+
+def test_patches_persist_roundtrip(monkeypatch, tmp_path):
+    monkeypatch.setattr(state, "STATE_FILE", str(tmp_path / "state.json"))
+    state.world_state["patches"] = [
+        {"version": "v1.1", "title": "A gentler winter", "tick": 400}
+    ]
+    state.save_state()
+    state.load_state()
+    assert state.world_state["patches"][0]["version"] == "v1.1"
+
+
+def test_old_save_without_patches_migrates(monkeypatch, tmp_path):
+    monkeypatch.setattr(state, "STATE_FILE", str(tmp_path / "state.json"))
+    state.world_state["pawns"] = {"pawn_1": state.make_pawn("pawn_1", "Lumberjack")}
+    del state.world_state["patches"]
+    state.save_state()
+    state.load_state()
+    assert state.world_state["patches"] == []
+
+
+def test_recipes_txt_lists_base_and_synthesized():
+    state.world_state["custom_recipes"]["Moss Knife"] = {
+        "materials": {"wood": 2, "stone": 1},
+        "slot": "main_hand",
+        "tier": 4,
+        "bonus": {"combat": 1},
+    }
+    txt = core.recipes_txt()
+    assert "Stone Axe" in txt and "Flint Spear" in txt and "Warm Coat" in txt
+    assert "Moss Knife" in txt and "+1 combat" in txt and "tier 4" in txt
+
+
+def test_quests_txt_shows_progress():
+    quest(kind="hunt", species="Wolf", needed=3, reward_title="the Wolf-Bane")
+    state.world_state["active_quests"][0]["progress"] = 2
+    txt = core.quests_txt()
+    assert "Prophecies" in txt and "2/3" in txt and "the Wolf-Bane" in txt
+    assert "slay Wolf" in txt
+
+
+def test_quests_txt_empty_message():
+    assert "no prophecies" in core.quests_txt().lower()
+
+
+def test_patchnotes_txt_shows_latest():
+    state.world_state["patches"] = [
+        {
+            "version": "v1.1",
+            "title": "A gentler winter",
+            "text": "Snows soften across the land.",
+            "notes": ["cold: 1.00 → 0.80", "new blueprint: Moss Knife"],
+            "modifiers": {"regrowth": 1.0, "cold": 0.8, "spawn": 1.0},
+            "tick": 400,
+        }
+    ]
+    txt = core.patchnotes_txt()
+    assert "v1.1" in txt and "Moss Knife" in txt and "tick 400" in txt
+
+
+def test_patchnotes_txt_empty_message():
+    assert "no patches yet" in core.patchnotes_txt().lower()
