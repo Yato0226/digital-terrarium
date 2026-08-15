@@ -1,5 +1,6 @@
 import json
 import os
+import random
 
 STATE_FILE = "terrarium_state.json"
 LOG_FILE = "terrarium_log.jsonl"
@@ -8,6 +9,26 @@ MAX_HISTORY = 10
 # Transient god effects (not persisted).
 god_orders = {}    # pawn_id -> {"action": str, "target": str | None}
 god_whispers = {}  # pawn_id -> str
+
+NAME_POOL = [
+    "Willow", "Bramble", "Moss", "Fern", "Hazel", "Ash", "Rowan", "Ivy",
+    "Thistle", "Clover", "Birch", "Cedar", "Ember", "Sable", "Onyx", "Rune",
+    "Pip", "Mist", "Fable", "Wren", "Owl", "Cinder", "Nyx", "Rook",
+]
+
+JOB_POOL = [
+    "Lumberjack", "Scout", "Forager", "Builder", "Hunter", "Fisher",
+    "Herbalist", "Cook", "Watchman", "Smith", "Gatherer", "Tanner",
+]
+
+
+def next_pawn_id():
+    nums = [
+        int(pid.split("_")[1])
+        for pid in world_state["pawns"]
+        if pid.startswith("pawn_")
+    ]
+    return f"pawn_{max(nums, default=0) + 1}"
 
 DEFAULT_PERSONALITY = {"bravery": 5, "aggression": 5, "curiosity": 5, "sociability": 5}
 DEFAULT_SKILLS = {"woodcutting": 5, "scouting": 5, "combat": 5}
@@ -53,11 +74,13 @@ def make_pawn(
     personality=None,
     skills=None,
     job=None,
+    sex=None,
 ):
     return {
         "id": pawn_id,
         "name": name,
         "job": job or "Wanderer",
+        "sex": sex or random.choice(("M", "F")),
         "status": "active",  # active | incapacitated
         "vitals": {
             "hp": hp,
@@ -73,6 +96,8 @@ def make_pawn(
         "relationships": {},
         "mental_break": None,
         "break_ticks": 0,
+        "pregnant_ticks": 0,
+        "child_ticks": 0,
         "pos": [CAMP_POS[0], CAMP_POS[1]],
         "counters": {
             "trees_felled": 0,
@@ -99,6 +124,7 @@ def reset_world():
             "Lumberjack",
             hp=100,
             energy=80,
+            sex="M",
             personality={"bravery": 6, "aggression": 7, "curiosity": 3, "sociability": 4},
             skills={"woodcutting": 8, "scouting": 3, "combat": 6},
         ),
@@ -107,6 +133,7 @@ def reset_world():
             "Scout",
             hp=90,
             energy=50,
+            sex="F",
             personality={"bravery": 4, "aggression": 3, "curiosity": 8, "sociability": 6},
             skills={"woodcutting": 3, "scouting": 8, "combat": 4},
         ),
@@ -140,6 +167,12 @@ def _migrate_pawn(pawn_id, pawn):
         base["title"] = pawn["title"]
     if pawn.get("job"):
         base["job"] = pawn["job"]
+    if pawn.get("sex") in ("M", "F"):
+        base["sex"] = pawn["sex"]
+    if isinstance(pawn.get("pregnant_ticks"), int):
+        base["pregnant_ticks"] = pawn["pregnant_ticks"]
+    if isinstance(pawn.get("child_ticks"), int):
+        base["child_ticks"] = pawn["child_ticks"]
     if pawn.get("status") in ("active", "incapacitated"):
         base["status"] = pawn["status"]
     return base

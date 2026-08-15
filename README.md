@@ -21,6 +21,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **AI director** — Gemma 4 (31B, fallback 26B MoE) decides for every pawn each tick, with per-tick structured JSON output
 - **5×5 living world** — seasons, weather, day/night, depletable wood/food stocks, campfire warmth
 - **Pawn biology & psyche** — HP, energy, hunger, warmth, morale, skills, relationships, gear, mental breaks
+- **Reproduction** — pawns have a sex (♂/♀); bonded pairs can Mate (same tile, relationship ≥ 25), pregnancies come to term, and newborns mature into full colonists (colony capped at 10)
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)
 - **Permadeath** — freeze in a Blizzard or starve → pawn is enshrined in the Graveyard with a tombstone and eulogy
 - **God interface** — spawn, edit, order, whisper, pause/resume
@@ -54,8 +55,8 @@ python main.py
 | `!rename <name\|pawn_id> <newname>` | Rename a pawn |
 | `!job <name\|pawn_id> <job>` | Set a pawn's job/role (flavor only, e.g. `!job Willow Lumberjack`) |
 | `!remove <name\|pawn_id>` | Remove a pawn (never the last) |
-| `!god <name\|pawn_id> <stat> <value>` | Set vitals / wood / food / stone / fiber, or `revive` |
-| `!order <name\|pawn_id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`) |
+| `!god <name\|pawn_id> <stat> <value>` | Set vitals / sex / wood / food / stone / fiber, or `revive` |
+| `!order <name\|pawn_id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`; Mate takes a bonded partner) |
 | `!say <name\|pawn_id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
 | `!graveyard` | List the fallen with epitaphs |
 | `!list` | List all pawns with full stats for easy targeting |

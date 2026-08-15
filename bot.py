@@ -15,17 +15,6 @@ bot = commands.Bot(command_prefix=BOT_COMMAND_PREFIX, intents=intents)
 
 tick_task = None
 
-NAME_POOL = [
-    "Willow", "Bramble", "Moss", "Fern", "Hazel", "Ash", "Rowan", "Ivy",
-    "Thistle", "Clover", "Birch", "Cedar", "Ember", "Sable", "Onyx", "Rune",
-    "Pip", "Mist", "Fable", "Wren", "Owl", "Cinder", "Nyx", "Rook",
-]
-
-JOB_POOL = [
-    "Lumberjack", "Scout", "Forager", "Builder", "Hunter", "Fisher",
-    "Herbalist", "Cook", "Watchman", "Smith", "Gatherer", "Tanner",
-]
-
 
 def is_god_channel():
     def predicate(ctx):
@@ -36,25 +25,26 @@ def is_god_channel():
     return commands.check(predicate)
 
 
-def next_pawn_id():
-    nums = [
-        int(pid.split("_")[1])
-        for pid in state.world_state["pawns"]
-        if pid.startswith("pawn_")
-    ]
-    return f"pawn_{max(nums, default=0) + 1}"
-
-
 def _random_name():
     used = {p["name"].lower() for p in state.world_state["pawns"].values()}
-    for n in NAME_POOL:
+    for n in state.NAME_POOL:
         if n.lower() not in used:
             return n
     return f"Wanderer_{len(state.world_state['pawns']) + 1}"
 
 
 def _random_job():
-    return random.choice(JOB_POOL)
+    return random.choice(state.JOB_POOL)
+
+
+def _spawn_pawn(name, hp=100, energy=80):
+    return state.make_pawn(
+        state.next_pawn_id(),
+        name,
+        hp=hp,
+        energy=energy,
+        job=_random_job(),
+    )
 
 
 def resolve_pawn_id(s):
@@ -80,13 +70,17 @@ def _pawn_line(pid, pawn):
     v = pawn["vitals"]
     title = f" {pawn['title']}" if pawn.get("title") else ""
     job = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
+    sex = " ♂" if pawn.get("sex") == "M" else " ♀" if pawn.get("sex") == "F" else ""
+    preg = " 🤰" if pawn.get("pregnant_ticks", 0) > 0 else ""
+    child = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
     gear = f" | 🛠️ {pawn['gear']['main_hand'] or '—'}, {pawn['gear']['body'] or '—'}"
     break_txt = f" | 🌀 {pawn['mental_break']}" if pawn.get("mental_break") else ""
     sk = pawn["skills"]
     x, y = pawn["pos"]
     tile = engine._tile_at(x, y) or "?"
     return (
-        f"**{pawn['name']}**{job}{title} (`{pid}`): HP {v['hp']} | Energy {v['energy']} | "
+        f"**{pawn['name']}**{sex}{job}{title}{preg}{child} (`{pid}`): "
+        f"HP {v['hp']} | Energy {v['energy']} | "
         f"Hunger {v['hunger']} | Warmth {v['warmth']} | Morale {v['morale']} | "
         f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
         f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
@@ -98,20 +92,17 @@ def _pawn_line(pid, pawn):
 @bot.command(name="add")
 @is_god_channel()
 async def add_pawn(ctx, name: str = None, hp: int = 100, energy: int = 80):
-    """!add [name] [hp] [energy] — spawn a new pawn (name auto-generated if omitted)."""
+    """!add [name] [hp] [energy] — spawn a new pawn (name and job auto-generated if omitted)."""
     async with core.tick_lock:
         if name is None:
             name = _random_name()
-        pawn_id = next_pawn_id()
-        state.world_state["pawns"][pawn_id] = state.make_pawn(
-            pawn_id,
-            name,
-            hp=max(0, min(100, hp)),
-            energy=max(0, min(100, energy)),
-            job=_random_job(),
-        )
+        pawn = _spawn_pawn(name, hp=max(0, min(100, hp)), energy=max(0, min(100, energy)))
+        state.world_state["pawns"][pawn["id"]] = pawn
         state.save_state()
-        await ctx.send(f"✨ Spawned **{name}** the {state.world_state['pawns'][pawn_id]['job']} (HP {hp} | Energy {energy}).")
+        await ctx.send(
+            f"✨ Spawned **{name}** {['♂', '♀'][pawn['sex'] == 'F']} "
+            f"the {pawn['job']} (HP {hp} | Energy {energy})."
+        )
 
 
 @bot.command(name="job")
@@ -164,8 +155,8 @@ async def remove_pawn(ctx, pawn_id: str):
 
 @bot.command(name="god")
 @is_god_channel()
-async def god_edit(ctx, pawn_id: str, stat: str, value: int = 50):
-    """!god <name|pawn_id> <hp|energy|hunger|warmth|morale|wood|food|revive> [value]"""
+async def god_edit(ctx, pawn_id: str, stat: str, value: str = "50"):
+    """!god <name|pawn_id> <hp|energy|hunger|warmth|morale|sex|wood|food|revive> [value]"""
     async with core.tick_lock:
         pawn_id, err = resolve_pawn_id(pawn_id)
         if err:
@@ -179,6 +170,20 @@ async def god_edit(ctx, pawn_id: str, stat: str, value: int = 50):
             state.save_state()
             await ctx.send(f"⚡ **{pawn['name']}** has been revived.")
             return
+        if key == "sex":
+            s = value.strip().upper()
+            if s not in ("M", "F"):
+                await ctx.send("❌ Sex must be M or F.")
+                return
+            pawn["sex"] = s
+            state.save_state()
+            await ctx.send(f"⚡ {pawn['name']} is now {'♂ male' if s == 'M' else '♀ female'}.")
+            return
+        try:
+            value = int(value)
+        except ValueError:
+            await ctx.send("❌ Value must be a number (or M/F for sex).")
+            return
         if key in ("hp", "energy", "hunger", "warmth", "morale"):
             pawn["vitals"][key] = max(0, min(100, value))
         elif key in ("wood", "food", "stone", "fiber"):
@@ -186,7 +191,7 @@ async def god_edit(ctx, pawn_id: str, stat: str, value: int = 50):
         else:
             await ctx.send(
                 "❌ Stat must be `hp`, `energy`, `hunger`, `warmth`, `morale`, "
-                "`wood`, `food`, `stone`, `fiber`, or `revive`."
+                "`sex`, `wood`, `food`, `stone`, `fiber`, or `revive`."
             )
             return
         state.save_state()
@@ -196,7 +201,7 @@ async def god_edit(ctx, pawn_id: str, stat: str, value: int = 50):
 @bot.command(name="order")
 @is_god_channel()
 async def order(ctx, pawn_id: str, action: str, target: str = None):
-    """!order <name|pawn_id> <Chop|Rest|Scout|Attack|Forage|Build|Share|Move> [target]"""
+    """!order <name|pawn_id> <Chop|Rest|Scout|Attack|Forage|Build|Share|Move|Mate> [target]"""
     async with core.tick_lock:
         pawn_id, err = resolve_pawn_id(pawn_id)
         if err:
@@ -204,11 +209,11 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
             return
         pawn = state.world_state["pawns"][pawn_id]
         action = action.capitalize()
-        valid_actions = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move")
-        needs_target = ("Attack", "Share")
+        valid_actions = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate")
+        needs_target = ("Attack", "Share", "Mate")
         if action not in valid_actions:
             await ctx.send(
-                "❌ Action must be Chop, Rest, Scout, Attack, Forage, Build, Share, or Move."
+                "❌ Action must be Chop, Rest, Scout, Attack, Forage, Build, Share, Move, or Mate."
             )
             return
         if action == "Move":
@@ -218,7 +223,7 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
             target = target.upper()
         elif action in needs_target:
             if not target:
-                await ctx.send("❌ Attacks and shares require a valid target (not self).")
+                await ctx.send("❌ Attacks, shares, and mates require a valid target (not self).")
                 return
             target, t_err = resolve_pawn_id(target)
             if t_err:

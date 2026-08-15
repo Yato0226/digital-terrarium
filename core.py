@@ -55,11 +55,14 @@ def post_to_discord(data):
         v = pawn["vitals"]
         title = f" {pawn['title']}" if pawn.get("title") else ""
         job_txt = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
+        sex_txt = "♂" if pawn.get("sex") == "M" else "♀" if pawn.get("sex") == "F" else ""
+        preg_txt = " 🤰" if pawn.get("pregnant_ticks", 0) > 0 else ""
+        child_txt = " 👶" if pawn.get("child_ticks", 0) > 0 else ""
         break_txt = f" 🌀{pawn['mental_break']}" if pawn.get("mental_break") else ""
         gear_txt = f" {pawn['gear']['main_hand'] or '—'}/{pawn['gear']['body'] or '—'}"
         inv = pawn["inventory"]
         name = (
-            f"🌲 {pawn['name']}{job_txt}{title}{break_txt} | "
+            f"🌲 {pawn['name']}{sex_txt}{job_txt}{title}{break_txt}{preg_txt}{child_txt} | "
             f"HP{v['hp']} E{v['energy']} H{v['hunger']} W{v['warmth']} M{v['morale']} | "
             f"{gear_txt} | W{inv['wood']} F{inv['food']} S{inv['stone']} Fb{inv['fiber']}"
             f"{action_txt}"

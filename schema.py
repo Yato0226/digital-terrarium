@@ -4,7 +4,7 @@ from pydantic import Field, create_model
 
 import state
 
-ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move")
+ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate")
 
 
 def build_models():
@@ -41,7 +41,7 @@ def build_models():
         ),
         target=(
             Optional[Literal[tuple(pawn_ids)]],
-            Field(default=None, description="Target pawn id — only for Attack or Share."),
+            Field(default=None, description="Target pawn id — only for Attack, Share, or Mate."),
         ),
     )
     fields = {

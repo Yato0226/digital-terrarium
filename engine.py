@@ -12,6 +12,7 @@ ACTION_COSTS = {
     "Build": 15,
     "Share": 5,
     "Move": 5,
+    "Mate": 10,
 }
 ACTIONS = tuple(ACTION_COSTS)
 SKILL_MAX = 20
@@ -80,6 +81,14 @@ BUILD_GAIN = 8
 SHARE_FOOD = 1
 REGROWTH = 1
 REGROWTH_SPRING = 2
+
+MATE_RELATIONSHIP = 25
+CONCEPTION_CHANCE = 0.5
+PREGNANCY_TICKS = 6
+CHILD_MATURITY = 5
+MAX_PAWNS = 10
+NEWBORN_HP = 60
+NEWBORN_ENERGY = 40
 
 
 def _clamp(value, lo=0, hi=100):
@@ -557,6 +566,162 @@ def _do_share(pawn, pawn_id, target):
     )
 
 
+def _do_mate(pawn, pawn_id, target):
+    if not target:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "no_target"},
+            description=f"{pawn['name']} looks for a partner and finds none.",
+        )
+    if target == pawn_id:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "self_target"},
+            description=f"{pawn['name']} courts themself — nothing happens.",
+        )
+    tpawn = state.world_state["pawns"].get(target)
+    if tpawn is None:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "unknown_target"},
+            description=f"{pawn['name']} seeks a partner that isn't there.",
+        )
+    if tpawn["status"] != "active":
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "target_down"},
+            description=f"{pawn['name']} finds {tpawn['name']} unavailable.",
+        )
+    if _manhattan(pawn["pos"], tpawn["pos"]) > 0:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "not_same_tile"},
+            description=f"{pawn['name']} wants to court {tpawn['name']}, but they are apart.",
+        )
+    if pawn.get("child_ticks", 0) > 0 or tpawn.get("child_ticks", 0) > 0:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "too_young"},
+            description=f"{pawn['name']} and {tpawn['name']} are too young to court.",
+        )
+    if pawn["sex"] == tpawn["sex"]:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "same_sex"},
+            description=f"{pawn['name']} and {tpawn['name']} share a moment as friends.",
+        )
+    if pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "relationship_too_low"},
+            description=f"{pawn['name']} courts {tpawn['name']}, who isn't ready.",
+        )
+    if len(state.world_state["pawns"]) >= MAX_PAWNS:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "population_cap"},
+            description="The colony is large enough — no new life is welcomed.",
+        )
+    female = pawn if pawn["sex"] == "F" else tpawn
+    if female.get("starving_ticks", 0) > 0:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "mother_starving"},
+            description=f"{female['name']} is too famished to conceive.",
+        )
+    if female.get("pregnant_ticks", 0) > 0:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "already_pregnant"},
+            description=f"{female['name']} is already with child.",
+        )
+    if not _pay_cost(pawn, "Mate"):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            target=target,
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted to court.",
+        )
+    _adjust_relationship(pawn, target, 10)
+    _adjust_relationship(tpawn, pawn_id, 10)
+    if random.random() < CONCEPTION_CHANCE:
+        female["pregnant_ticks"] = PREGNANCY_TICKS
+        return events.add_event(
+            "mate",
+            actor=pawn_id,
+            target=target,
+            data={"conceived": True},
+            description=f"{pawn['name']} and {tpawn['name']} become partners — "
+            f"{female['name']} is expecting!",
+        )
+    return events.add_event(
+        "mate",
+        actor=pawn_id,
+        target=target,
+        data={"conceived": False},
+        description=f"{pawn['name']} and {tpawn['name']} grow closer.",
+    )
+
+
+def _give_birth(mother, mother_id, result):
+    if len(state.world_state["pawns"]) >= MAX_PAWNS:
+        mother["pregnant_ticks"] = PREGNANCY_TICKS
+        result.append(
+            events.add_event(
+                "birth",
+                actor=mother_id,
+                data={"delivered": False},
+                description=f"{mother['name']} is due, but the colony is full — the birth is delayed.",
+            )
+        )
+        return
+    child_id = state.next_pawn_id()
+    used = {p["name"].lower() for p in state.world_state["pawns"].values()}
+    name = next(
+        (n for n in state.NAME_POOL if n.lower() not in used),
+        f"Child_{len(state.world_state['pawns']) + 1}",
+    )
+    child = state.make_pawn(
+        child_id,
+        name,
+        hp=NEWBORN_HP,
+        energy=NEWBORN_ENERGY,
+        job=random.choice(state.JOB_POOL),
+    )
+    child["pos"] = list(mother["pos"])
+    child["child_ticks"] = CHILD_MATURITY
+    state.world_state["pawns"][child_id] = child
+    result.append(
+        events.add_event(
+            "birth",
+            actor=mother_id,
+            data={"child": child_id, "name": name, "sex": child["sex"]},
+            description=f"{mother['name']} gives birth to {name} ({child['sex']})! "
+            "The colony grows.",
+        )
+    )
+
+
 def _feed_campfire():
     biome = state.world_state["biome"]
     if biome["campfire"] <= 0:
@@ -875,6 +1040,16 @@ def tick_environment():
                 )
         _metabolize(pawn, pawn_id, biome, lit, day, result)
 
+    # Children mature, pregnancies come to term.
+    for pawn_id, pawn in list(state.world_state["pawns"].items()):
+        if pawn.get("child_ticks", 0) > 0:
+            pawn["child_ticks"] -= 1
+    for pawn_id, pawn in list(state.world_state["pawns"].items()):
+        if pawn.get("pregnant_ticks", 0) > 0:
+            pawn["pregnant_ticks"] -= 1
+            if pawn["pregnant_ticks"] <= 0:
+                _give_birth(pawn, pawn_id, result)
+
     for pawn_id, pawn in list(state.world_state["pawns"].items()):
         cause = _death_cause(pawn, biome)
         if cause:
@@ -935,6 +1110,8 @@ def resolve_actions(intents):
             resulting.append(_do_attack(pawn, pawn_id, target))
         elif action == "Move":
             resulting.append(_do_move(pawn, pawn_id, target))
+        elif action == "Mate":
+            resulting.append(_do_mate(pawn, pawn_id, target))
         else:
             resulting.append(
                 events.add_event(

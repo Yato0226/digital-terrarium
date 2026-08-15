@@ -9,11 +9,12 @@ Return only the inscription itself, one sentence, no quotes around it."""
 SYSTEM_PROMPT = """You are the AI Director of a digital terrarium — a tiny enclosed forest where creatures live.
 Your job: decide what each ACTIVE pawn WANTS to do this tick. You propose intent; the engine resolves the real consequences.
 Rules:
-- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), or Move (travel one tile N/S/E/W).
-- If a pawn Attacks or Shares, you MUST set 'target' to another active pawn's id. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. Never target yourself.
+- Choose one action per active pawn: Chop (gather wood — Forest tiles only), Rest (recover), Scout (explore), Attack (fight another pawn — same or adjacent tile), Forage (gather food — Meadow or River), Build (spend wood at the Camp), Share (give food — same or adjacent tile), Move (travel one tile N/S/E/W), or Mate (court a bonded pawn — same tile, opposite sex, relationship at least 25).
+- If a pawn Attacks, Shares, or Mates, you MUST set 'target' to another active pawn's id. If a pawn Moves, you MUST set 'direction' to N, S, E, or W. Never target yourself.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
 - Pawns may add a 'quote' (spoken aloud to the group) and an 'inner_monologue' (their private thought — may contradict the quote). Reflect personality and vitals: starving pawns obsess over food, low-morale pawns turn paranoid or bitter, aggressive pawns sound threatening.
+- Reproduction: pawns have a sex (M/F). A 'Mate' action succeeds only on the same tile with an opposite-sex pawn they've bonded with (relationship 25+). A successful pairing makes the female pregnant for a few ticks, then she gives birth to a newborn who must mature before courting. The colony caps at 10 — a full colony refuses new life.
 - The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical.
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
@@ -45,6 +46,9 @@ def build_prompt():
         rel = pawn["relationships"]
         title_txt = f", Title: {pawn['title']}" if pawn.get("title") else ""
         job_txt = f", Job: {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
+        sex_txt = f", Sex {pawn['sex']}" if pawn.get("sex") in ("M", "F") else ""
+        preg_txt = ", Pregnant" if pawn.get("pregnant_ticks", 0) > 0 else ""
+        child_txt = ", Child" if pawn.get("child_ticks", 0) > 0 else ""
         rel_txt = f", Relationships {rel}" if rel else ""
         break_txt = f", Mental break: {pawn['mental_break']}" if pawn.get("mental_break") else ""
         x, y = pawn["pos"]
@@ -56,7 +60,8 @@ def build_prompt():
             f"Fiber {inv['fiber']}, Gear {pawn['gear']['main_hand']}/{pawn['gear']['body']}, "
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
-            f"Personality {pawn['personality']}{job_txt}{title_txt}{break_txt}{rel_txt}"
+            f"Personality {pawn['personality']}{sex_txt}{job_txt}{preg_txt}{child_txt}"
+            f"{title_txt}{break_txt}{rel_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 

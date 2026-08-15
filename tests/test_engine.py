@@ -691,3 +691,148 @@ def test_break_ends_after_ticks(monkeypatch):
     assert p["break_ticks"] == 0
     assert p["vitals"]["morale"] == 54
     assert any(e["type"] == "break_end" for e in evs)
+
+
+def test_mate_requires_target():
+    evs = engine.resolve_actions({"pawn_1": ("Mate", None)})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "no_target"
+
+
+def test_mate_same_sex_rejected():
+    pawn("pawn_2")["sex"] = "M"
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "same_sex"
+
+
+def test_mate_requires_bond():
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "relationship_too_low"
+
+
+def test_mate_requires_same_tile():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["pos"] = [2, 1]
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "not_same_tile"
+
+
+def test_mate_mother_starving_rejected():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["starving_ticks"] = 2
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "mother_starving"
+
+
+def test_mate_child_suitor_rejected():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_1")["child_ticks"] = 1
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "too_young"
+    assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_mate_child_target_rejected():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_2")["child_ticks"] = 1
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "too_young"
+    assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_mate_energy_cost_enforced():
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    pawn("pawn_1")["vitals"]["energy"] = 5
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "low_energy"
+    assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_mate_conceives(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "mate"
+    assert evs[0]["data"]["conceived"] is True
+    assert pawn("pawn_2")["pregnant_ticks"] == engine.PREGNANCY_TICKS
+    assert pawn("pawn_1")["vitals"]["energy"] == 70
+
+
+def test_mate_without_conception(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "mate"
+    assert evs[0]["data"]["conceived"] is False
+    assert pawn("pawn_2")["pregnant_ticks"] == 0
+
+
+def test_pregnancy_leads_to_birth():
+    mother = pawn("pawn_2")
+    mother["pregnant_ticks"] = 1
+    before = len(state.world_state["pawns"])
+    evs = engine.tick_environment()
+    assert len(state.world_state["pawns"]) == before + 1
+    assert any(e["type"] == "birth" for e in evs)
+    newborn = [p for p in state.world_state["pawns"].values() if p["id"] != "pawn_1" and p["id"] != "pawn_2"]
+    assert len(newborn) == 1
+    assert newborn[0]["pos"] == list(mother["pos"])
+    assert newborn[0]["child_ticks"] == engine.CHILD_MATURITY
+    assert newborn[0]["vitals"]["hp"] == engine.NEWBORN_HP
+    assert newborn[0]["vitals"]["energy"] == engine.NEWBORN_ENERGY
+
+
+def test_birth_blocked_at_population_cap():
+    while len(state.world_state["pawns"]) < engine.MAX_PAWNS:
+        pid = state.next_pawn_id()
+        state.world_state["pawns"][pid] = state.make_pawn(pid, f"Extra_{pid}")
+    mother = pawn("pawn_2")
+    mother["pregnant_ticks"] = 1
+    before = len(state.world_state["pawns"])
+    evs = engine.tick_environment()
+    assert len(state.world_state["pawns"]) == before
+    birth = [e for e in evs if e["type"] == "birth"]
+    assert birth and birth[0]["data"]["delivered"] is False
+    assert mother["pregnant_ticks"] == engine.PREGNANCY_TICKS
+
+
+def test_birth_delivered_after_slot_frees():
+    while len(state.world_state["pawns"]) < engine.MAX_PAWNS:
+        pid = state.next_pawn_id()
+        state.world_state["pawns"][pid] = state.make_pawn(pid, f"Extra_{pid}")
+    mother = pawn("pawn_2")
+    mother["pregnant_ticks"] = 1
+    engine.tick_environment()
+    assert mother["pregnant_ticks"] == engine.PREGNANCY_TICKS
+    state.world_state["pawns"].popitem()
+    mother["pregnant_ticks"] = 1
+    evs = engine.tick_environment()
+    assert len(state.world_state["pawns"]) == engine.MAX_PAWNS
+    birth = [e for e in evs if e["type"] == "birth"]
+    assert birth and birth[0]["data"]["child"] in state.world_state["pawns"]
+
+
+def test_mate_blocked_at_population_cap(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    while len(state.world_state["pawns"]) < engine.MAX_PAWNS:
+        pid = state.next_pawn_id()
+        state.world_state["pawns"][pid] = state.make_pawn(pid, f"Extra_{pid}")
+    pawn("pawn_1")["relationships"]["pawn_2"] = 30
+    evs = engine.resolve_actions({"pawn_1": ("Mate", "pawn_2")})
+    assert evs[0]["type"] == "failed"
+    assert evs[0]["data"]["reason"] == "population_cap"
+
+
+def test_child_matures_over_ticks():
+    p = pawn("pawn_1")
+    p["child_ticks"] = 1
+    engine.tick_environment()
+    assert p["child_ticks"] == 0
+
