@@ -50,13 +50,19 @@ python main.py
 
 | Command | Effect |
 |---|---|
-| `!add <name> [hp] [energy]` | Spawn a new pawn |
-| `!remove <pawn_id>` | Remove a pawn (never the last) |
-| `!god <id> <stat> <value>` | Set vitals / wood / food / stone / fiber, or `revive` |
-| `!order <id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`) |
-| `!say <id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
+| `!add [name] [hp] [energy]` | Spawn a new pawn (name and job auto-generated if omitted) |
+| `!rename <name\|pawn_id> <newname>` | Rename a pawn |
+| `!job <name\|pawn_id> <job>` | Set a pawn's job/role (flavor only, e.g. `!job Willow Lumberjack`) |
+| `!remove <name\|pawn_id>` | Remove a pawn (never the last) |
+| `!god <name\|pawn_id> <stat> <value>` | Set vitals / wood / food / stone / fiber, or `revive` |
+| `!order <name\|pawn_id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`) |
+| `!say <name\|pawn_id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
 | `!graveyard` | List the fallen with epitaphs |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
+
+Pawns are targeted **by name** (case-insensitive) or by their `pawn_N` id. New pawns get an auto-generated name (e.g. `Willow`) and a flavor job (e.g. `the Forager`) from built-in pools, or you can set both explicitly (`!add Fern`, `!job Fern Hunter`).
+
+**Total extinction is possible**: if every pawn dies (blizzard freeze or starvation), the bot pings `NOTIFY_USER_ID`, pauses itself to stop API usage, and waits for you to `!add` new colonists and `!resume`.
 
 ## Run as a service (Proxmox / LXC)
 

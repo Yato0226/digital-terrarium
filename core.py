@@ -44,25 +44,25 @@ def post_to_discord(data):
     for pid, pawn in state.world_state["pawns"].items():
         if pawn["status"] == "active":
             decision = getattr(data, pid)
-            value = f"*{decision.narrative}* (Action: {decision.action})"
+            value = f"*{decision.narrative}*"
             quote = getattr(decision, "quote", None)
             if quote:
-                value += f"\n💬 *\"{quote}\"*"
-            thought = getattr(decision, "inner_monologue", None)
-            if thought:
-                value += f"\n— *thinks: \"{thought}\"*"
+                value += f" 💬 *\"{quote}\"*"
+            action_txt = f" | {decision.action}"
         else:
             value = "💤 *Incapacitated* — recovering"
+            action_txt = ""
         v = pawn["vitals"]
         title = f" {pawn['title']}" if pawn.get("title") else ""
+        job_txt = f" the {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
         break_txt = f" 🌀{pawn['mental_break']}" if pawn.get("mental_break") else ""
         gear_txt = f" {pawn['gear']['main_hand'] or '—'}/{pawn['gear']['body'] or '—'}"
+        inv = pawn["inventory"]
         name = (
-            f"🌲 {pawn['name']}{title}{break_txt}{gear_txt} ({pid}) | "
-            f"HP {v['hp']} | E {v['energy']} | H {v['hunger']} | "
-            f"W {v['warmth']} | M {v['morale']} | "
-            f"Wood {pawn['inventory']['wood']} | Food {pawn['inventory']['food']} | "
-            f"Stone {pawn['inventory']['stone']} | Fiber {pawn['inventory']['fiber']}"
+            f"🌲 {pawn['name']}{job_txt}{title}{break_txt} | "
+            f"HP{v['hp']} E{v['energy']} H{v['hunger']} W{v['warmth']} M{v['morale']} | "
+            f"{gear_txt} | W{inv['wood']} F{inv['food']} S{inv['stone']} Fb{inv['fiber']}"
+            f"{action_txt}"
         )
         fields.append({"name": name, "value": value, "inline": False})
 
@@ -105,9 +105,34 @@ async def _eulogize_fallen():
         entry["eulogized"] = True
 
 
+def _notify_extinction():
+    """Roster empty: ping the god and pause so no more API is wasted."""
+    if state.world_state.get("extinct"):
+        return
+    state.world_state["extinct"] = True
+    print("🪦 Extinction detected — pausing simulation.")
+    message = (
+        "🪦 **The terrarium has fallen silent.** Every last pawn is gone. "
+        f"<@{config.NOTIFY_USER_ID}>"
+    )
+    if DISCORD_WEBHOOK_URL:
+        try:
+            requests.post(DISCORD_WEBHOOK_URL, json={"content": message}, timeout=5)
+        except requests.exceptions.RequestException as e:
+            print(f"Extinction ping failed: {e}")
+    pause_event.clear()
+
+
 async def run_tick():
     async with tick_lock:
         print(f"🌱 Tick {state.world_state['tick']} starting...")
+
+        if state.world_state["pawns"]:
+            state.world_state["extinct"] = False
+        else:
+            _notify_extinction()
+            state.world_state["tick"] += 1
+            return
 
         try:
             TickResponse = schema.build_models()

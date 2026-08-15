@@ -44,6 +44,7 @@ def build_prompt():
         sk = pawn["skills"]
         rel = pawn["relationships"]
         title_txt = f", Title: {pawn['title']}" if pawn.get("title") else ""
+        job_txt = f", Job: {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
         rel_txt = f", Relationships {rel}" if rel else ""
         break_txt = f", Mental break: {pawn['mental_break']}" if pawn.get("mental_break") else ""
         x, y = pawn["pos"]
@@ -55,7 +56,7 @@ def build_prompt():
             f"Fiber {inv['fiber']}, Gear {pawn['gear']['main_hand']}/{pawn['gear']['body']}, "
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
-            f"Personality {pawn['personality']}{title_txt}{break_txt}{rel_txt}"
+            f"Personality {pawn['personality']}{job_txt}{title_txt}{break_txt}{rel_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 

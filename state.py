@@ -52,10 +52,12 @@ def make_pawn(
     morale=80,
     personality=None,
     skills=None,
+    job=None,
 ):
     return {
         "id": pawn_id,
         "name": name,
+        "job": job or "Wanderer",
         "status": "active",  # active | incapacitated
         "vitals": {
             "hp": hp,
@@ -136,6 +138,8 @@ def _migrate_pawn(pawn_id, pawn):
         base["starving_ticks"] = pawn["starving_ticks"]
     if pawn.get("title"):
         base["title"] = pawn["title"]
+    if pawn.get("job"):
+        base["job"] = pawn["job"]
     if pawn.get("status") in ("active", "incapacitated"):
         base["status"] = pawn["status"]
     return base
