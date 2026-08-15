@@ -43,12 +43,16 @@ def post_to_discord(data):
 
     for pid, pawn in state.world_state["pawns"].items():
         if pawn["status"] == "active":
-            decision = getattr(data, pid)
-            value = f"*{decision.narrative}*"
-            quote = getattr(decision, "quote", None)
-            if quote:
-                value += f" 💬 *\"{quote}\"*"
-            action_txt = f" | {decision.action}"
+            decision = getattr(data, pid, None)
+            if decision is not None:
+                value = f"*{decision.narrative}*"
+                quote = getattr(decision, "quote", None)
+                if quote:
+                    value += f" 💬 *\"{quote}\"*"
+                action_txt = f" | {decision.action}"
+            else:
+                value = "🌱 *A new life enters the terrarium.*"
+                action_txt = ""
         else:
             value = "💤 *Incapacitated* — recovering"
             action_txt = ""
