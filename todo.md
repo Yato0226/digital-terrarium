@@ -106,10 +106,10 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 3. The Architect LLM Routine — `core.py`
 
-- [ ] Triggered outside the lock every annual cycle (400 ticks / 4 seasons) or after major milestones.
-- [ ] Schema `PatchUpdate`: outputs `patch_title`, `balance_changes`, optional `new_recipe`, `new_quest`, and bounded numeric deltas (`regrowth_delta`, `cold_delta`).
-- [ ] Python enforces strict clamping on all balance deltas (e.g. net multipliers clamped strictly within `[0.7, 1.3]`).
-- [ ] Emits `"patch"` event to event log and increments `world_state["patch_version"]`.
+- [x] Triggered outside the lock every annual cycle (400 ticks / 4 seasons) or after major milestones.
+- [x] Schema `PatchUpdate`: outputs `patch_title`, `balance_changes`, optional `new_recipe`, `new_quest`, and bounded numeric deltas (`regrowth_delta`, `cold_delta`).
+- [x] Python enforces strict clamping on all balance deltas (e.g. net multipliers clamped strictly within `[0.7, 1.3]`).
+- [x] Emits `"patch"` event to event log and increments `world_state["patch_version"]`.
 
 ### 4. Discord Interface & Commands — `bot.py`
 

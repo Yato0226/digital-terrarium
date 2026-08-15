@@ -988,6 +988,138 @@ def _check_quests():
     return result
 
 
+# Stage 9 Architect routine: annual balance review (LLM call lives in core).
+PATCH_INTERVAL = 400           # one full year cycle (4 seasons x 100 ticks)
+CUSTOM_RECIPE_LIMIT = 6        # max synthesized blueprints kept
+CUSTOM_RECIPE_TIER_MAX = 10
+RECIPE_BONUS_MAX = 5
+RECIPE_RESOURCES = ("wood", "food", "stone", "fiber")
+RECIPE_BONUS_KEYS = ("combat", "woodcutting", "scouting", "fiber")
+QUEST_KINDS = ("hunt", "stockpile", "survive", "chop")
+QUEST_NEEDED_MAX = 100
+
+
+def bump_patch_version():
+    """'v1.0' -> 'v1.1' ... -> 'v1.9' -> 'v2.0'. Sets and returns the new version."""
+    current = state.world_state.get("patch_version", "v1.0")
+    try:
+        core = current.lstrip("vV")
+        parts = core.split(".") if "." in core else (core, "0")
+        major, minor = int(parts[0]), int(parts[1])
+    except (ValueError, IndexError):
+        major, minor = 1, 0
+    minor += 1
+    if minor > 9:
+        major += 1
+        minor = 0
+    state.world_state["patch_version"] = f"v{major}.{minor}"
+    return state.world_state["patch_version"]
+
+
+def apply_patch(deltas):
+    """Apply strictly-clamped balance deltas to biome.modifiers.
+
+    Net multipliers are clamped within [MODIFIER_MIN, MODIFIER_MAX] regardless
+    of what the LLM proposed. Returns (old, new) clamped modifier dicts.
+    """
+    mods = state.world_state["biome"].setdefault("modifiers", {})
+    keys = ("regrowth", "cold", "spawn")
+    old = {k: _clamp_modifier(mods.get(k, 1.0)) for k in keys}
+    for key in keys:
+        try:
+            delta = float(deltas.get(key, 0.0))
+        except (TypeError, ValueError, AttributeError):
+            delta = 0.0
+        mods[key] = _clamp_modifier(old[key] + delta)
+    new = {k: _clamp_modifier(mods.get(k, 1.0)) for k in keys}
+    return old, new
+
+
+def validate_new_recipe(raw):
+    """Coerce an LLM-synthesized blueprint into a safe recipe dict, or None."""
+    if not isinstance(raw, dict):
+        return None
+    name = str(raw.get("name", "")).strip().title()[:40]
+    if not name or not all(c.isalnum() or c.isspace() for c in name):
+        return None
+    materials = {}
+    for res, cost in (raw.get("materials") or {}).items():
+        if res not in RECIPE_RESOURCES:
+            continue
+        try:
+            cost = max(1, int(float(cost)))
+        except (TypeError, ValueError):
+            cost = 1
+        materials[res] = min(cost, 20)
+    if not materials:
+        return None
+    slot = raw.get("slot", "main_hand")
+    if slot not in ("main_hand", "body"):
+        slot = "main_hand"
+    try:
+        tier = int(float(raw.get("tier", CUSTOM_RECIPE_TIER_MIN)))
+    except (TypeError, ValueError):
+        tier = CUSTOM_RECIPE_TIER_MIN
+    tier = max(CUSTOM_RECIPE_TIER_MIN, min(tier, CUSTOM_RECIPE_TIER_MAX))
+    bonus = {}
+    for key, val in (raw.get("bonus") or {}).items():
+        if key not in RECIPE_BONUS_KEYS:
+            continue
+        try:
+            val = max(0, int(float(val)))
+        except (TypeError, ValueError):
+            val = 0
+        bonus[key] = min(val, RECIPE_BONUS_MAX)
+    return {"name": name, "materials": materials, "slot": slot, "tier": tier, "bonus": bonus}
+
+
+def validate_new_quest(raw):
+    """Coerce an LLM world-prophecy into a safe quest dict, or None."""
+    if not isinstance(raw, dict):
+        return None
+    kind = raw.get("kind")
+    if kind not in QUEST_KINDS:
+        return None
+    title = str(raw.get("title", "")).strip()[:80]
+    if not title:
+        title = "The Unwritten Prophecy"
+    quests = state.world_state.get("active_quests", [])
+    if any(q.get("title", "").strip().lower() == title.lower() for q in quests):
+        return None
+    try:
+        needed = max(1, int(float(raw.get("needed", 1))))
+    except (TypeError, ValueError):
+        needed = 1
+    needed = min(needed, QUEST_NEEDED_MAX)
+    try:
+        morale = int(float(raw.get("reward_morale", QUEST_REWARD_MORALE)))
+    except (TypeError, ValueError):
+        morale = QUEST_REWARD_MORALE
+    morale = max(0, min(morale, QUEST_MORALE_CAP))
+    quest = {
+        "id": f"quest_{state.world_state['tick']}_{len(quests) + 1}",
+        "title": title,
+        "text": str(raw.get("text", "")).strip()[:300],
+        "kind": kind,
+        "needed": needed,
+        "progress": 0,
+        "reward_morale": morale,
+        "reward_title": str(raw.get("reward_title") or "").strip()[:40] or None,
+        "created_tick": state.world_state["tick"],
+    }
+    if kind == "hunt":
+        species = raw.get("species")
+        if species not in WILDLIFE:
+            return None
+        quest["species"] = species
+    elif kind == "stockpile":
+        resource = raw.get("resource", "food")
+        if resource not in RECIPE_RESOURCES:
+            return None
+        quest["resource"] = resource
+    return quest
+
+
 def _tick_fires():
     """Burn down each active fire, damage occupants, and regrow scorched earth."""
     result = []

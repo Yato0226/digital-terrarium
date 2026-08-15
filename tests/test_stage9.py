@@ -4,6 +4,7 @@ import pytest
 
 import engine
 import events
+import schema
 import state
 
 pytestmark = pytest.mark.usefixtures("fresh_world")
@@ -453,3 +454,143 @@ def test_quest_reward_goes_to_all_active_pawns():
     state.world_state["wildlife"].append(wolf)
     engine.resolve_actions({"pawn_1": ("Attack", wolf["id"])})
     assert pawn("pawn_2")["vitals"]["morale"] == 95
+
+
+# --- Stage 9 Part 3: Architect routine (engine-side, offline) ---------------
+
+
+def test_patch_interval_is_one_year():
+    assert engine.PATCH_INTERVAL == 400
+
+
+def test_bump_patch_version_increments():
+    state.world_state["patch_version"] = "v1.0"
+    assert engine.bump_patch_version() == "v1.1"
+    assert state.world_state["patch_version"] == "v1.1"
+    state.world_state["patch_version"] = "v1.9"
+    assert engine.bump_patch_version() == "v2.0"
+
+
+def test_apply_patch_clamps_net_multipliers():
+    old, new = engine.apply_patch({"regrowth": 0.5, "cold": -0.5, "spawn": 0.2})
+    assert old == {"regrowth": 1.0, "cold": 1.0, "spawn": 1.0}
+    assert new["regrowth"] == engine.MODIFIER_MAX
+    assert new["cold"] == engine.MODIFIER_MIN
+    assert new["spawn"] == pytest.approx(1.2)
+    assert state.world_state["biome"]["modifiers"]["regrowth"] == 1.3
+
+
+def test_apply_patch_accumulates_within_bounds():
+    engine.apply_patch({"regrowth": 0.3})
+    engine.apply_patch({"regrowth": 0.3})
+    assert state.world_state["biome"]["modifiers"]["regrowth"] == 1.3
+    engine.apply_patch({"regrowth": -9.0})
+    assert state.world_state["biome"]["modifiers"]["regrowth"] == 0.7
+
+
+def test_apply_patch_ignores_garbage_deltas():
+    old, new = engine.apply_patch({"regrowth": None, "cold": "loud", "spawn": 0.0})
+    assert old == new == {"regrowth": 1.0, "cold": 1.0, "spawn": 1.0}
+
+
+def test_validate_new_recipe_normalizes():
+    recipe = engine.validate_new_recipe(
+        {
+            "name": "iron hatchet",
+            "materials": {"wood": 100, "stone": 0, "mana": 5},
+            "slot": "hat",
+            "tier": 99,
+            "bonus": {"combat": 99, "scouting": -3, "fishing": 4},
+        }
+    )
+    assert recipe["name"] == "Iron Hatchet"
+    assert recipe["materials"] == {"wood": 20, "stone": 1}
+    assert recipe["slot"] == "main_hand"
+    assert recipe["tier"] == engine.CUSTOM_RECIPE_TIER_MAX
+    assert recipe["bonus"] == {"combat": 5, "scouting": 0}
+
+
+def test_validate_new_recipe_low_tier_raised():
+    recipe = engine.validate_new_recipe(
+        {"name": "Leaf Dagger", "materials": {"wood": 1}, "slot": "main_hand", "tier": 1}
+    )
+    assert recipe["tier"] == engine.CUSTOM_RECIPE_TIER_MIN
+
+
+def test_validate_new_recipe_rejects_garbage():
+    assert engine.validate_new_recipe(None) is None
+    assert engine.validate_new_recipe("tool") is None
+    assert engine.validate_new_recipe({"name": "", "materials": {"wood": 1}}) is None
+    assert engine.validate_new_recipe({"name": "!!!", "materials": {"wood": 1}}) is None
+    assert engine.validate_new_recipe({"name": "Ghost", "materials": {}}) is None
+
+
+def test_validate_new_quest_hunt():
+    quest = engine.validate_new_quest(
+        {
+            "kind": "hunt",
+            "title": "Winter's Bite",
+            "text": "Slay the great wolf.",
+            "species": "Wolf",
+            "needed": 500,
+            "reward_morale": 50,
+            "reward_title": "the Wolf-Bane",
+        }
+    )
+    assert quest["kind"] == "hunt"
+    assert quest["species"] == "Wolf"
+    assert quest["needed"] == engine.QUEST_NEEDED_MAX
+    assert quest["reward_morale"] == engine.QUEST_MORALE_CAP
+    assert quest["reward_title"] == "the Wolf-Bane"
+    assert quest["progress"] == 0
+    assert quest["created_tick"] == state.world_state["tick"]
+
+
+def test_validate_new_quest_stockpile_and_survive():
+    stock = engine.validate_new_quest(
+        {"kind": "stockpile", "title": "Granary", "resource": "food", "needed": 10}
+    )
+    assert stock["resource"] == "food"
+    survive = engine.validate_new_quest({"kind": "survive", "title": "Endure", "needed": 5})
+    assert survive["kind"] == "survive"
+    assert "species" not in survive and "resource" not in survive
+
+
+def test_validate_new_quest_rejects_bad_inputs():
+    assert engine.validate_new_quest(None) is None
+    assert engine.validate_new_quest({"kind": "dance", "title": "Boogie"}) is None
+    assert (
+        engine.validate_new_quest({"kind": "hunt", "title": "No Beast", "species": "Dragon"})
+        is None
+    )
+    assert (
+        engine.validate_new_quest(
+            {"kind": "stockpile", "title": "Mana", "resource": "mana"}
+        )
+        is None
+    )
+
+
+def test_validate_new_quest_dedupes_title():
+    state.world_state["active_quests"].append(
+        {"title": "Same Prophecy", "kind": "hunt", "species": "Wolf", "needed": 1}
+    )
+    assert (
+        engine.validate_new_quest(
+            {"kind": "hunt", "title": "same prophecy", "species": "Wolf", "needed": 1}
+        )
+        is None
+    )
+
+
+def test_patch_schema_builds_and_validates():
+    model = schema.build_patch_model()
+    payload = (
+        '{"patch_title": "A gentler winter", '
+        '"balance_changes": "Snows are softening across the land.", '
+        '"regrowth_delta": 0.1, "cold_delta": -0.2, "spawn_delta": 0.0}'
+    )
+    patch = model.model_validate_json(payload)
+    assert patch.patch_title == "A gentler winter"
+    assert patch.cold_delta == -0.2
+    assert patch.new_recipe is None and patch.new_quest is None

@@ -67,3 +67,42 @@ def build_models():
     for pid in pawn_ids:
         fields[pid] = (AgentDecision, Field(description=f"Decision for {pid}"))
     return create_model("TickResponse", **fields)
+
+
+def build_patch_model():
+    """Schema for the Architect's annual balance review (runs outside the tick lock).
+
+    The LLM proposes intent and bounded deltas; Python clamps the net multipliers
+    to [0.7, 1.3] and validates/coerces any blueprint or prophecy before applying.
+    """
+    return create_model(
+        "PatchUpdate",
+        patch_title=(
+            str,
+            Field(description="One-line title for the patch notes (e.g. 'A gentler winter')."),
+        ),
+        balance_changes=(
+            str,
+            Field(description="2-3 sentence plain-language summary of what is being tuned and why."),
+        ),
+        regrowth_delta=(
+            float,
+            Field(description="Small change to the world regrowth multiplier, between -0.3 and 0.3. Python clamps the net value."),
+        ),
+        cold_delta=(
+            float,
+            Field(description="Small change to the world cold multiplier, between -0.3 and 0.3. Python clamps the net value."),
+        ),
+        spawn_delta=(
+            float,
+            Field(description="Small change to the wildlife spawn multiplier, between -0.3 and 0.3. Python clamps the net value."),
+        ),
+        new_recipe=(
+            Optional[dict],
+            Field(default=None, description="Optional synthesized blueprint: {name, materials: {wood/food/stone/fiber: cost}, slot: main_hand or body, tier: 4 to 10, bonus: {combat/woodcutting/scouting/fiber: 0 to 5}}. Omit unless the colony clearly needs a new tool."),
+        ),
+        new_quest=(
+            Optional[dict],
+            Field(default=None, description="Optional world prophecy: {title, text, kind: hunt/stockpile/survive/chop, species (hunt only), resource (stockpile only), needed, reward_morale, reward_title}. Omit unless the colony needs a shared goal."),
+        ),
+    )

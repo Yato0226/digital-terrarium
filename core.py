@@ -143,6 +143,39 @@ def post_to_discord(data):
             print(f"Discord post failed: {e2}")
 
 
+def post_patch_notes(record):
+    """Standalone 'Terrarium Patch Notes' embed to Discord after an Architect review."""
+    if not DISCORD_WEBHOOK_URL:
+        return
+    notes = record.get("notes") or []
+    fields = []
+    if notes:
+        fields.append(
+            {
+                "name": "Adjustments",
+                "value": "• " + "\n• ".join(notes)[:1024],
+                "inline": False,
+            }
+        )
+    if record.get("text"):
+        fields.append(
+            {"name": "Balance notes", "value": record["text"][:1024], "inline": False}
+        )
+    mods = record.get("modifiers") or {}
+    footer = ", ".join(f"{k}={v:.2f}" for k, v in mods.items())
+    embed = {
+        "title": f"⚙️ Terrarium Patch Notes {record.get('version')}",
+        "description": record.get("title") or "The Architect adjusts the world.",
+        "fields": fields,
+        "footer": {"text": f"Tick {record.get('tick')} — modifiers: {footer}"},
+    }
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=5)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Patch-notes post failed: {e}")
+
+
 def _biome_infra_txt(biome):
     parts = []
     if biome.get("granary"):
@@ -321,6 +354,110 @@ async def _inscribe_monument():
         state.save_state()
 
 
+def _patch_context():
+    """Compact context for the Architect's annual balance review."""
+    biome = state.world_state["biome"]
+    mods = biome.get("modifiers") or {}
+    names = ", ".join(
+        p["name"] for p in state.world_state["pawns"].values()
+    ) or "no one"
+    history = events.history_to_text()
+    recipes = ", ".join(sorted(state.world_state.get("custom_recipes", {}))) or "the three basic tools"
+    quests = state.world_state.get("active_quests", [])
+    quest_txt = (
+        ", ".join(
+            f"{q.get('title')} ({q.get('progress', 0)}/{q.get('needed')})" for q in quests
+        )
+        or "none"
+    )
+    return (
+        f"The terrarium is at patch version {state.world_state.get('patch_version', 'v1.0')}. "
+        f"The colony of {names} has reached Tick {state.world_state['tick']} "
+        f"(Day {state.world_state['tick'] // engine.TICKS_PER_DAY}). "
+        f"Season {biome['season']}, weather {biome['weather']}. "
+        f"Campfire {biome['campfire']}, shelter {biome['shelter']}, "
+        f"wood {biome['wood_stock']}, food {biome['food_stock']}, "
+        f"granary {biome.get('granary')}, palisade {biome.get('palisade', 0)}. "
+        f"Balance modifiers: regrowth {mods.get('regrowth', 1.0)}, "
+        f"cold {mods.get('cold', 1.0)}, spawn {mods.get('spawn', 1.0)}. "
+        f"Known blueprints: {recipes}. "
+        f"Active prophecies: {quest_txt}. "
+        f"Recent events: {history}"
+    )
+
+
+async def _run_architect():
+    """Annual Architect review: bounded tuning + optional blueprint/prophecy.
+
+    Runs outside the tick lock like the chronicle. Emits a 'patch' event,
+    bumps patch_version, persists, and returns the patch record for Discord.
+    """
+    PatchModel = schema.build_patch_model()
+    try:
+        content, _model_used = await asyncio.to_thread(
+            _llm_call,
+            prompts.ARCHITECT_PROMPT,
+            _patch_context(),
+            PatchModel,
+            config.ARCHITECT_TEMPERATURE,
+        )
+        if not content:
+            raise ValueError("Architect returned empty content")
+        patch = PatchModel.model_validate_json(content)
+    except Exception as e:
+        print(f"❌ Architect review failed: {e}")
+        return None
+
+    old, new = engine.apply_patch(
+        {
+            "regrowth": getattr(patch, "regrowth_delta", 0.0) or 0.0,
+            "cold": getattr(patch, "cold_delta", 0.0) or 0.0,
+            "spawn": getattr(patch, "spawn_delta", 0.0) or 0.0,
+        }
+    )
+    notes = []
+    for key in ("regrowth", "cold", "spawn"):
+        if new[key] != old[key]:
+            notes.append(f"{key}: {old[key]:.2f} → {new[key]:.2f}")
+
+    recipe = engine.validate_new_recipe(getattr(patch, "new_recipe", None))
+    if recipe:
+        recipes = state.world_state.setdefault("custom_recipes", {})
+        if len(recipes) >= engine.CUSTOM_RECIPE_LIMIT:
+            recipe = None
+        else:
+            recipes[recipe["name"]] = recipe
+            notes.append(f"new blueprint: {recipe['name']}")
+
+    quest = engine.validate_new_quest(getattr(patch, "new_quest", None))
+    if quest:
+        if len(state.world_state.get("active_quests", [])) >= engine.QUEST_MAX:
+            quest = None
+        else:
+            state.world_state.setdefault("active_quests", []).append(quest)
+            notes.append(f"new prophecy: {quest['title']}")
+
+    version = engine.bump_patch_version()
+    record = {
+        "version": version,
+        "title": (getattr(patch, "patch_title", "") or "").strip()[:120],
+        "text": (getattr(patch, "balance_changes", "") or "").strip()[:800],
+        "notes": notes,
+        "modifiers": new,
+        "tick": state.world_state["tick"],
+    }
+    events.add_event(
+        "patch",
+        data={"version": version, "notes": notes},
+        description=(
+            f"⚙️ Patch {version}: {record['title'] or 'balance pass'}"
+            + (" — " + "; ".join(notes) if notes else "")
+        ),
+    )
+    state.save_state()
+    return record
+
+
 def _adoption_message(etype, name, description):
     label = {
         "birth": "gave birth",
@@ -449,8 +586,13 @@ async def run_tick():
         await _inscribe_monument()
     await _eulogize_fallen(dead_tick)
     await _notify_adopted(tick_events)
+    patch_record = None
+    if dead_tick % engine.PATCH_INTERVAL == 0:
+        patch_record = await _run_architect()
     state.save_state()
     await asyncio.to_thread(post_to_discord, data)
+    if patch_record:
+        await asyncio.to_thread(post_patch_notes, patch_record)
 
 
 async def tick_loop():
