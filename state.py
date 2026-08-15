@@ -21,6 +21,11 @@ MAX_CHRONICLE = 24  # keep the last N seasonal chronicle entries
 # tick lock is released. Cleared in reset_world.
 pending_chronicle = None
 
+# Transient monument signal (not persisted): set by engine._do_build when the
+# Ancestral Monolith completes, consumed by core.run_tick (outside the lock) to
+# write the inscription. Cleared in reset_world.
+pending_monument = None
+
 NAME_POOL = [
     "Willow", "Bramble", "Moss", "Fern", "Hazel", "Ash", "Rowan", "Ivy",
     "Thistle", "Clover", "Birch", "Cedar", "Ember", "Sable", "Onyx", "Rune",
@@ -159,6 +164,7 @@ world_state = {
     "extinct": False,
     "tiles": {},
     "visitors": [],
+    "monument": {"wood": 0, "stone": 0, "done": False, "inscription": None},
 }
 
 
@@ -222,7 +228,7 @@ def make_pawn(
 
 
 def reset_world():
-    global pending_chronicle
+    global pending_chronicle, pending_monument
     world_state["tick"] = 1
     world_state["history"] = []
     world_state["biome"] = dict(DEFAULT_BIOME)
@@ -235,7 +241,9 @@ def reset_world():
     world_state["extinct"] = False
     world_state["tiles"] = {}
     world_state["visitors"] = []
+    world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None}
     pending_chronicle = None
+    pending_monument = None
     failed_intents.clear()
     world_state["pawns"] = {
         "pawn_1": make_pawn(
@@ -386,6 +394,13 @@ def load_state():
         else:
             world_state.setdefault("tiles", {})
         world_state.setdefault("visitors", [])
+        monument = world_state.setdefault(
+            "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+        )
+        monument.setdefault("wood", 0)
+        monument.setdefault("stone", 0)
+        monument.setdefault("done", False)
+        monument.setdefault("inscription", None)
         if not world_state["pawns"]:
             if world_state["graveyard"]:
                 # Real extinction: keep the dataset and stay paused.

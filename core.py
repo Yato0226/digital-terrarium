@@ -148,6 +148,11 @@ def _biome_infra_txt(biome):
         parts.append(" | 🏛️ Granary")
     if biome.get("palisade", 0):
         parts.append(f" | 🛡️ Palisade {biome['palisade']}")
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if monument.get("done"):
+        parts.append(" | 🗿 Monolith")
     return "".join(parts)
 
 
@@ -253,6 +258,49 @@ async def _chronicle_season(season):
         description=f"The chronicle records a new era: {title}.",
     )
     state.save_state()
+
+
+def _monument_context():
+    """Compact context for the monument-inscription LLM call."""
+    names = ", ".join(
+        p["name"] for p in state.world_state["pawns"].values()
+    ) or "no one"
+    fallen = len(state.world_state["graveyard"])
+    history = events.history_to_text()
+    return (
+        f"The colony of {names} has just completed the Ancestral Monolith on "
+        f"Tick {state.world_state['tick']}. {fallen} lie in the graveyard. "
+        f"Recent events: {history}"
+    )
+
+
+async def _inscribe_monument():
+    """Best-effort outside-lock LLM dedication for a freshly completed monolith."""
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    inscription = None
+    try:
+        text, _model_used = await asyncio.to_thread(
+            _llm_call,
+            prompts.MONUMENT_PROMPT,
+            _monument_context(),
+            None,
+            0.8,
+        )
+        text = (text or "").strip().strip('"').strip()
+        if text:
+            inscription = text.splitlines()[0][:120]
+    except Exception as e:
+        print(f"❌ Monument inscription failed: {e}")
+    if inscription:
+        monument["inscription"] = inscription
+        events.add_event(
+            "monument",
+            data={"inscription": inscription},
+            description=f"The monolith bears the dedication: \"{inscription}\"",
+        )
+        state.save_state()
 
 
 def _adoption_message(etype, name, description):
@@ -377,6 +425,10 @@ async def run_tick():
     state.pending_chronicle = None
     if pending_season:
         await _chronicle_season(pending_season)
+    pending_monument = state.pending_monument
+    state.pending_monument = None
+    if pending_monument:
+        await _inscribe_monument()
     await _eulogize_fallen(dead_tick)
     await _notify_adopted(tick_events)
     state.save_state()

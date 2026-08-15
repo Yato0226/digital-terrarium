@@ -100,6 +100,14 @@ GUILT_MOODLET_DELTA = -5
 GUILT_MOODLET_TICKS = 15
 AGGRESSION_GUILT_THRESHOLD = 6
 
+# Stage 6 monument (Ancestral Monolith).
+MONUMENT_WOOD_NEEDED = 20
+MONUMENT_STONE_NEEDED = 15
+MONUMENT_WOOD_PER_BUILD = 5
+MONUMENT_STONE_PER_BUILD = 5
+MONUMENT_MORALE_FLOOR = 10
+MONUMENT_INSULATION = 2
+
 INSPIRED_MORALE = 80
 BREAK_MORALE = 20
 BREAK_TICKS = 3
@@ -1173,6 +1181,56 @@ def _do_build(pawn, pawn_id):
             data={"structure": "palisade", "level": biome["palisade"]},
             description=f"{pawn['name']} fortifies the palisade (level {biome['palisade']}).",
         )
+    # The camp is fully fortified (shelter/fire/granary/palisade all done):
+    # Build now raises the Ancestral Monolith, 5 wood + 5 stone per action.
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if not monument["done"]:
+        if (
+            pawn["inventory"]["wood"] < MONUMENT_WOOD_PER_BUILD
+            or pawn["inventory"]["stone"] < MONUMENT_STONE_PER_BUILD
+        ):
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_resources"},
+                description=(
+                    f"{pawn['name']} lacks the wood and stone for the Ancestral Monolith."
+                ),
+            )
+        pawn["inventory"]["wood"] -= MONUMENT_WOOD_PER_BUILD
+        pawn["inventory"]["stone"] -= MONUMENT_STONE_PER_BUILD
+        monument["wood"] = min(MONUMENT_WOOD_NEEDED, monument["wood"] + MONUMENT_WOOD_PER_BUILD)
+        monument["stone"] = min(
+            MONUMENT_STONE_NEEDED, monument["stone"] + MONUMENT_STONE_PER_BUILD
+        )
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
+        if (
+            monument["wood"] >= MONUMENT_WOOD_NEEDED
+            and monument["stone"] >= MONUMENT_STONE_NEEDED
+        ):
+            monument["done"] = True
+            state.pending_monument = True
+            return events.add_event(
+                "monument_complete",
+                actor=pawn_id,
+                description=(
+                    f"The Ancestral Monolith stands complete — "
+                    f"{pawn['name']} carves the final runes!"
+                ),
+            )
+        return events.add_event(
+            "build",
+            actor=pawn_id,
+            data={"structure": "monument", "wood": monument["wood"], "stone": monument["stone"]},
+            description=(
+                f"{pawn['name']} raises the Ancestral Monolith "
+                f"({monument['wood']}/{MONUMENT_WOOD_NEEDED} wood, "
+                f"{monument['stone']}/{MONUMENT_STONE_NEEDED} stone)."
+            ),
+        )
     if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
         return events.add_event(
             "failed",
@@ -2053,11 +2111,16 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
     )
     if pawn["gear"]["body"] == "Warm Coat":
         cold = max(0, cold - COAT_INSULATION)
-    near_fire = lit and _manhattan(pawn["pos"], CAMP_POS) <= CAMP_RANGE
+    near_camp = _manhattan(pawn["pos"], CAMP_POS) <= CAMP_RANGE
+    near_fire = lit and near_camp
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
     recovery = (
         WARMTH_RECOVERY
         + (CAMPFIRE_WARMTH if near_fire else 0)
         + (SHELTER_WARMTH if biome["shelter"] > 50 else 0)
+        + (MONUMENT_INSULATION if monument.get("done") and near_camp else 0)
     )
     delta = recovery - cold
     if delta < 0 and v["warmth"] > 0:
@@ -2116,6 +2179,10 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
     has_pet = any(w["state"] == "tamed" for w in state.world_state["wildlife"])
     if has_pet:
         v["morale"] = _clamp(v["morale"] + PET_MORALE_BONUS)
+
+    if monument.get("done"):
+        # The Ancestral Monolith anchors colony morale: it never dips below 10.
+        v["morale"] = max(v["morale"], MONUMENT_MORALE_FLOOR)
 
     if v["morale"] <= 0 and not pawn.get("mental_break"):
         pawn["mental_break"] = _break_archetype(pawn)

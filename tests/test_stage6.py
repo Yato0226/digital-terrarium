@@ -1,0 +1,206 @@
+import pytest
+
+import engine
+import events
+import state
+from engine import (
+    _do_build,
+    _metabolize,
+    CAMP_POS,
+    CAMP_RANGE,
+    MONUMENT_INSULATION,
+    MONUMENT_MORALE_FLOOR,
+    MONUMENT_STONE_NEEDED,
+    MONUMENT_WOOD_NEEDED,
+)
+
+pytestmark = pytest.mark.usefixtures("fresh_world")
+
+
+@pytest.fixture(autouse=True)
+def fresh_world():
+    state.reset_world()
+    events.LOGGING = False
+    yield
+    events.LOGGING = True
+
+
+def _fortify():
+    """Fully fortify the camp so the monument is unlocked."""
+    biome = state.world_state["biome"]
+    biome["shelter"] = 100
+    biome["campfire"] = 100
+    biome["granary"] = True
+    biome["palisade"] = engine.PALISADE_MAX
+
+
+def _pawn_with(mineral):
+    pawn_id, pawn = next(iter(state.world_state["pawns"].items()))
+    pawn["inventory"]["wood"] = 20
+    pawn["inventory"]["stone"] = 20 if mineral else 0
+    pawn["inventory"]["food"] = 20
+    pawn["vitals"]["energy"] = 100
+    pawn["pos"] = [CAMP_POS[0], CAMP_POS[1]]
+    pawn["gear"]["main_hand"] = "Flint Spear"
+    pawn["gear"]["body"] = "Warm Coat"
+    return pawn_id, pawn
+
+
+def _warmth_expected(pos, warmth, day=True):
+    """Expected warmth after _metabolize for a pawn at pos (no campfire)."""
+    biome = state.world_state["biome"]
+    cold = (
+        engine.SEASON_COLD[biome["season"]]
+        + engine.WEATHER_COLD[biome["weather"]]
+        + (0 if day else 3)
+    )
+    recovery = engine.WARMTH_RECOVERY + (
+        engine.SHELTER_WARMTH if biome["shelter"] > 50 else 0
+    )
+    near_camp = (
+        abs(pos[0] - CAMP_POS[0]) + abs(pos[1] - CAMP_POS[1]) <= CAMP_RANGE
+    )
+    if state.world_state["monument"].get("done") and near_camp:
+        recovery += MONUMENT_INSULATION
+    return max(0, min(100, warmth + (recovery - cold)))
+
+
+def test_build_does_not_start_monument_until_fortified():
+    pawn_id, pawn = _pawn_with(True)
+    _do_build(pawn, pawn_id)
+    mon = state.world_state["monument"]
+    assert mon["wood"] == 0 and mon["stone"] == 0
+    _fortify()
+    _do_build(pawn, pawn_id)
+    assert state.world_state["monument"]["wood"] == 5
+
+
+def test_build_monument_progresses_and_deducts_inventory():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    _do_build(pawn, pawn_id)
+    mon = state.world_state["monument"]
+    assert mon["wood"] == 5
+    assert mon["stone"] == 5
+    assert pawn["inventory"]["wood"] == 15
+    assert pawn["inventory"]["stone"] == 15
+
+
+def test_build_monument_requires_resources():
+    _fortify()
+    pawn_id, pawn = _pawn_with(False)
+    _do_build(pawn, pawn_id)
+    mon = state.world_state["monument"]
+    assert mon["wood"] == 0
+    assert pawn["inventory"]["stone"] == 0
+
+
+def test_build_monument_completes_after_20_15():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(4):
+        _do_build(pawn, pawn_id)
+    mon = state.world_state["monument"]
+    assert mon["done"] is True
+    assert mon["wood"] == MONUMENT_WOOD_NEEDED
+    assert mon["stone"] == MONUMENT_STONE_NEEDED
+    assert state.pending_monument is True
+    assert any(
+        h["type"] == "monument_complete" for h in state.world_state["history"]
+    )
+
+
+def test_monument_stone_caps_at_needed():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(3):
+        _do_build(pawn, pawn_id)
+    mon = state.world_state["monument"]
+    assert mon["wood"] == 15
+    assert mon["stone"] == 15
+    assert mon["done"] is False
+    _do_build(pawn, pawn_id)
+    assert mon["done"] is True
+
+
+def test_monument_morale_floor():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(4):
+        _do_build(pawn, pawn_id)
+    pawn["vitals"]["morale"] = 5
+    _metabolize(
+        pawn,
+        pawn_id,
+        state.world_state["biome"],
+        lit=False,
+        day=True,
+        result=[],
+    )
+    assert pawn["vitals"]["morale"] >= MONUMENT_MORALE_FLOOR
+
+
+def test_monument_insulation_near_camp():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(4):
+        _do_build(pawn, pawn_id)
+    pawn["pos"] = [CAMP_POS[0], CAMP_POS[1]]
+    pawn["vitals"]["warmth"] = 50
+    _metabolize(
+        pawn,
+        pawn_id,
+        state.world_state["biome"],
+        lit=False,
+        day=True,
+        result=[],
+    )
+    assert pawn["vitals"]["warmth"] == _warmth_expected(pawn["pos"], 50)
+
+
+def test_monument_insulation_only_near_camp():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(4):
+        _do_build(pawn, pawn_id)
+    far = [CAMP_POS[0] + CAMP_RANGE + 1, CAMP_POS[1]]
+    pawn["pos"] = far
+    pawn["vitals"]["warmth"] = 50
+    _metabolize(
+        pawn,
+        pawn_id,
+        state.world_state["biome"],
+        lit=False,
+        day=True,
+        result=[],
+    )
+    assert pawn["vitals"]["warmth"] == _warmth_expected(far, 50)
+    near = _warmth_expected([CAMP_POS[0], CAMP_POS[1]], 50)
+    assert near - pawn["vitals"]["warmth"] == MONUMENT_INSULATION
+
+
+def test_monument_no_insulation_before_complete():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    _do_build(pawn, pawn_id)
+    pawn["pos"] = [CAMP_POS[0], CAMP_POS[1]]
+    pawn["vitals"]["warmth"] = 50
+    _metabolize(
+        pawn,
+        pawn_id,
+        state.world_state["biome"],
+        lit=False,
+        day=True,
+        result=[],
+    )
+    assert pawn["vitals"]["warmth"] == _warmth_expected(pawn["pos"], 50)
+
+
+def test_monument_after_complete_build_falls_back():
+    _fortify()
+    pawn_id, pawn = _pawn_with(True)
+    for _ in range(4):
+        _do_build(pawn, pawn_id)
+    assert state.world_state["monument"]["done"] is True
+    _do_build(pawn, pawn_id)
+    assert state.world_state["monument"]["wood"] == MONUMENT_WOOD_NEEDED

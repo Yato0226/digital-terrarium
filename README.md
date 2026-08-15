@@ -28,6 +28,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Wildlife & hunting** — season-gated prey/predators roam the map: hunt them for food+fiber, or tame them into camp pets that lift morale; predators bite to incapacitate, never kill
 - **Visitors & travelers** — every ~150 ticks a wandering NPC (Merchant, Lost Wanderer, or Bard) walks in from the grid edge, lingers by the campfire, and leaves: share food to barter, court or invite them to stay to recruit a colonist, or rob them and feel the guilt
 - **Fortifications** — build a Granary (stops Summer food decay) and a Palisade (deters predators)
+- **Megaprojects** — once the camp is fully fortified, `Build` raises the **Ancestral Monolith** (20 wood + 15 stone, 5/5 per action): it permanently anchors colony morale (never below 10) and warms the camp (`!monument` shows its LLM-carved dedication)
 - **Reproduction & lineage** — pawns have a sex (♂/♀); mutually bonded pairs Mate (relationship ≥ 25), pregnancies come to term, newborns mature into colonists (capped at 10), and `!tree` shows couples, kinship, and rivalries
 - **Aging & old age** — pawns age tick by tick; elders (👴) tire faster, heal less, and eventually die of old age, freeing a colony slot
 - **Tools & crafting** — Stone Axe, Flint Spear, Warm Coat (built at Camp)
@@ -78,6 +79,7 @@ python main.py
 | `!wildlife` | List the fauna roaming the terrarium |
 | `!visitors` | List the wandering travelers at the edge of the world |
 | `!heirlooms` | List the relics of the fallen |
+| `!monument` | Inspect the Ancestral Monolith (progress / completed dedication) |
 | `!chronicle` | Read the seasonal chronicle of the terrarium |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
 | `!adopt <name\|pawn_id>` | Bond with a pawn — you'll be DM'd about its milestones (any channel) |

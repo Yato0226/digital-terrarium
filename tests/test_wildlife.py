@@ -315,6 +315,8 @@ def test_build_palisade_upgrades():
 def test_build_palisade_capped():
     p = pawn("pawn_1")
     p["inventory"]["wood"] = 100
+    p["inventory"]["stone"] = 20
+    p["gear"]["main_hand"] = "Flint Spear"
     biome = state.world_state["biome"]
     biome["shelter"] = 100
     biome["campfire"] = 100
@@ -322,7 +324,9 @@ def test_build_palisade_capped():
     biome["palisade"] = engine.PALISADE_MAX
     evs = engine.resolve_actions({"pawn_1": ("Build", None)})
     assert biome["palisade"] == engine.PALISADE_MAX
-    assert any(e["data"]["structure"] == "campfire" for e in evs)
+    # Once fully fortified, Build raises the Ancestral Monolith (Stage 6).
+    assert state.world_state["monument"]["wood"] == 5
+    assert any(e["data"]["structure"] == "monument" for e in evs)
 
 
 def test_render_grid_shows_wildlife():

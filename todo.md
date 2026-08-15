@@ -45,10 +45,10 @@ Respects the core philosophy: the LLM proposes intent only; the deterministic en
 
 ### 1. Colony Megaprojects (The Great Work)
 
-- [ ] Once Shelter (100), Campfire (100), Granary, and Palisade (3) are complete, `Build` unlocks **Monument Construction**.
-- [ ] **Ancestral Monolith:** requires 20 Wood + 15 Stone, built progressively (5 wood/5 stone per Build action).
-- [ ] **Passive effect on completion:** permanently anchors colony morale (floor of 10) and +2 insulation camp aura.
-- [ ] **Inscription:** outside-lock LLM call writes a 1-sentence dedication; visible via `!monument` in Discord.
+- [x] Once Shelter (100), Campfire (100), Granary, and Palisade (3) are complete, `Build` unlocks **Monument Construction**.
+- [x] **Ancestral Monolith:** requires 20 Wood + 15 Stone, built progressively (5 wood/5 stone per Build action).
+- [x] **Passive effect on completion:** permanently anchors colony morale (floor of 10) and +2 insulation camp aura.
+- [x] **Inscription:** outside-lock LLM call writes a 1-sentence dedication; visible via `!monument` in Discord.
 
 ### 2. Agriculture / Garden Plots (Meadow Transformation)
 

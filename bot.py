@@ -434,6 +434,49 @@ async def chronicle_cmd(ctx):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="monument")
+@is_god_channel()
+async def monument_cmd(ctx):
+    """!monument — inspect the Ancestral Monolith."""
+    mon = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if mon.get("done"):
+        msg = (
+            "🗿 **Ancestral Monolith** — complete! It anchors colony morale "
+            "(never below 10) and warms the camp (+2 insulation)."
+        )
+        if mon.get("inscription"):
+            msg += f"\n*“{mon['inscription']}”*"
+        else:
+            msg += "\n*No dedication has been carved yet.*"
+        await ctx.send(msg)
+        return
+    if mon.get("wood", 0) or mon.get("stone", 0):
+        await ctx.send(
+            f"🗿 The Ancestral Monolith is under construction — "
+            f"{mon['wood']}/{engine.MONUMENT_WOOD_NEEDED} wood, "
+            f"{mon['stone']}/{engine.MONUMENT_STONE_NEEDED} stone."
+        )
+        return
+    biome = state.world_state["biome"]
+    if (
+        biome["shelter"] >= 100
+        and biome["campfire"] >= 100
+        and biome.get("granary")
+        and biome.get("palisade", 0) >= engine.PALISADE_MAX
+    ):
+        await ctx.send(
+            "🗿 The camp is fully fortified — Build to raise the Ancestral "
+            "Monolith (20 wood + 15 stone, 5 of each per action)."
+        )
+        return
+    await ctx.send(
+        "🗿 No monument yet — complete the shelter and campfire (100), build the "
+        "Granary, and max the Palisade to unlock it."
+    )
+
+
 @bot.command(name="adopt")
 async def adopt(ctx, pawn_id: str):
     """!adopt <name|pawn_id> — bond with a pawn; you'll be DM'd about its milestones (any channel)."""

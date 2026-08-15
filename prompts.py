@@ -12,6 +12,11 @@ First line: a 2-4 word era title (e.g. "The Winter of the Great Wolf").
 Then ONE paragraph (3-5 sentences) chronicling what the colony has endured and what this season holds.
 Return only the title line and the paragraph."""
 
+MONUMENT_PROMPT = """You are the stone-carver of the terrarium.
+The colony has just completed the Ancestral Monolith — a great standing stone raised after seasons of toil.
+Write EXACTLY ONE short sentence (under 20 words) to be carved into the stone, in the voice of the colony.
+Return only the inscription, no quotes, no preamble."""
+
 # Humanized reasons for the director-hint feedback loop (engine.FEASIBILITY_REASONS).
 REASON_HINTS = {
     "low_energy": "is too exhausted",
@@ -45,6 +50,7 @@ Rules:
 - The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins (rich but risky), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp. Wildfires can start from storm lightning or Summer heat — a 🔥 Burning tile hurts anyone inside and spreads to adjacent Forest (and threatens the Camp); it burns out into 🌫️ scorched earth that regrows over time. A pawn can Interact to extinguish an adjacent fire (e.g. "douse the flames") or Chop a firebreak to stop it spreading. The land also suffers seasonal hazards: Spring downpours can flood the riverbanks (🌊 floodwater covers adjacent Meadow — foraging impossible until the water recedes, then it deposits wild food); clear Winter nights may bring the ✨ Aurora Borealis (lifts everyone's morale); damp Autumn air brews ☠️ toxic spores around the Ruins (5 HP per tick unless a pawn wears a Warm Coat).
 - Wildlife roams the map (see the Wildlife section): prey (🦌 Deer, 🐇 Rabbit) flee the colony and yield food + fiber when hunted; predators (🐺 Wolf, 🐻 Bear) stalk the pawn furthest from camp and can bite — but never kill outright (like pawn combat, they only incapacitate). Taming a same-tile animal via Interact (e.g. "tame the deer") turns it into a pet that stays at camp and lifts everyone's morale.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
+- Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
 - Pawns gather wood, food, stone, and fiber. At the Camp, the Build action auto-crafts the best affordable tool (Stone Axe, Flint Spear, Warm Coat) before upgrading structures. Gear shows as Main/Body (e.g. Stone Axe/—).
 - Morale below 20 is dangerous and morale at 0 triggers a mental break (berserk rampage, paranoid hiding, or apathetic wandering) — the pawn is uncontrollable until it subsides or the Creator whispers to it.
 - The Creator may give direct orders or whispers; orders are absolute and must appear in your output.
@@ -82,6 +88,18 @@ def build_prompt():
         biome_line += f" | ☠️ Toxic spores ({biome['miasma']}t)"
     if biome.get("aurora"):
         biome_line += " | ✨ Aurora Borealis"
+
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if monument.get("done"):
+        biome_line += " | 🗿 The Ancestral Monolith stands, anchoring the colony"
+    elif monument.get("wood", 0) or monument.get("stone", 0):
+        biome_line += (
+            f" | 🗿 Monolith under construction "
+            f"({monument['wood']}/{engine.MONUMENT_WOOD_NEEDED} wood, "
+            f"{monument['stone']}/{engine.MONUMENT_STONE_NEEDED} stone)"
+        )
 
     wild_lines = []
     for w in state.world_state["wildlife"]:
