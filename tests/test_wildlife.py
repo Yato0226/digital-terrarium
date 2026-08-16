@@ -44,6 +44,9 @@ def test_wildlife_spawn_is_capped(monkeypatch):
     monkeypatch.setattr(random, "random", lambda: 0.15)
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
     state.world_state["tick"] = 1
+    # A wild predator in the world keeps prey under normal predator pressure
+    # (Stage 15 trophic cascade: prey only overpopulate when no predator hunts).
+    state.world_state["wildlife"].append(state.make_animal("Wolf", pos=[0, 0], hp=40))
     for _ in range(engine.WILDLIFE_MAX):
         engine.tick_environment()
     assert len(state.world_state["wildlife"]) == engine.WILDLIFE_MAX

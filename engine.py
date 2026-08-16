@@ -625,6 +625,74 @@ def _title_share_bonus(pawn):
     return TITLE_NURTURE_SHARE if _title_role(pawn) == "nurture" else 0
 
 
+def _wild_predators():
+    return [
+        w
+        for w in state.world_state["wildlife"]
+        if WILDLIFE[w["species"]]["kind"] == "predator" and w["state"] != "tamed"
+    ]
+
+
+def _wild_prey():
+    return [
+        w
+        for w in state.world_state["wildlife"]
+        if WILDLIFE[w["species"]]["kind"] == "prey" and w["state"] != "tamed"
+    ]
+
+
+def _forest_count():
+    """How many Forest tiles remain on the grid (windbreak coverage)."""
+    return sum(
+        1 for row in state.world_state["grid"] for t in row if t in FOREST_TILES
+    )
+
+
+def _overpopulated():
+    """Herds count as overpopulated when wild prey exceed the normal cap."""
+    return len(_wild_prey()) > WILDLIFE_MAX
+
+
+def _clear_cut():
+    """Windbreaks are gone when few Forest tiles remain."""
+    return _forest_count() <= WINDBREAK_FOREST_MIN
+
+
+def _graze_tick(result):
+    """Overpopulated prey strip the wild forage and eat ripe farm plots."""
+    prey = _wild_prey()
+    if len(prey) <= WILDLIFE_MAX:
+        return
+    surplus = len(prey) - WILDLIFE_MAX
+    biome = state.world_state["biome"]
+    drained = min(biome["food_stock"], surplus * GRAZE_DRAIN)
+    if drained > 0:
+        biome["food_stock"] = _clamp(biome["food_stock"] - drained)
+        result.append(
+            events.add_event(
+                "grazed",
+                data={"food": drained},
+                description=(
+                    f"The overabundant herds strip the meadows of {drained} wild food."
+                ),
+            )
+        )
+    tiles = state.world_state.setdefault("tiles", {})
+    for key, entry in list(tiles.items()):
+        if entry.get("farm", 0) >= FARM_GROW_TICKS and random.random() < FARM_GRAZE_CHANCE:
+            entry["farm"] = 0
+            result.append(
+                events.add_event(
+                    "farm_eaten",
+                    data={"tile": key},
+                    description=(
+                        f"A hungry herd breaks into the farm plot at ({key}) "
+                        "and eats the crop before it can be gathered!"
+                    ),
+                )
+            )
+
+
 def _name_to_id(text):
     """Find a living active pawn whose name appears in the goal text."""
     for pid, pawn in state.world_state["pawns"].items():
@@ -1177,6 +1245,15 @@ QUEST_NEEDED_MAX = 100
 COUNCIL_INTERVAL = PATCH_INTERVAL  # every year, alongside the Architect review
 MANDATE_MAX_LEN = 120
 COUNCIL_LEADER_MORALE = 5  # the recognized leader starts the year inspired
+
+# Stage 15 (Phase 4) trophic cascades — predator pressure & windbreak ecology.
+WILDLIFE_OVERPOP_MAX = 5      # prey may exceed the cap when no predator hunts them
+PREY_SPAWN_OVERHUNT = 0.55    # prey spawn chance when no wild predator remains
+GRAZE_DRAIN = 2               # each surplus prey eats wild forage (food_stock) per tick
+FARM_GRAZE_CHANCE = 0.2       # per ripe plot per tick, an overabundant herd may eat it
+WINDBREAK_FOREST_MIN = 6      # forest tiles at or below this = clear-cut (windbreaks gone)
+WINDBREAK_COLD_PENALTY = 2    # extra Winter cold when the windbreak is gone
+WINDBREAK_FLOOD_BONUS = 0.15  # extra Spring flood chance when the windbreak is gone
 
 
 def apply_council(leader_pid, mandate):
@@ -3155,6 +3232,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         + WEATHER_COLD[biome["weather"]]
     )
     cold = round(cold * _modifier("cold"))
+    if biome["season"] == "Winter" and _clear_cut():
+        cold += WINDBREAK_COLD_PENALTY
     if pawn["gear"]["body"] == "Warm Coat":
         cold = max(0, cold - COAT_INSULATION)
     if _tradition() == HUNTERS_TAG:
@@ -3589,7 +3668,9 @@ def tick_environment():
 
     ws = state.world_state["wildlife"]
     spawn_mod = _modifier("spawn")
-    if len(ws) < WILDLIFE_MAX and random.random() < 0.3 * spawn_mod:
+    overhunted = not _wild_predators()
+    wild_cap = WILDLIFE_OVERPOP_MAX if overhunted else WILDLIFE_MAX
+    if len(ws) < wild_cap and random.random() < 0.3 * spawn_mod:
         palisade_lvl = biome.get("palisade", 0)
         if new_season in ("Winter", "Autumn"):
             pred_chance = 0.25 * (1 - palisade_lvl * 0.3) * spawn_mod
@@ -3598,7 +3679,8 @@ def tick_environment():
                 ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
                 result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
         else:
-            if random.random() < 0.3 * spawn_mod:
+            prey_chance = PREY_SPAWN_OVERHUNT if overhunted else 0.3
+            if random.random() < prey_chance * spawn_mod:
                 species = random.choice(PREY_SPECIES)
                 ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
                 result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
@@ -3658,6 +3740,8 @@ def tick_environment():
     if not state.world_state["pawns"]:
         state.world_state["wildlife"] = []
 
+    _graze_tick(result)
+
     if random.random() < WEATHER_CHANGE_CHANCE:
         new_weather = random.choice(WEATHER_OPTIONS[new_season])
         if new_weather != biome["weather"]:
@@ -3701,11 +3785,12 @@ def tick_environment():
 
     # Seasonal disasters (Stage 4 part 2): flash floods, aurora, toxic miasma.
     biome["aurora"] = False
+    flood_chance = FLOOD_CHANCE + (WINDBREAK_FLOOD_BONUS if _clear_cut() else 0)
     if (
         new_season == "Spring"
         and biome["weather"] == "Rain"
         and not biome.get("flood")
-        and random.random() < FLOOD_CHANCE
+        and random.random() < flood_chance
     ):
         flooded = _trigger_flood()
         result.append(

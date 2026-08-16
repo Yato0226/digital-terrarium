@@ -59,8 +59,8 @@
 *Goal: Make the wilderness dynamic, reactive, and dangerous.*
 
 ### Step 15: Trophic Cascades (Food Chain Ecology)
-- [ ] Over-hunting wolves removes predator pressure, causing deer and rabbits to overpopulate, eat wild forage, and damage farm plots.
-- [ ] Clear-cutting forests removes windbreaks, making winter cold harsher and increasing the risk of spring river floods.
+- [x] Over-hunting wolves removes predator pressure, causing deer and rabbits to overpopulate, eat wild forage, and damage farm plots.
+- [x] Clear-cutting forests removes windbreaks, making winter cold harsher and increasing the risk of spring river floods.
 
 ### Step 16: Persistent Named Legendary Beasts
 - [ ] If a predator injures multiple colonists and escapes, it gains a permanent name and reputation (*The Grey Terror*, *Old Scar-Face*), triggering colony-wide revenge hunts.

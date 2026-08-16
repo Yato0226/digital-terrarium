@@ -191,7 +191,7 @@ Interact & 5 & any free-form verb in \texttt{flavor}; engine buckets it by keywo
 \caption*{\scriptsize All yields receive a $+10\%$ bonus while morale is above 80 (``Inspired''). Personal goals (\texttt{goal}) are proposed by the LLM in \texttt{new\_goal}, parsed and tracked by the engine, advanced by matching deeds, and pay $+15$ morale and skill XP on completion.}
 \end{table}
 
-Beyond the colonists, the world itself is alive. \texttt{world\_state} hosts the colony and the systems around it --- wildlife, wandering visitors, hostile raiders, emergent culture, and the Architect that re-balances the world each year. Figure~\ref{fig:systems} maps every system to its engine-owned consequences; Table~\ref{tab:stages} shows how they arrived stage by stage. The invariants that matter: kills convert to \texttt{food} and \texttt{fiber} (no ``meat'' resource); predators bite only to incapacitate, never kill; \texttt{Interact} verbs are bucketed by keyword with scouting/sociability-scaled rolls (taming $0.5+0.02\cdot\texttt{scouting}$, recruitment $0.3+0.05\cdot\texttt{sociability}$); tradition tags are sticky once earned; raid plunder is capped at 5 food; and every Architect delta is clamped to $[0.7, 1.3]$ before it touches the world.
+Beyond the colonists, the world itself is alive. \texttt{world\_state} hosts the colony and the systems around it --- wildlife, wandering visitors, hostile raiders, emergent culture, and the Architect that re-balances the world each year. Figure~\ref{fig:systems} maps every system to its engine-owned consequences; Table~\ref{tab:stages} shows how they arrived stage by stage. The invariants that matter: kills convert to \texttt{food} and \texttt{fiber} (no ``meat'' resource); predators bite only to incapacitate, never kill; \texttt{Interact} verbs are bucketed by keyword with scouting/sociability-scaled rolls (taming $0.5+0.02\cdot\texttt{scouting}$, recruitment $0.3+0.05\cdot\texttt{sociability}$); tradition tags are sticky once earned; raid plunder is capped at 5 food; and every Architect delta is clamped to $[0.7, 1.3]$ before it touches the world. The ecology is reactive: with no wild predator left alive the prey cap rises from 3 to 5, and each surplus herd strips wild forage from \texttt{food\_stock} and may eat ripe farm plots, so over-hunting predators trades short-term safety for a slow-burn famine; and cutting the Forest down to at most 6 tiles removes the windbreak, adding \texttt{WINDBREAK\_COLD\_PENALTY} to Winter cold and roughly doubling the Spring flood chance. Colonists therefore have reason to spare a wolf or two.
 
 \begin{figure}[htbp]
 \centering
@@ -461,7 +461,9 @@ def tick_environment():             # the world ages after pawns act
                                     # metabolism, regrowth (never in
                                     # Winter), frostbite, starvation
     # wildlife: season-gated spawn (predators Winter/Autumn, prey
-    # Spring/Summer, cap 3); prey flee the nearest pawn, predators
+    # Spring/Summer, cap 3; no predator left alive -> prey overpopulate to 5,
+    # strip food_stock, and eat ripe farm plots); prey flee the nearest pawn,
+    # predators
     # stalk the pawn furthest from Camp and bite to incapacitate
     spawn_wildlife(biome["season"]); update_wildlife(biome)
     # visitors (Stage 5): a traveler spawns at the grid edge every
