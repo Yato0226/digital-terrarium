@@ -686,6 +686,82 @@ async def _run_architect():
     return record
 
 
+def _resolve_leader(name):
+    """Resolve a council-nominated leader name to a living active pawn id."""
+    name = (name or "").strip().lower()
+    for pid, p in state.world_state["pawns"].items():
+        if p["status"] == "active" and p["name"].lower() == name:
+            return pid
+    return None
+
+
+def _council_context():
+    """Compact review of the past year for the Camp Council LLM."""
+    biome = state.world_state["biome"]
+    names = ", ".join(
+        p["name"] for p in state.world_state["pawns"].values()
+    ) or "no one"
+    history = events.history_to_text()
+    trad = state.world_state.get("traditions", {})
+    tag = trad.get("tag")
+    tag_txt = f" The colony's tradition tag is {tag}." if tag else ""
+    fallen = len(state.world_state["graveyard"])
+    monument = state.world_state.get("monument", {})
+    mon_txt = " The Ancestral Monolith stands complete." if monument.get("done") else ""
+    return (
+        f"The colony of {names} has survived to Day "
+        f"{state.world_state['tick'] // engine.TICKS_PER_DAY} in {biome['season']} "
+        f"({biome['weather']}). {fallen} colonists have been lost and laid to rest. "
+        f"Counters: {trad.get('predators_slain', 0)} predators slain, "
+        f"{trad.get('trees_felled', 0)} trees felled, "
+        f"{trad.get('rations_shared', 0)} rations shared.{tag_txt}{mon_txt} "
+        f"Recent events: {history}"
+    )
+
+
+async def _run_council():
+    """Annual Camp Council: names a leader and issues a Colony Mandate.
+
+    Runs outside the tick lock like the chronicle and Architect. Emits a
+    'council' event and persists the new council record for Discord/prompt.
+    """
+    CouncilModel = schema.build_council_model()
+    try:
+        content, _model_used = await asyncio.to_thread(
+            _llm_call,
+            prompts.COUNCIL_PROMPT,
+            _council_context(),
+            CouncilModel,
+            config.COUNCIL_TEMPERATURE,
+        )
+        if not content:
+            raise ValueError("Council returned empty content")
+        decision = CouncilModel.model_validate_json(content)
+    except Exception as e:
+        print(f"❌ Camp Council failed: {e}")
+        return None
+    leader_pid = _resolve_leader(getattr(decision, "leader", ""))
+    record = engine.apply_council(leader_pid, getattr(decision, "mandate", ""))
+    if record is None:
+        print("❌ Camp Council: could not seat a leader (unknown name or invalid mandate).")
+        return None
+    state.save_state()
+    return record
+
+
+def council_txt():
+    """The current council, leader, and Colony Mandate, for `!council`."""
+    council = state.world_state.get("council")
+    if not council or not council.get("leader_name"):
+        return "🏛️ No council has been held yet — the colony has no recognized leader or mandate."
+    lines = [
+        f"🏛️ **Council** (Day {council.get('day', '?')}):",
+        f"- Leader: **{council['leader_name']}**",
+        f"- Colony Mandate: “{council.get('mandate', '')}”",
+    ]
+    return "\n".join(lines)
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()
@@ -881,12 +957,16 @@ async def run_tick():
     patch_record = None
     if dead_tick % engine.PATCH_INTERVAL == 0:
         patch_record = await _run_architect()
+    council_record = None
+    if dead_tick % engine.COUNCIL_INTERVAL == 0:
+        council_record = await _run_council()
     state.save_state()
     milestone = (
         _is_milestone_tick(tick_events)
         or bool(pending_season)
         or bool(pending_monument)
         or bool(patch_record)
+        or bool(council_record)
     )
     if milestone:
         await asyncio.to_thread(post_to_discord, data)

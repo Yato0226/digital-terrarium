@@ -216,6 +216,7 @@ world_state = {
     "active_quests": [],
     "patch_version": "v1.0",
     "patches": [],
+    "council": None,
 }
 
 
@@ -306,6 +307,7 @@ def reset_world():
     world_state["active_quests"] = []
     world_state["patch_version"] = "v1.0"
     world_state["patches"] = []
+    world_state["council"] = None
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -484,6 +486,7 @@ def load_state():
         world_state.setdefault("active_quests", [])
         world_state.setdefault("patch_version", "v1.0")
         world_state.setdefault("patches", [])
+        world_state.setdefault("council", None)
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

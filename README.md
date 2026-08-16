@@ -48,6 +48,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Relational badges** — deeds leave durable labels the AI Director can weave into drama: **Lifesaver** (shared food with a starving pawn), **Betrayer** (attacked a friend, 25+ bond), **Indebted** (received a share), **Mentor** (*teach* an Interact near a pupil), **Widow** (lost a partner). Shown per pawn in the prompt and via `!badges`
 - **Blood feuds** — children are born carrying their parents' rivalries (seeded −40 toward each mutual rival), and mutual rivals who share the camp tile risk flare-ups: a **camp brawl** (−3 HP each, deeper hatred). The only way out is the LLM's choice — courtship, sharing food (+25/share), or letting the feud burn on
 - **Dynamic roles** — the Director can bestow custom titles for earned deeds (`new_title`, e.g. *"Fang-Breaker"*, *"Keeper of the Hearth"*, *"Seer of Whispers"`). The engine buckets them by keyword into subtle passive perks — **martial** (fang/claw/blade/slayer/…) → −2 damage taken, **nurturing** (keeper/hearth/mother/…) → +1 food per share, **spiritual** (seer/shaman/oracle/…) → grief heals 2× faster. Shown on the pawn line and via `!roles`
+- **Annual Camp Council** — every year a council LLM reviews the colony's year, names a **recognized leader** (Chosen moodlet, +5 morale) and issues a one-sentence **Colony Mandate** (e.g. *"Tame the beasts of the wood"*). The mandate leads every prompt so the whole colony steers together toward the year's focus (`!council`)
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Milestone news hub** — Discord no longer broadcasts every tick. Embeds are reserved for high-impact moments: 📜 a new-era chronicle each season, 🪦 fallen-hero eulogies (tombstone inscription + cause of death), ⚙️ annual patch notes, and 🥷🔥🌊☠️ breaking crisis alerts (raids, wildfires, floods, miasma, extinction)
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the milestone embeds
@@ -100,6 +101,7 @@ python main.py
 | `!lore` | Read the fragments recovered from The Sunken Tribe's ruins |
 | `!badges` | List the relational badges colonists have earned by their deeds |
 | `!roles` | List the Director-invented custom roles and their keyword-bucketed perks |
+| `!council` | The annual Camp Council — the recognized leader and this year's Colony Mandate |
 | `!recipes` | List all known blueprints (base + Architect-synthesized + ancient) |
 | `!quests` / `!prophecies` | View the world's active objectives and progress |
 | `!patchnotes` | Read the latest autonomous balance notes from the Architect |

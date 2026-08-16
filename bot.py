@@ -533,6 +533,13 @@ async def roles_cmd(ctx):
     await ctx.send("\n".join(out))
 
 
+@bot.command(name="council")
+@is_god_channel()
+async def council_cmd(ctx):
+    """!council — the annual Camp Council's leader and Colony Mandate."""
+    await ctx.send(core.council_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

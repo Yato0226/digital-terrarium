@@ -110,3 +110,18 @@ def build_patch_model():
             Field(default=None, description="Optional world prophecy: {title, text, kind: hunt/stockpile/survive/chop, species (hunt only), resource (stockpile only), needed, reward_morale, reward_title}. Omit unless the colony needs a shared goal."),
         ),
     )
+
+
+def build_council_model():
+    """Schema for the annual Camp Council (runs outside the tick lock)."""
+    return create_model(
+        "CouncilDecision",
+        leader=(
+            str,
+            Field(description="The exact name of the colonist chosen to lead the colony this year."),
+        ),
+        mandate=(
+            str,
+            Field(description="A one-sentence Colony Mandate giving everyone a unified focus this year (e.g. 'Tame the beasts of the wood', 'Fortify before the raiders return')."),
+        ),
+    )

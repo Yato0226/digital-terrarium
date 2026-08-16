@@ -51,7 +51,7 @@
 - [x] The engine uses keyword matching to safely grant subtle passive perks (martial words boost defense, nurturing words boost food sharing, spiritual words speed up grief recovery).
 
 ### Step 14: Annual Camp Council & Colony Mandates
-- [ ] Every year cycle, the LLM reviews colony history, names a recognized leader, and issues a 1-sentence **Colony Mandate** (e.g. *"Tame the beasts of the wood"* or *"Fortify before raiders return"*), giving all colonists a unified narrative focus.
+- [x] Every year cycle, the LLM reviews colony history, names a recognized leader, and issues a 1-sentence **Colony Mandate** (e.g. *"Tame the beasts of the wood"* or *"Fortify before raiders return"*), giving all colonists a unified narrative focus.
 
 ---
 

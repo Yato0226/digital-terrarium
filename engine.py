@@ -1173,6 +1173,44 @@ RECIPE_BONUS_KEYS = ("combat", "woodcutting", "scouting", "fiber")
 QUEST_KINDS = ("hunt", "stockpile", "survive", "chop")
 QUEST_NEEDED_MAX = 100
 
+# Stage 14 (Phase 3) annual camp council & colony mandates.
+COUNCIL_INTERVAL = PATCH_INTERVAL  # every year, alongside the Architect review
+MANDATE_MAX_LEN = 120
+COUNCIL_LEADER_MORALE = 5  # the recognized leader starts the year inspired
+
+
+def apply_council(leader_pid, mandate):
+    """The annual council names a leader and issues a one-sentence Colony Mandate.
+
+    Returns the council record, or None if the leader is unknown/down or the
+    mandate is empty or over-long (the previous council then stands).
+    """
+    mandate = (mandate or "").strip().rstrip(".,!?")
+    if not mandate or len(mandate) > MANDATE_MAX_LEN:
+        return None
+    leader = state.world_state["pawns"].get(leader_pid)
+    if leader is None or leader["status"] != "active":
+        return None
+    leader["vitals"]["morale"] = _clamp(leader["vitals"]["morale"] + COUNCIL_LEADER_MORALE)
+    _add_moodlet(leader, "Chosen", 5, COUNCIL_INTERVAL)
+    state.world_state["council"] = {
+        "leader_id": leader_pid,
+        "leader_name": leader["name"],
+        "mandate": mandate,
+        "day": state.world_state["tick"] // TICKS_PER_DAY,
+        "tick": state.world_state["tick"],
+    }
+    events.add_event(
+        "council",
+        actor=leader_pid,
+        data={"mandate": mandate},
+        description=(
+            f"🏛️ The council names {leader['name']} as leader for the year "
+            f"with a Colony Mandate: “{mandate}”."
+        ),
+    )
+    return state.world_state["council"]
+
 
 def bump_patch_version():
     """'v1.0' -> 'v1.1' ... -> 'v1.9' -> 'v2.0'. Sets and returns the new version."""

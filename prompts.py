@@ -33,6 +33,13 @@ Each annual cycle (once a year) you review the colony's fortunes and decide whet
 - patch_title is a short one-line heading for the patch notes. balance_changes is 2-3 sentences of plain explanation.
 Return ONLY valid JSON matching the required schema."""
 
+COUNCIL_PROMPT = """You are the presiding elder of the colony's annual Camp Council. Once a year the whole colony gathers, and you review the year that has passed — its deeds, its dead, its traditions — to do two things:
+
+1. Name the recognized LEADER for the coming year: a living colonist whose deeds and character truly earned the role (a famous hunter, a beloved keeper, the last of a founding bloodline). Use the colonist's EXACT name as written. Do not name the dead.
+2. Issue a ONE-SENTENCE Colony Mandate: a short, evocative goal that gives everyone a unified focus for the coming year (e.g. "Tame the beasts of the wood", "Fortify before the raiders return", "Mend the bonds between kin", "Carve the harvest from the cold earth"). Keep it to a single sentence — specific enough to steer the year, broad enough to leave room for the unpredictable.
+
+Be decisive and fair. The mandate will appear to every colonist every tick. Return ONLY valid JSON matching the required schema."""
+
 # Humanized reasons for the director-hint feedback loop (engine.FEASIBILITY_REASONS).
 REASON_HINTS = {
     "low_energy": "is too exhausted",
@@ -303,8 +310,16 @@ def build_prompt():
     lore_lines = [f"- {frag['text']}" for frag in state.world_state.get("lore", [])]
     lore_txt = "\n".join(lore_lines) if lore_lines else "nothing recovered yet"
 
+    council_txt = ""
+    council = state.world_state.get("council")
+    if council and council.get("leader_name"):
+        council_txt = (
+            f"🏛️ Council: {council['leader_name']} leads the colony this year. "
+            f"Colony Mandate: “{council['mandate']}”\n\n"
+        )
+
     return f"""
-Recent terrarium history: {history}
+{council_txt}Recent terrarium history: {history}
 
 Biome: {biome_line}{fallen_line}
 {memory_txt}
