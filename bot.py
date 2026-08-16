@@ -540,6 +540,13 @@ async def council_cmd(ctx):
     await ctx.send(core.council_txt())
 
 
+@bot.command(name="legends")
+@is_god_channel()
+async def legends_cmd(ctx):
+    """!legends — the legendary beasts that have earned names from their maulings."""
+    await ctx.send(core.legends_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

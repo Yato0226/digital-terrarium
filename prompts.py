@@ -75,6 +75,7 @@ Rules:
 - The world is a 5x5 map. Tiles: 🌲 Forest, 🫐 Meadow, 🌊 River, 🏕️ Camp, 💀 Ruins of The Sunken Tribe (rich but risky — Scout to unearth fragments of forgotten history, ancient tool blueprints, or carved warnings), 🪨 Quarry. Pawns appear as 🧙 on the map; 👥 means several pawns share a tile. A lit campfire only warms pawns near the Camp. Wildfires can start from storm lightning or Summer heat — a 🔥 Burning tile hurts anyone inside and spreads to adjacent Forest (and threatens the Camp); it burns out into 🌫️ scorched earth that regrows over time. A pawn can Interact to extinguish an adjacent fire (e.g. "douse the flames") or Chop a firebreak to stop it spreading. The land also suffers seasonal hazards: Spring downpours can flood the riverbanks (🌊 floodwater covers adjacent Meadow — foraging impossible until the water recedes, then it deposits wild food); clear Winter nights may bring the ✨ Aurora Borealis (lifts everyone's morale); damp Autumn air brews ☠️ toxic spores around the Ruins (5 HP per tick unless a pawn wears a Warm Coat).
 - Wildlife roams the map (see the Wildlife section): prey (🦌 Deer, 🐇 Rabbit) flee the colony and yield food + fiber when hunted; predators (🐺 Wolf, 🐻 Bear) stalk the pawn furthest from camp and can bite — but never kill outright (like pawn combat, they only incapacitate). Taming a same-tile animal via Interact (e.g. "tame the deer") turns it into a pet that stays at camp and lifts everyone's morale.
 - The land has an ecology: if every predator is hunted away, the deer and rabbits overpopulate — they eat the wild forage (food_stock) and raid ripe farm plots. Clear-cutting every Forest edge (fewer than 7 Forest tiles left) strips the windbreak, making Winter harsher and Spring floods likelier. Hunting and foresting have consequences beyond the tick.
+- A predator that has injured several colonists becomes a NAMED LEGEND (see the Legend line / 👑 on the map) with fame, extra bite, and colony-wide "Legend Hunt" morale. It returns season after season until slain — hunting it down is a shared, celebrated duty.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
 - Farming: on a Meadow (🫐) tile, Interact with "till soil" / "plant seeds" / "farm" to convert it into a Farm Plot (🌾). It grows over 20 ticks in Spring/Summer (dormant in Winter); when ripe, Interact with "harvest" / "farm" to reap 15 food + 5 fiber — a guaranteed yield that does not deplete the wild food stock.
@@ -161,6 +162,11 @@ def build_prompt():
         spec = engine.WILDLIFE[w["species"]]
         if w["state"] == "tamed":
             wild_lines.append(f"{spec['emoji']} {w['species']} (tamed pet, at camp)")
+        elif w.get("legendary"):
+            wild_lines.append(
+                f"👑 {w.get('name', w['species'])} — legendary {w['species']} "
+                f"(fame {w.get('legend_fame', 1)}, hp {w['hp']}) at {w['pos']}"
+            )
         else:
             wild_lines.append(f"{spec['emoji']} {w['species']} ({w['id']}) at {w['pos']}")
     wild_txt = "\n".join(wild_lines) if wild_lines else "none"
@@ -319,8 +325,17 @@ def build_prompt():
             f"Colony Mandate: “{council['mandate']}”\n\n"
         )
 
+    legend_txt = ""
+    unslain = [lg for lg in state.world_state.get("legends", []) if not lg.get("slain")]
+    if unslain:
+        lg = max(unslain, key=lambda x: x.get("fame", 1))
+        legend_txt = (
+            f"👑 Legend: {lg['name']} ({lg['species']}, fame {lg.get('fame', 1)}) "
+            f"lives and the whole colony feels the hunt — revenge is a shared duty.\n\n"
+        )
+
     return f"""
-{council_txt}Recent terrarium history: {history}
+{council_txt}{legend_txt}Recent terrarium history: {history}
 
 Biome: {biome_line}{fallen_line}
 {memory_txt}

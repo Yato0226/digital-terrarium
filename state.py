@@ -217,6 +217,7 @@ world_state = {
     "patch_version": "v1.0",
     "patches": [],
     "council": None,
+    "legends": [],
 }
 
 
@@ -273,6 +274,7 @@ def make_pawn(
             "rations_shared": 0,
             "blizzards_survived": 0,
             "damage_dealt": 0,
+            "legends_slain": 0,
         },
         "title": None,
         "born_tick": world_state["tick"],
@@ -308,6 +310,7 @@ def reset_world():
     world_state["patch_version"] = "v1.0"
     world_state["patches"] = []
     world_state["council"] = None
+    world_state["legends"] = []
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -487,6 +490,7 @@ def load_state():
         world_state.setdefault("patch_version", "v1.0")
         world_state.setdefault("patches", [])
         world_state.setdefault("council", None)
+        world_state.setdefault("legends", [])
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

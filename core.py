@@ -762,6 +762,27 @@ def council_txt():
     return "\n".join(lines)
 
 
+def legends_txt():
+    """The legend archive and which beast currently stalks, for `!legends`."""
+    legends = state.world_state.get("legends", [])
+    if not legends:
+        return "👑 No legendary beasts yet — no predator has survived mauling enough colonists."
+    living = {w["id"] for w in state.world_state["wildlife"]}
+    lines = ["👑 **Legendary beasts:**"]
+    for lg in legends:
+        active = not lg.get("slain") and lg.get("wild_id") in living
+        if lg.get("slain"):
+            status = f"slain (Day {lg.get('slain_tick', 0) // engine.TICKS_PER_DAY})"
+        elif active:
+            status = "stalking the colony NOW"
+        else:
+            status = f"escaped {lg.get('escapes', 0)}× — may return"
+        lines.append(
+            f"- **{lg['name']}** — {lg['species']}, fame {lg.get('fame', 1)} ({status})"
+        )
+    return "\n".join(lines)
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()

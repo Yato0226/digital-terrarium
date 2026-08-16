@@ -693,6 +693,167 @@ def _graze_tick(result):
             )
 
 
+def _legend_by_wild(w):
+    """The legend archive record bound to a living wildlife entity, if any."""
+    return next(
+        (
+            lg
+            for lg in state.world_state.get("legends", [])
+            if lg.get("wild_id") == w["id"]
+        ),
+        None,
+    )
+
+
+def _legend_hp(legend):
+    return int(WILDLIFE[legend["species"]]["hp"] * LEGEND_HP_MULT) + legend.get(
+        "fame", 1
+    ) * LEGEND_FAME_HP
+
+
+def _grant_legend_hunt():
+    """A standing colony-wide hunt moodlet while an unslain legend lives."""
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active" and not any(
+            m["name"] == "Legend Hunt" for m in p.get("moodlets", [])
+        ):
+            p["moodlets"].append(
+                {"name": "Legend Hunt", "delta": LEGEND_HUNT_MORALE, "ticks_left": 1 << 20}
+            )
+
+
+def _sync_legend_hunt():
+    """Reflect the legend state in every pawn's moodlets each tick."""
+    unslain = [
+        lg for lg in state.world_state.get("legends", []) if not lg.get("slain")
+    ]
+    for p in state.world_state["pawns"].values():
+        if p["status"] != "active":
+            continue
+        mood = next(
+            (m for m in p.get("moodlets", []) if m["name"] == "Legend Hunt"), None
+        )
+        if unslain:
+            if mood is None:
+                p["moodlets"].append(
+                    {"name": "Legend Hunt", "delta": LEGEND_HUNT_MORALE, "ticks_left": 1 << 20}
+                )
+            else:
+                mood["ticks_left"] = 1 << 20
+        elif mood is not None:
+            p["moodlets"].remove(mood)
+
+
+def _promote_legend(w, result):
+    """A predator that has injured enough colonists earns a name and a legend."""
+    name = random.choice(LEGEND_NAMES.get(w["species"], ("The Nameless Terror",)))
+    w["legendary"] = True
+    w["name"] = name
+    w["legend_fame"] = 1
+    spec = WILDLIFE[w["species"]]
+    w["hp"] = max(w.get("hp", spec["hp"]), int(spec["hp"] * LEGEND_HP_MULT))
+    legends = state.world_state.setdefault("legends", [])
+    legends.append(
+        {
+            "id": f"legend_{w['id']}",
+            "wild_id": w["id"],
+            "species": w["species"],
+            "name": name,
+            "fame": 1,
+            "created_tick": state.world_state["tick"],
+            "slain": False,
+            "slain_tick": None,
+            "slain_by": None,
+            "escapes": 0,
+        }
+    )
+    if len(legends) > LEGEND_MAX_LEGENDS:
+        state.world_state["legends"] = legends[-LEGEND_MAX_LEGENDS:]
+    _grant_legend_hunt()
+    event = events.add_event(
+        "legend",
+        data={"species": w["species"], "name": name},
+        description=(
+            f"The {w['species']} that has mauled so many earns a name: "
+            f"{name}! Every colonist feels the hunt."
+        ),
+    )
+    if result is not None:
+        result.append(event)
+
+
+def _predator_bites(w, target, result=None):
+    """A wild predator bites a colonist: damage plus legend-injury tracking."""
+    spec = WILDLIFE[w["species"]]
+    bite = spec["bite_damage"] + (w.get("legend_fame", 0) * LEGEND_FAME_BITE)
+    target["vitals"]["hp"] = _clamp(target["vitals"]["hp"] - bite)
+    w["injuries"] = w.get("injuries", 0) + 1
+    if w.get("legendary"):
+        w["legend_fame"] = min(LEGEND_MAX_FAME, w.get("legend_fame", 0) + 1)
+        legend = _legend_by_wild(w)
+        if legend:
+            legend["fame"] = w["legend_fame"]
+    elif w["injuries"] >= LEGEND_INJURY_MIN:
+        _promote_legend(w, result)
+    return bite
+
+
+def _returning_legend():
+    """The most infamous unslain legend whose beast is off the map returns."""
+    living = {w["id"] for w in state.world_state["wildlife"]}
+    candidates = [
+        lg
+        for lg in state.world_state.get("legends", [])
+        if not lg.get("slain")
+        and not (lg.get("wild_id") and lg["wild_id"] in living)
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates, key=lambda lg: (lg.get("fame", 1), lg.get("escapes", 0))
+    )
+
+
+def _spawn_legend(legend, ws, result):
+    """An escaped legend returns to stalk the colony, hardened by infamy."""
+    beast = state.make_animal(
+        legend["species"], pos=[0, 0], hp=_legend_hp(legend)
+    )
+    beast["legendary"] = True
+    beast["name"] = legend["name"]
+    beast["legend_fame"] = legend.get("fame", 1)
+    legend["wild_id"] = beast["id"]
+    ws.append(beast)
+    result.append(
+        events.add_event(
+            "legend_return",
+            data={"name": legend["name"]},
+            description=f"{legend['name']} stalks the colony again, more infamous than ever!",
+        )
+    )
+
+
+def _slay_legend(animal, pawn, pawn_id):
+    """A legendary beast falls: colony-wide relief, archive update, hunt ends."""
+    legend = _legend_by_wild(animal)
+    if legend is None:
+        return
+    legend["slain"] = True
+    legend["slain_tick"] = state.world_state["tick"]
+    legend["slain_by"] = pawn_id
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active":
+            p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + LEGEND_SLAY_MORALE)
+            p["moodlets"] = [m for m in p.get("moodlets", []) if m["name"] != "Legend Hunt"]
+    pawn["counters"]["legends_slain"] = pawn["counters"].get("legends_slain", 0) + 1
+    events.add_event(
+        "legend_slain",
+        actor=pawn_id,
+        data={"name": legend["name"], "species": legend["species"]},
+        description=f"{pawn['name']} slays the legend {legend['name']}! The colony rejoices.",
+    )
+
+
 def _name_to_id(text):
     """Find a living active pawn whose name appears in the goal text."""
     for pid, pawn in state.world_state["pawns"].items():
@@ -1255,6 +1416,20 @@ WINDBREAK_FOREST_MIN = 6      # forest tiles at or below this = clear-cut (windb
 WINDBREAK_COLD_PENALTY = 2    # extra Winter cold when the windbreak is gone
 WINDBREAK_FLOOD_BONUS = 0.15  # extra Spring flood chance when the windbreak is gone
 
+# Stage 16 (Phase 4) persistent named legendary beasts.
+LEGEND_INJURY_MIN = 2        # a wild predator must bite this many colonists to earn a name
+LEGEND_NAMES = {
+    "Wolf": ("The Grey Terror", "Old Scar-Face", "The Night Fang"),
+    "Bear": ("The Brown Lord", "The Old River Crone", "The Slumbering King"),
+}
+LEGEND_HP_MULT = 2.0         # legendary beasts are twice as tough as the herd
+LEGEND_FAME_HP = 15          # each fame point hardens the legend further
+LEGEND_FAME_BITE = 2         # each fame point sharpens the bite
+LEGEND_MAX_FAME = 3
+LEGEND_HUNT_MORALE = 3       # colony-wide "Legend Hunt" moodlet while one lives
+LEGEND_SLAY_MORALE = 15      # slaying a legend lifts the whole colony
+LEGEND_MAX_LEGENDS = 4       # cap on the legend archive
+
 
 def apply_council(leader_pid, mandate):
     """The annual council names a leader and issues a one-sentence Colony Mandate.
@@ -1536,7 +1711,10 @@ def render_grid():
     for w in state.world_state["wildlife"]:
         x, y = w["pos"]
         occupants.setdefault((x, y), {"pawns": 0, "animals": []})
-        occupants[(x, y)]["animals"].append(WILDLIFE[w["species"]]["emoji"])
+        emoji = WILDLIFE[w["species"]]["emoji"]
+        if w.get("legendary"):
+            emoji = "👑" + emoji
+        occupants[(x, y)]["animals"].append(emoji)
     for v in state.world_state.get("visitors", []):
         x, y = v["pos"]
         occupants.setdefault((x, y), {"pawns": 0, "animals": []})
@@ -2233,10 +2411,21 @@ def _do_attack(pawn, pawn_id, target):
                         "The First Predator Falls",
                         f"{pawn['name']} slew the first great predator to threaten the colony.",
                     )
+            if animal.get("legendary"):
+                _slay_legend(animal, pawn, pawn_id)
             pawn["inventory"]["food"] += spec["food_yield"]
             pawn["inventory"]["fiber"] += spec["fiber_yield"]
             _goal_nudge(pawn, spec["food_yield"], resource="food")
             _quest_progress("hunt", actor=pawn_id, species=animal["species"])
+            if animal.get("legendary"):
+                name = animal.get("name", animal["species"])
+                return events.add_event(
+                    "hunt",
+                    actor=pawn_id,
+                    target=target,
+                    data={"species": animal["species"], "legend": name, "food": spec["food_yield"], "fiber": spec["fiber_yield"]},
+                    description=f"{pawn['name']} hunts down the legend {name}, gathering {spec['food_yield']} food and {spec['fiber_yield']} fiber.",
+                )
             return events.add_event(
                 "hunt",
                 actor=pawn_id,
@@ -2259,8 +2448,7 @@ def _do_attack(pawn, pawn_id, target):
                 animal["pos"] = best_pos
                 desc += f" The {animal['species']} flees!"
             else:
-                bite = spec["bite_damage"]
-                pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] - bite)
+                bite = _predator_bites(animal, pawn)
                 desc += f" The {animal['species']} retaliates, biting for {bite} damage!"
                 if pawn["vitals"]["hp"] <= 0:
                     pawn["vitals"]["hp"] = 0
@@ -3648,8 +3836,29 @@ def tick_environment():
         for w in state.world_state["wildlife"]:
             if w["state"] == "tamed" or WILDLIFE[w["species"]]["kind"] != "predator":
                 new_wild.append(w)
+            elif w.get("legendary"):
+                legend = _legend_by_wild(w)
+                if legend:
+                    legend["escapes"] += 1
+                    legend["fame"] = min(LEGEND_MAX_FAME, legend["fame"] + 1)
+                    result.append(
+                        events.add_event(
+                            "legend_escape",
+                            data={"name": w.get("name", w["species"])},
+                            description=(
+                                f"{w.get('name', w['species'])} slips away into the wilds, "
+                                "more infamous than ever."
+                            ),
+                        )
+                    )
             else:
-                result.append(events.add_event("wildlife_despawn", data={"species": w["species"]}, description=f"The {w['species']} retreats into the wilderness."))
+                result.append(
+                    events.add_event(
+                        "wildlife_despawn",
+                        data={"species": w["species"]},
+                        description=f"The {w['species']} retreats into the wilderness.",
+                    )
+                )
         state.world_state["wildlife"] = new_wild
 
     biome["season"] = new_season
@@ -3675,9 +3884,13 @@ def tick_environment():
         if new_season in ("Winter", "Autumn"):
             pred_chance = 0.25 * (1 - palisade_lvl * 0.3) * spawn_mod
             if random.random() < pred_chance:
-                species = random.choice(PREDATOR_SPECIES)
-                ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
-                result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
+                returning = _returning_legend()
+                if returning:
+                    _spawn_legend(returning, ws, result)
+                else:
+                    species = random.choice(PREDATOR_SPECIES)
+                    ws.append(state.make_animal(species, pos=[0, 0], hp=WILDLIFE[species]["hp"]))
+                    result.append(events.add_event("wildlife", data={"species": species}, description=f"A wild {species} appears."))
         else:
             prey_chance = PREY_SPAWN_OVERHUNT if overhunted else 0.3
             if random.random() < prey_chance * spawn_mod:
@@ -3725,9 +3938,9 @@ def tick_environment():
         if spec["kind"] == "predator":
             for pid, p in state.world_state["pawns"].items():
                 if p["status"] == "active" and p["pos"] == w["pos"]:
-                    bite = spec["bite_damage"]
-                    p["vitals"]["hp"] = _clamp(p["vitals"]["hp"] - bite)
-                    desc = f"The {w['species']} bites {p['name']} for {bite} damage!"
+                    bite = _predator_bites(w, p, result)
+                    name = w.get("name") or w["species"]
+                    desc = f"The {name} bites {p['name']} for {bite} damage!"
                     if p["vitals"]["hp"] <= 0:
                         p["vitals"]["hp"] = 0
                         p["status"] = "incapacitated"
@@ -3945,6 +4158,7 @@ def tick_environment():
 
     _update_titles()
     result += _drain_runes()
+    _sync_legend_hunt()
     return result
 
 

@@ -63,7 +63,7 @@
 - [x] Clear-cutting forests removes windbreaks, making winter cold harsher and increasing the risk of spring river floods.
 
 ### Step 16: Persistent Named Legendary Beasts
-- [ ] If a predator injures multiple colonists and escapes, it gains a permanent name and reputation (*The Grey Terror*, *Old Scar-Face*), triggering colony-wide revenge hunts.
+- [x] If a predator injures multiple colonists and escapes, it gains a permanent name and reputation (*The Grey Terror*, *Old Scar-Face*), triggering colony-wide revenge hunts.
 
 ### Step 17: Fog of War & Off-Grid Expeditions
 - [ ] Shroud the outer rim of the 5×5 map in mist, requiring Scouts to actively explore and map the perimeter.
