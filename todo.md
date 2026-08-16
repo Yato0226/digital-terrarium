@@ -90,8 +90,8 @@
 - [x] Foragers gather medicinal herbs from meadows to brew salves and nurse sick colonists back to health.
 
 ### Step 22: The Domino Effect (Total Interconnection)
-- [ ] Close the full causal loop:
-  - [ ] *Hazard strikes → Wood stock burns → Campfire dies → Morale collapses → Berserk break → Ancestor falls → Grave marked → Legend carved into Monolith → New tradition forged.*
+- [x] Close the full causal loop:
+  - [x] *Hazard strikes → Wood stock burns → Campfire dies → Morale collapses → Berserk break → Ancestor falls → Grave marked → Legend carved into Monolith → New tradition forged.*
 
 ---
 

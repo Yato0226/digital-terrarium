@@ -4400,6 +4400,11 @@ def _kill(pawn_id, pawn, cause):
         "beloved": _is_beloved(pawn_id, pawn),
     }
     state.world_state["graveyard"].append(entry)
+    if entry["beloved"] or pawn.get("title") or is_elder(pawn):
+        _carve_rune(
+            f"The Fall of {pawn['name']}",
+            f"{pawn['name']} was taken by {cause}, and the colony will not forget.",
+        )
     for h in state.world_state["heirlooms"]:
         if h.get("owner") == pawn_id:
             h.pop("owner", None)
