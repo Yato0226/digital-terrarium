@@ -28,6 +28,20 @@ notifier = None
 # Event types that trigger an adoption DM for the adopted pawn.
 ADOPTION_NOTIFY_TYPES = ("birth", "goal", "break", "death")
 
+# Milestone webhook posts can be disabled (tests set this False alongside
+# events.LOGGING so a real .env webhook can't fire during the suite).
+POSTING_ENABLED = True
+
+# Event types that mark a tick as high-impact: the full state embed (map +
+# pawn dossier) is only posted on ticks that produced at least one of these.
+MILESTONE_EVENT_TYPES = (
+    "season", "death", "birth", "feast", "tradition", "monument_complete",
+    "quest_complete", "raid", "fire_start", "fire_damage", "flood", "miasma",
+)
+
+# Event types that fire a standalone Breaking Crisis Alert embed.
+CRISIS_EVENT_TYPES = ("raid", "fire_start", "fire_damage", "flood", "miasma")
+
 
 def _llm_call(system, user, schema_model, temperature):
     """Lazy llm import keeps core importable in the offline test suite."""
@@ -176,6 +190,77 @@ def post_patch_notes(record):
         print(f"Patch-notes post failed: {e}")
 
 
+def _post_embed(embed):
+    """Best-effort standalone embed post (single choke point; no-op when off)."""
+    if not POSTING_ENABLED or not DISCORD_WEBHOOK_URL:
+        return
+    try:
+        resp = requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=5)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Discord post failed: {e}")
+
+
+def _is_milestone_tick(tick_events):
+    """True when any event this tick counts as a high-impact milestone."""
+    return any(ev.get("type") in MILESTONE_EVENT_TYPES for ev in tick_events)
+
+
+def post_chronicle(entry):
+    """Season Change & Era Chronicle milestone: the lorekeeper's title + paragraph."""
+    names = ", ".join(
+        p["name"] for p in state.world_state["pawns"].values()
+    ) or "no one"
+    embed = {
+        "title": f"📜 New Era: {entry['title']}",
+        "description": entry["text"][:2048],
+        "color": 0xD4AF37,
+        "fields": [
+            {"name": "Season", "value": entry["season"], "inline": True},
+            {"name": "Colony", "value": names[:256], "inline": True},
+        ],
+        "footer": {"text": f"Tick {entry['tick']}"},
+    }
+    _post_embed(embed)
+
+
+def post_eulogy(entry):
+    """Fallen Heroes milestone: tombstone inscription and cause of death."""
+    day = entry["died_tick"] // engine.TICKS_PER_DAY
+    embed = {
+        "title": f"🪦 {entry['name']} has fallen",
+        "description": entry.get("epitaph") or "Gone, but not forgotten.",
+        "color": 0x2C2F33,
+        "fields": [
+            {"name": "Cause", "value": entry.get("cause", "unknown")[:256], "inline": True},
+            {"name": "Day", "value": f"{day} (tick {entry['died_tick']})", "inline": True},
+        ],
+    }
+    _post_embed(embed)
+
+
+def post_crisis(tick_events):
+    """Breaking Crisis Alerts: raids, fires reaching the colony, floods, miasma."""
+    titles = {
+        "raid": "🥷 Scavenger Raid!",
+        "fire_start": "🔥 Wildfire!",
+        "fire_damage": "🔥 Flames reach the colony!",
+        "flood": "🌊 Flash Flood!",
+        "miasma": "☠️ Toxic Miasma!",
+    }
+    for ev in tick_events:
+        etype = ev.get("type")
+        if etype not in CRISIS_EVENT_TYPES:
+            continue
+        embed = {
+            "title": titles.get(etype, "⚠️ Crisis!"),
+            "description": (ev.get("description") or "")[:1024],
+            "color": 0xFF4444,
+            "footer": {"text": f"Tick {ev.get('tick', state.world_state['tick'])}"},
+        }
+        _post_embed(embed)
+
+
 def _biome_infra_txt(biome):
     parts = []
     if biome.get("granary"):
@@ -253,6 +338,7 @@ async def _eulogize_fallen(dead_tick):
         except Exception as e:
             print(f"❌ Eulogy failed for {entry['name']}: {e}")
         entry["eulogized"] = True
+        post_eulogy(entry)
 
 
 def _chronicle_context(season):
@@ -309,6 +395,7 @@ async def _chronicle_season(season):
         description=f"The chronicle records a new era: {title}.",
     )
     state.save_state()
+    post_chronicle(entry)
 
 
 def _monument_context():
@@ -657,7 +744,15 @@ async def run_tick():
     if dead_tick % engine.PATCH_INTERVAL == 0:
         patch_record = await _run_architect()
     state.save_state()
-    await asyncio.to_thread(post_to_discord, data)
+    milestone = (
+        _is_milestone_tick(tick_events)
+        or bool(pending_season)
+        or bool(pending_monument)
+        or bool(patch_record)
+    )
+    if milestone:
+        await asyncio.to_thread(post_to_discord, data)
+    await asyncio.to_thread(post_crisis, tick_events)
     if patch_record:
         await asyncio.to_thread(post_patch_notes, patch_record)
 

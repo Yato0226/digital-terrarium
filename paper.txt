@@ -117,7 +117,7 @@ The system is a single Python process split into focused modules: \texttt{state.
 \item \textbf{Decision}: the LLM is prompted with current vitals, skills, personality, relationships, gear, map positions, and the event ring buffer. The per-tick Pydantic schema is passed to the API as a structured-output schema (\texttt{response\_schema}) that both forces valid JSON and suppresses the model's reasoning channel; the response is validated again with Pydantic, and a failed parse skips mutation and increments the tick.
 \item \textbf{Intent override}: any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, the LLM merely narrates.
 \item \textbf{Deterministic resolution}: \texttt{engine.resolve\_actions()} validates the intent (energy cost, target legality), computes consequences (damage, resources, skill XP, relationship deltas), and emits structured events.
-\item \textbf{Save inside lock}: \texttt{terrarium\_state.json} is persisted (auto-migrated on startup), the tick counter is incremented, and the tick lock is released. Then the best-effort eulogy LLM generates tombstone inscriptions for the newly fallen, and a formatted Discord embed is posted outside the lock so god commands are not stalled by network I/O.
+\item \textbf{Save inside lock}: \texttt{terrarium\_state.json} is persisted (auto-migrated on startup), the tick counter is incremented, and the tick lock is released. Then the best-effort eulogy LLM generates tombstone inscriptions for the newly fallen (posted immediately as dedicated eulogy embeds), and a Discord state embed is posted outside the lock only on high-impact ticks (season change, death, birth, feast, quest completion, or a crisis such as a raid, wildfire, flood, or miasma) so quiet ticks do not spam the channel.
 \end{enumerate}
 
 \begin{figure}[htbp]
@@ -598,10 +598,12 @@ async def run_tick():
         await _chronicle_season(state.pending_chronicle)
     if state.pending_monument:                         # monolith done: carve dedication
         await _inscribe_monument()
-    await _eulogize_fallen(dead_tick)                  # LLM epitaph (per fallen)
+    await _eulogize_fallen(dead_tick)                  # LLM epitaph + eulogy embed
     await _notify_adopted(tick_events)                 # DM adopted pawns' milestones
     state.save_state()                                 # re-save after outside-lock calls
-    await asyncio.to_thread(post_to_discord, data)     # Discord webhook + PNG map
+    if _is_milestone_tick(tick_events) or state.pending_chronicle:
+        await asyncio.to_thread(post_to_discord, data) # milestone-only state embed + PNG map
+    post_crisis(tick_events)                           # raid / wildfire / flood / miasma
 \end{lstlisting}
 
 \section{Expected Outcomes}

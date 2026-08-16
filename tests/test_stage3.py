@@ -18,8 +18,10 @@ pytestmark = pytest.mark.usefixtures("fresh_world")
 def fresh_world():
     state.reset_world()
     events.LOGGING = False
+    core.POSTING_ENABLED = False
     yield
     events.LOGGING = True
+    core.POSTING_ENABLED = True
 
 
 def pawn(pawn_id):

@@ -12,7 +12,7 @@ Every tick (default 60 s):
 2. **Decision** — the LLM proposes *intent only*: action, narrative, quote, inner monologue, direction, target, free-form `flavor` verb, and optional personal goal.
 3. **Override** — god orders (`!order`) replace the model's proposal.
 4. **Resolve** — a deterministic engine (`engine.py`) validates, costs, and applies all consequences.
-5. **Persist & broadcast** — state saves, events log to `terrarium_log.jsonl`, an embed posts to Discord.
+5. **Persist & broadcast** — state saves, events log to `terrarium_log.jsonl`, and high-impact milestones post to Discord (era chronicles, fallen-hero eulogies, patch notes, and crisis alerts) — quiet ticks stay quiet.
 
 The model **never emits stat numbers** — the engine is the sole source of truth, so a hallucinating LLM cannot corrupt the simulation.
 
@@ -42,7 +42,8 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Autonomous world engine** — every 400 ticks (one year) an **Architect LLM** reviews the world's fortunes and emits a bounded balance patch (regrowth/cold/spawn multipliers clamped to `[0.7, 1.3]`), optionally synthesizing a new tool blueprint (crafted via `Build`, tier 4+) or seeding a **world prophecy** — a colony-wide quest (hunt, chop, stockpile, or survive) that pays shared morale and a custom title when completed. Patches post as ⚙️ *Terrarium Patch Notes* embeds (`!patchnotes`) and are queryable via `!recipes` and `!quests`
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
-- **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the daily embed
+- **Milestone news hub** — Discord no longer broadcasts every tick. Embeds are reserved for high-impact moments: 📜 a new-era chronicle each season, 🪦 fallen-hero eulogies (tombstone inscription + cause of death), ⚙️ annual patch notes, and 🥷🔥🌊☠️ breaking crisis alerts (raids, wildfires, floods, miasma, extinction)
+- **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the milestone embeds
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 
 ## Quick start
