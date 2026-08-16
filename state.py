@@ -175,6 +175,7 @@ DEFAULT_BIOME = {
     "flooded": [],
     "miasma": 0,
     "aurora": False,
+    "cataclysm": None,
     "modifiers": dict(DEFAULT_MODIFIERS),
 }
 
@@ -461,6 +462,7 @@ def load_state():
         world_state["biome"].setdefault("flooded", [])
         world_state["biome"].setdefault("miasma", 0)
         world_state["biome"].setdefault("aurora", False)
+        world_state["biome"].setdefault("cataclysm", None)
         modifiers = world_state["biome"].setdefault("modifiers", {})
         for key in DEFAULT_MODIFIERS:
             modifiers.setdefault(key, DEFAULT_MODIFIERS[key])

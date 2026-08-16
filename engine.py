@@ -45,6 +45,7 @@ FEASIBILITY_REASONS = {
     "off_grid",
     "pacifist",
     "flooded",
+    "drought",
 }
 
 GRID_SIZE = state.GRID_SIZE
@@ -1682,6 +1683,18 @@ EXPEDITION_LOOT = {"wood": (5, 12), "stone": (5, 12), "fiber": (3, 8), "food": (
 MAPPED_MORALE = 5            # colony-wide cheer when the whole perimeter is mapped
 EXPEDITION_SCARS_TITLE = "the Scarred"
 
+# Stage 18 (Phase 4) multi-tick seasonal cataclysms.
+CATACLYSM_CHANCE = 0.12      # rolled at each season change while none is active
+LONG_WINTER_TICKS = 150      # The Long Winter: intense freeze, double fuel drain
+LONG_WINTER_COLD = 4
+LONG_WINTER_FUEL_MULT = 2
+DROUGHT_TICKS = 150          # The Great Drought: dry rivers, wildfire danger spikes
+DROUGHT_FIRE_MULT = 2.0
+CATACLYMS = {
+    "long_winter": {"name": "The Long Winter", "seasons": ("Winter",), "ticks": LONG_WINTER_TICKS},
+    "drought": {"name": "The Great Drought", "seasons": ("Summer", "Spring"), "ticks": DROUGHT_TICKS},
+}
+
 
 def apply_council(leader_pid, mandate):
     """The annual council names a leader and issues a one-sentence Colony Mandate.
@@ -1939,6 +1952,8 @@ def _spread_fire():
                 chance = FIRE_CAMP_SPREAD_CHANCE
             else:
                 continue
+            if _cataclysm_kind() == "drought":
+                chance *= DROUGHT_FIRE_MULT
             if random.random() < chance and _ignite(nx, ny):
                 result.append(
                     events.add_event(
@@ -2360,6 +2375,16 @@ def _do_forage(pawn, pawn_id):
             actor=pawn_id,
             data={"reason": "flooded"},
             description=f"{pawn['name']} wades through floodwater and finds nothing to forage.",
+        )
+    if _cataclysm_kind() == "drought" and _tile_at(*pawn["pos"]) == RIVER_TILE:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "drought"},
+            description=(
+                f"The river has run dry in the Great Drought; "
+                f"{pawn['name']} scrapes mud and finds nothing."
+            ),
         )
     biome = state.world_state["biome"]
     if biome["food_stock"] <= 0:
@@ -3625,13 +3650,20 @@ def _give_birth(mother, mother_id, result):
     )
 
 
+def _cataclysm_kind():
+    return (state.world_state["biome"].get("cataclysm") or {}).get("kind")
+
+
 def _feed_campfire():
     biome = state.world_state["biome"]
     if biome["campfire"] <= 0:
         return False
+    fuel = CAMPFIRE_FUEL
+    if _cataclysm_kind() == "long_winter":
+        fuel = CAMPFIRE_FUEL * LONG_WINTER_FUEL_MULT
     for pawn_id, pawn in state.world_state["pawns"].items():
-        if pawn["inventory"]["wood"] >= CAMPFIRE_FUEL:
-            pawn["inventory"]["wood"] -= CAMPFIRE_FUEL
+        if pawn["inventory"]["wood"] >= fuel:
+            pawn["inventory"]["wood"] -= fuel
             biome["campfire"] = _clamp(biome["campfire"] + CAMPFIRE_FEED_GAIN)
             return True
     biome["campfire"] = _clamp(biome["campfire"] - CAMPFIRE_DECAY)
@@ -3677,6 +3709,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
     cold = round(cold * _modifier("cold"))
     if biome["season"] == "Winter" and _clear_cut():
         cold += WINDBREAK_COLD_PENALTY
+    if _cataclysm_kind() == "long_winter":
+        cold += LONG_WINTER_COLD
     if pawn["gear"]["body"] == "Warm Coat":
         cold = max(0, cold - COAT_INSULATION)
     if _tradition() == HUNTERS_TAG:
@@ -4130,6 +4164,42 @@ def tick_environment():
     if new_season == "Summer" and not biome.get("granary"):
         biome["food_stock"] = _clamp(biome["food_stock"] - 2)
 
+    # Multi-tick seasonal cataclysms (Stage 18): a trial rolls at season change
+    # and persists across many ticks until its ends_tick arrives.
+    cataclysm = biome.get("cataclysm")
+    if cataclysm and state.world_state["tick"] >= cataclysm["ends_tick"]:
+        biome["cataclysm"] = None
+        result.append(
+            events.add_event(
+                "cataclysm_end",
+                data={"name": cataclysm["name"]},
+                description=f"{cataclysm['name']} finally lifts.",
+            )
+        )
+    elif cataclysm is None and new_season != prev_season and random.random() < CATACLYSM_CHANCE:
+        candidates = [
+            kind for kind, info in CATACLYMS.items() if new_season in info["seasons"]
+        ]
+        if candidates:
+            kind = random.choice(candidates)
+            info = CATACLYMS[kind]
+            biome["cataclysm"] = {
+                "kind": kind,
+                "name": info["name"],
+                "started_tick": state.world_state["tick"],
+                "ends_tick": state.world_state["tick"] + info["ticks"],
+            }
+            result.append(
+                events.add_event(
+                    "cataclysm",
+                    data={"kind": kind, "name": info["name"], "ticks": info["ticks"]},
+                    description=(
+                        f"{info['name']} descends upon the land — the colony must "
+                        f"endure for {info['ticks']} ticks."
+                    ),
+                )
+            )
+
     ws = state.world_state["wildlife"]
     spawn_mod = _modifier("spawn")
     overhunted = not _wild_predators()
@@ -4227,9 +4297,12 @@ def tick_environment():
     result += _spread_fire()
     grid = state.world_state["grid"]
     if biome["weather"] == "Storm":
+        lightning = LIGHTNING_CHANCE
+        if _cataclysm_kind() == "drought":
+            lightning *= DROUGHT_FIRE_MULT
         for y in range(GRID_SIZE):
             for x in range(GRID_SIZE):
-                if grid[y][x] in FOREST_TILES and random.random() < LIGHTNING_CHANCE:
+                if grid[y][x] in FOREST_TILES and random.random() < lightning:
                     if _ignite(x, y):
                         result.append(
                             events.add_event(

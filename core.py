@@ -810,6 +810,25 @@ def fog_txt():
     return "\n".join(lines)
 
 
+def cataclysm_txt():
+    """The active multi-tick seasonal cataclysm, for `!cataclysm`."""
+    cataclysm = state.world_state["biome"].get("cataclysm")
+    if not cataclysm:
+        return "⚠️ No cataclysm is active — the seasons run their ordinary course."
+    remaining = max(0, cataclysm["ends_tick"] - state.world_state["tick"])
+    kind = cataclysm["kind"]
+    if kind == "long_winter":
+        effects = "cold +" + str(engine.LONG_WINTER_COLD) + ", campfire fuel drain ×" + str(engine.LONG_WINTER_FUEL_MULT)
+    elif kind == "drought":
+        effects = "river foraging fails, wildfire danger ×" + str(engine.DROUGHT_FIRE_MULT)
+    else:
+        effects = "unknown trial"
+    return (
+        f"⚠️ **{cataclysm['name']}** rages — ends in ~{remaining} ticks.\n"
+        f"Effects: {effects}."
+    )
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()

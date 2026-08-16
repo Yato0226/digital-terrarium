@@ -70,7 +70,7 @@
 - [x] Allow pairs of colonists to pack rations and leave the map for 15–20 ticks on background expeditions, returning with rare loot, exotic seeds, unique pets, or battle scars.
 
 ### Step 18: Multi-Tick Seasonal Cataclysms
-- [ ] Introduce multi-tick environmental trials such as *The Long Winter* (150 ticks of intense freeze and double fuel drain) or *The Great Drought* (halting river forage and dramatically spiking wildfire danger).
+- [x] Introduce multi-tick environmental trials such as *The Long Winter* (150 ticks of intense freeze and double fuel drain) or *The Great Drought* (halting river forage and dramatically spiking wildfire danger).
 
 ---
 

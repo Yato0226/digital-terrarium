@@ -554,6 +554,13 @@ async def fog_cmd(ctx):
     await ctx.send(core.fog_txt())
 
 
+@bot.command(name="cataclysm")
+@is_god_channel()
+async def cataclysm_cmd(ctx):
+    """!cataclysm — the active multi-tick seasonal trial and its effects."""
+    await ctx.send(core.cataclysm_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):
