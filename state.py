@@ -257,6 +257,8 @@ def make_pawn(
         "inventory": {"wood": 0, "food": 0, "stone": 0, "fiber": 0},
         "gear": {"main_hand": None, "body": None},
         "relationships": {},
+        "badges": [],
+        "rel_badges": {},
         "mental_break": None,
         "break_ticks": 0,
         "pregnant_ticks": 0,
@@ -369,6 +371,13 @@ def _migrate_pawn(pawn_id, pawn):
         base["generation"] = pawn["generation"]
     if isinstance(pawn.get("goal"), dict):
         base["goal"] = pawn["goal"]
+    if isinstance(pawn.get("badges"), list):
+        base["badges"] = [b for b in pawn["badges"] if isinstance(b, str)]
+    if isinstance(pawn.get("rel_badges"), dict):
+        base["rel_badges"] = {
+            k: [b for b in v if isinstance(b, str)] if isinstance(v, list) else []
+            for k, v in pawn["rel_badges"].items()
+        }
     for key in ("mother_id", "father_id", "partner_id"):
         if pawn.get(key) in (None,) or isinstance(pawn.get(key), str):
             base[key] = pawn.get(key)

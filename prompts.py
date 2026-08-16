@@ -211,6 +211,14 @@ def build_prompt():
             h["name"] for h in state.world_state["heirlooms"] if h.get("owner") == pid
         ]
         heir_txt = f", Heirlooms: {', '.join(owned)}" if owned else ""
+        badge_names = list(pawn.get("badges", []))
+        for oid, bgs in pawn.get("rel_badges", {}).items():
+            other = engine._pawn_by_id(oid)
+            if other is None:
+                continue
+            for b in bgs:
+                badge_names.append(f"{b} of {other['name']}")
+        badges_txt = f", Badges: {', '.join(badge_names)}" if badge_names else ""
         x, y = pawn["pos"]
         tile = engine._tile_at(x, y) or "?"
         pawn_lines.append(
@@ -222,7 +230,7 @@ def build_prompt():
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
             f"Personality {pawn['personality']}{sex_txt}{gen_txt}{age_txt}{stage_txt}{job_txt}"
             f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{break_txt}{traits_txt}{mood_txt}"
-            f"{goal_txt}{rel_txt}{heir_txt}"
+            f"{goal_txt}{rel_txt}{heir_txt}{badges_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
 

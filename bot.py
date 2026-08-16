@@ -488,6 +488,27 @@ async def lore_cmd(ctx):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="badges")
+@is_god_channel()
+async def badges_cmd(ctx):
+    """!badges — list the relational badges each colonist has earned by their deeds."""
+    out = ["🏅 **Relational badges** (earned by deeds, shown to the AI Director)"]
+    for pid, p in state.world_state["pawns"].items():
+        if p["status"] != "active":
+            continue
+        names = []
+        for oid, bgs in p.get("rel_badges", {}).items():
+            other = engine._pawn_by_id(oid)
+            if other:
+                names += [f"{b} of {other['name']}" for b in bgs]
+        names += list(p.get("badges", []))
+        if names:
+            out.append(f"- **{p['name']}**: {', '.join(names)}")
+    if len(out) == 1:
+        out.append("No badges earned yet — deeds will speak soon.")
+    await ctx.send("\n".join(out))
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

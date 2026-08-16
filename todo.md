@@ -39,8 +39,8 @@
 *Goal: Transform flat relationship numbers into living social drama and emergent colony governance.*
 
 ### Step 11: Qualitative Relational Badges
-- [ ] Attach meaningful badges based on actual deeds: *Lifesaver*, *Betrayer*, *Indebted*, *Mentor*, *Widow*.
-- [ ] The AI Director uses these badges to weave deep, specific social drama and dialogue into tick narratives.
+- [x] Attach meaningful badges based on actual deeds: *Lifesaver*, *Betrayer*, *Indebted*, *Mentor*, *Widow*.
+- [x] The AI Director uses these badges to weave deep, specific social drama and dialogue into tick narratives.
 
 ### Step 12: Multigenerational Blood Feuds
 - [ ] If two colonists become bitter rivals, their children inherit the feud at birth.

@@ -153,6 +153,10 @@ RUIN_BLUEPRINTS = {
     },
 }
 
+# Stage 11 (Phase 3) qualitative relational badges — durable labels earned by deeds.
+BADGES = ("Lifesaver", "Betrayer", "Indebted", "Mentor", "Widow")
+BETRAY_RELATIONSHIP = 25  # attacking someone bonded to you earns "Betrayer"
+
 # Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
 FARM_TILE = "🌾"
 FARM_GROW_TICKS = 20
@@ -346,6 +350,20 @@ def _inherit_traits(mother, father):
 def _adjust_relationship(pawn, other_id, delta):
     rel = pawn["relationships"].get(other_id, 0)
     pawn["relationships"][other_id] = _clamp(rel + delta, -100, 100)
+
+
+def _grant_badge(pawn, badge):
+    """Personal badge (e.g. Widow) — deduped."""
+    if badge not in pawn.setdefault("badges", []):
+        pawn["badges"].append(badge)
+
+
+def _grant_rel_badge(pawn, other_id, badge):
+    """Directional badge pawn → other (Lifesaver/Betrayer/Indebted/Mentor) — deduped."""
+    rel_badges = pawn.setdefault("rel_badges", {})
+    lst = rel_badges.setdefault(other_id, [])
+    if badge not in lst:
+        lst.append(badge)
 
 
 def _decay_relationships():
@@ -2142,6 +2160,8 @@ def _do_attack(pawn, pawn_id, target):
     tpawn["vitals"]["hp"] = _clamp(tpawn["vitals"]["hp"] - damage)
     pawn["counters"]["attacks_won"] += 1
     pawn["counters"]["damage_dealt"] += damage
+    if tpawn["relationships"].get(pawn_id, 0) >= BETRAY_RELATIONSHIP:
+        _grant_rel_badge(tpawn, pawn_id, "Betrayer")
     _gain_skill(pawn, "combat")
     _adjust_relationship(pawn, target, -10)
     _adjust_relationship(tpawn, pawn_id, -15)
@@ -2381,6 +2401,9 @@ def _do_share(pawn, pawn_id, target):
     _adjust_relationship(tpawn, pawn_id, 25)
     pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 5)
     tpawn["vitals"]["morale"] = _clamp(tpawn["vitals"]["morale"] + 5)
+    _grant_rel_badge(tpawn, pawn_id, "Indebted")
+    if tpawn.get("starving_ticks", 0) > 0:
+        _grant_rel_badge(tpawn, pawn_id, "Lifesaver")
     return events.add_event(
         "share",
         actor=pawn_id,
@@ -2503,6 +2526,8 @@ def _do_interact(pawn, pawn_id, flavor):
             _adjust_relationship(pawn, partner["id"], 10)
             _adjust_relationship(partner, pawn_id, 10)
             _goal_nudge(pawn, 1, kind="social", target_id=partner["id"])
+            if "teach" in verb:
+                _grant_rel_badge(pawn, partner["id"], "Mentor")
             effects.append(f"closer to {partner['name']}")
     elif _in_words(verb, INTERACT_WORDS["farm"]):
         tile = _tile_at(*pawn["pos"])
@@ -3275,6 +3300,8 @@ def _kill(pawn_id, pawn, cause):
         })
     for other in state.world_state["pawns"].values():
         if pawn_id in other.get("partners", []):
+            if other["status"] in ("active", "incapacitated"):
+                _grant_badge(other, "Widow")
             other["partners"].remove(pawn_id)
         if other["status"] in ("active", "incapacitated"):
             _add_moodlet(other, "Grief", -10, 10)
