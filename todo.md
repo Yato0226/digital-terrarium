@@ -1,141 +1,93 @@
-# Terrarium Feature Roadmap: Stage 10+ Master Blueprint
+# Terrarium Feature Roadmap
 
-## Phase 1: Streamline Discord into a Milestone News Hub
-*Goal: Stop every-minute embed spam and turn your Discord channels into a clean, exciting newspaper of major colony events.*
-
-### Step 6: The Milestone Announcement System
-- [x] Cease sending embeds every 60 seconds.
-- [x] Restrict automated Discord posts to high-impact milestones only:
-  - [x] **Season Change & Era Chronicle**: Posted every 100 ticks with the Lorekeeper's era title and paragraph.
-  - [x] **Fallen Heroes & Eulogies**: Posted immediately when a colonist dies with their tombstone inscription and cause of death.
-  - [x] **Annual Patch Notes**: Posted every 400 ticks with the Architect's balance tuning, synthesized blueprints, and prophecies.
-  - [x] **Breaking Crisis Alerts**: Instant notifications when an Autumn Scavenger Raid strikes, a Wildfire reaches the camp, or Total Extinction occurs.
-  - [x] **Adoption Milestones**: Direct DMs to users when their adopted ward gives birth, achieves a goal, or suffers a mental break.
+> **Status:** Phases 1–5 and Phase 6 Steps 1–5 are **implemented & shipped** (archived below).
+> **Active:** **Phase 6 Step 6+ — The Gorgeous Diorama** (visual-polish pass) — work in progress.
 
 ---
 
-## Phase 2: Living Memory, Biographies & Generational Sagas
+## ✅ Completed blueprint (archived — all shipped)
+
+### Phase 1: Streamline Discord into a Milestone News Hub
+*Goal: Stop every-minute embed spam and turn Discord into a clean newspaper of major colony events.*
+- [x] **Step 6: The Milestone Announcement System** — milestone-only embeds (season chronicle, eulogies, patch notes, crisis alerts, adoption DMs).
+
+### Phase 2: Living Memory, Biographies & Generational Sagas
 *Goal: Turn the event log into deep historical memory that persists across generations.*
+- [x] **Step 7: The Pawn Biography Engine (`!bio <name>`)** — on-demand 3-sentence sagas/obituaries from the event log.
+- [x] **Step 8: Generational Handoffs & Dynasties** — G2/G3 succession; graves, heirlooms, and deeds persist in prompts.
+- [x] **Step 9: The Monolith as an Oracle & Rune Archive** — achievements carved as runes; prayers grant visions/warnings.
+- [x] **Step 10: Ancient Pre-History (The Lost Tribe)** — Ruins = Sunken Tribe remnants with lore fragments and blueprints.
 
-### Step 7: The Pawn Biography Engine (`!bio <name>`)
-- [x] Create a biography command where Gemma parses a colonist's raw event history from the log file and synthesizes it on demand into a 3-sentence heroic saga or obituary.
-- [x] Viewers can inspect living elders or read the full life stories of ancestors buried in the graveyard.
+### Phase 3: Social Dynamics, Factions & Dynamic Roles
+*Goal: Transform flat relationship numbers into living social drama and emergent governance.*
+- [x] **Step 11: Qualitative Relational Badges** — *Lifesaver / Betrayer / Indebted / Mentor / Widow* badges woven into narratives.
+- [x] **Step 12: Multigenerational Blood Feuds** — rivalries inherited at birth; peace via courtship/sharing or escalation.
+- [x] **Step 13: Free-Form Dynamic Roles with Keyword Bucketing** — organic job titles grant subtle keyword-based perks.
+- [x] **Step 14: Annual Camp Council & Colony Mandates** — yearly leader + 1-sentence Colony Mandate for unified focus.
 
-### Step 8: Generational Handoffs & Dynasties
-- [x] When Generation 1 dies out, Generation 2 and 3 take over the colony.
-- [x] Ancestral graves, inherited heirlooms, and family deeds remain permanently referenced in future prompt contexts so ancestors are never forgotten.
-
-### Step 9: The Monolith as an Oracle & Rune Archive
-- [x] Significant colony achievements get carved into the Ancestral Monolith as permanent historical runes.
-- [x] Colonists can pray at the monolith to receive prophetic visions, divine inspiration, or weather warnings.
-
-### Step 10: Ancient Pre-History (The Lost Tribe)
-- [x] Turn the Ruins tile into the named remnants of an ancient civilization (*The Sunken Tribe*).
-- [x] Scouts exploring the ruins discover fragments of forgotten history, ancient tool blueprints, and carved warnings.
-
----
-
-## Phase 3: Social Dynamics, Factions & Dynamic Roles
-*Goal: Transform flat relationship numbers into living social drama and emergent colony governance.*
-
-### Step 11: Qualitative Relational Badges
-- [x] Attach meaningful badges based on actual deeds: *Lifesaver*, *Betrayer*, *Indebted*, *Mentor*, *Widow*.
-- [x] The AI Director uses these badges to weave deep, specific social drama and dialogue into tick narratives.
-
-### Step 12: Multigenerational Blood Feuds
-- [x] If two colonists become bitter rivals, their children inherit the feud at birth.
-- [x] New generations must choose between making peace through courtship and sharing food, or escalating the feud into camp brawls during elections.
-
-### Step 13: Free-Form Dynamic Roles with Keyword Bucketing
-- [x] Allow the LLM to organically invent custom job titles based on pawn deeds (*"Fang-Breaker"*, *"Keeper of the Hearth"*).
-- [x] The engine uses keyword matching to safely grant subtle passive perks (martial words boost defense, nurturing words boost food sharing, spiritual words speed up grief recovery).
-
-### Step 14: Annual Camp Council & Colony Mandates
-- [x] Every year cycle, the LLM reviews colony history, names a recognized leader, and issues a 1-sentence **Colony Mandate** (e.g. *"Tame the beasts of the wood"* or *"Fortify before raiders return"*), giving all colonists a unified narrative focus.
-
----
-
-## Phase 4: Living Ecosystem, Cataclysms & Exploration
+### Phase 4: Living Ecosystem, Cataclysms & Exploration
 *Goal: Make the wilderness dynamic, reactive, and dangerous.*
+- [x] **Step 15: Trophic Cascades (Food Chain Ecology)** — over-hunting → overpopulation → crop damage; clear-cutting → harsher winters/floods.
+- [x] **Step 16: Persistent Named Legendary Beasts** — escaped predators gain names/reputation (*The Grey Terror*) and revenge hunts.
+- [x] **Step 17: Fog of War & Off-Grid Expeditions** — mist-shrouded rim; scouting + paired rations-packed expeditions.
+- [x] **Step 18: Multi-Tick Seasonal Cataclysms** — *The Long Winter*, *The Great Drought*.
 
-### Step 15: Trophic Cascades (Food Chain Ecology)
-- [x] Over-hunting wolves removes predator pressure, causing deer and rabbits to overpopulate, eat wild forage, and damage farm plots.
-- [x] Clear-cutting forests removes windbreaks, making winter cold harsher and increasing the risk of spring river floods.
-
-### Step 16: Persistent Named Legendary Beasts
-- [x] If a predator injures multiple colonists and escapes, it gains a permanent name and reputation (*The Grey Terror*, *Old Scar-Face*), triggering colony-wide revenge hunts.
-
-### Step 17: Fog of War & Off-Grid Expeditions
-- [x] Shroud the outer rim of the 5×5 map in mist, requiring Scouts to actively explore and map the perimeter.
-- [x] Allow pairs of colonists to pack rations and leave the map for 15–20 ticks on background expeditions, returning with rare loot, exotic seeds, unique pets, or battle scars.
-
-### Step 18: Multi-Tick Seasonal Cataclysms
-- [x] Introduce multi-tick environmental trials such as *The Long Winter* (150 ticks of intense freeze and double fuel drain) or *The Great Drought* (halting river forage and dramatically spiking wildfire danger).
-
----
-
-## Phase 5: Emergent Mythology, Religion & Full Interconnection
+### Phase 5: Emergent Mythology, Religion & Full Interconnection
 *Goal: Connect all systems into a self-sustaining, emergent civilization saga.*
+- [x] **Step 19: Dynamic Colony Identity & Taboos** — evolving community name; fear-based taboos (e.g. shunning the Ruins).
+- [x] **Step 20: The Voice in the Sky & Camp Shrines** — frequent god-whisper recipients become Prophets; shrines + offerings.
+- [x] **Step 21: Physical Folklore & Herbal Medicine** — cave murals/totems with positive moodlets; medicinal herb salves.
+- [x] **Step 22: The Domino Effect (Total Interconnection)** — full causal loop closed (hazard → fire → morale → break → grave → legend → tradition).
 
-### Step 19: Dynamic Colony Identity & Taboos
-- [x] The colony earns an evolving community name based on what it survives (*The Hearthfolk*, *The Ashen Kin*).
-- [x] Emergent cultural taboos develop naturally (e.g. fearing the Ruins after casualties, causing low-bravery pawns to avoid those tiles).
-
-### Step 20: The Voice in the Sky & Camp Shrines
-- [x] Colonists who receive frequent God whispers (`!say`) become spiritual leaders or "Prophets."
-- [x] The colony builds small shrines and leaves food offerings at camp to appease the Creator.
-
-### Step 21: Physical Folklore & Herbal Medicine
-- [x] Artisans paint cave murals or carve wooden totems celebrating major historical events, giving future generations positive moodlets.
-- [x] Foragers gather medicinal herbs from meadows to brew salves and nurse sick colonists back to health.
-
-### Step 22: The Domino Effect (Total Interconnection)
-- [x] Close the full causal loop:
-  - [x] *Hazard strikes → Wood stock burns → Campfire dies → Morale collapses → Berserk break → Ancestor falls → Grave marked → Legend carved into Monolith → New tradition forged.*
+### Phase 6: The Live Isometric Visual Engine & Discord Activity
+*Goal: Turn the simulation into a real-time, 60 FPS floating diorama viewable inside Discord voice channels.*
+- [x] **Step 1: Lightweight State Broadcast** — WebSocket feed broadcasting a clean JSON snapshot per tick (tiny RAM footprint).
+- [x] **Step 2: The Floating Isometric Diorama Client** — 5×5 grid as a cutaway island cube; walk interpolation (0–4s), bubbles (4–12s), looping action animations (12–60s), continuous particles.
+- [x] **Step 3: Comic Speech & Thought Bubbles** — speech `quote` bubbles, `inner_monologue` thought clouds, status emotes.
+- [x] **Step 4: Full Interactive On-Screen Dashboard (HUD)** — snapshot extensions (resources aggregate, dossier fields, lore payloads) + client HUD (top bar, narrative log, click-to-inspect dossiers, lore archives).
+- [x] **Step 5: ngrok Tunnel & Discord Activity Embedding** — static domain `budget-universe-manila.ngrok-free.dev`, Rocket Activity icon launch, no URL rotation.
 
 ---
 
-## Phase 6: The Live Isometric Visual Engine & Discord Activity
-*Goal: Turn the simulation into a real-time, 60 FPS floating diorama that members can watch directly inside Discord voice channels.*
+## 🎨 Phase 6 (continued): The Gorgeous Diorama — Visual Polish Pass
+*Goal: Take the working diorama from "small flat sticker in a black void" to a cozy, close, polished indie-game look — scale/depth, real sprites, un-stacked pawns, a framed RPG HUD, and ambient juice.*
 
-### Step 1: Lightweight State Broadcast
-- [x] Set up a minimal WebSocket feed in your backend that broadcasts a clean JSON snapshot of the world whenever a tick completes.
-- [x] Keep it ultra-lightweight so it consumes barely any extra RAM on your 2 GB container while running quietly in the background.
+### Step 6: Scale, Depth & the Floating-Island Look
+- [ ] **Zoom the camera in**: scale the board so the 5×5 island fills ~55–65% of the screen height — cozy, close, and detailed instead of tiny and far away.
+- [ ] **3D thickness**: below the grass edge add a 20–30 px dirt drop, dark rock strata, and dangling roots → a real floating diorama cube (upgrade the current flat cutaway diamonds).
+- [ ] **Soft ground shadow**: blurred dark oval beneath the floating island for elevation + lighting.
+- [ ] **Atmospheric background**: replace the pitch-black void with a deep gradient (e.g. midnight navy on a Winter Night), faint twinkling stars, and a distant mountain silhouette.
 
-### Step 2: The Floating Isometric Diorama Client
-- [x] Build a lightweight browser view that renders the 5×5 grid as an isometric floating island cube with cutaway dirt and stone layers underneath.
-- [x] Use **Client-Side Interpolation** so the 60-second tick feels like a live game:
-  - [x] Seconds 0 to 4: Pawns walk diagonally across the diamond grid to their destination.
-  - [x] Seconds 4 to 12: Speech and thought bubbles float and fade.
-  - [x] Seconds 12 to 55: Continuous looping animations (swinging axes at trees, foraging bushes, sitting by the fire, sleeping).
-  - [x] Continuous: Atmospheric particle loops (river water flowing, campfire smoke rising, wind swaying trees).
+### Step 7: Free Isometric RPG Asset Packs (CC0 / Public Domain)
+*No drawing from scratch — vendor proven packs locally so the client stays offline with zero runtime downloads.*
+- [ ] **Kenney's Isometric Landscape & Mini-Dungeon** (kenney.nl, public domain): grass tiles, snowy pine trees, stone rocks, water tiles, modular ruin walls → replace flat color diamonds + emoji glyphs.
+- [ ] **Kenney's Tiny Characters / Micro RPG**: 16×16 / 32×32 standing pawn sprites (lumberjack, scout, mage, villager) with idle + walking poses.
+- [ ] **Animal sprites**: wolf, bear, deer, rabbit sprites from the same/vetted packs.
+- [ ] **Animated campfire**: 4-frame campfire sprite so the camp center feels warm and alive.
+- [ ] **Optional extras** (OpenGameArt / CraftPix CC0): farm crops (wheat sprouts → ripe stalks), snow-covered winter pines, stone masonry.
+- [ ] **Attribution**: record pack names, sources, and CC0/Public-Domain license notes in `README.md`.
 
-### Step 3: Comic Speech & Thought Bubbles
-- [x] **Outward Speech (`quote`)**: Comic-style dialogue bubbles pop up above character sprites for nearby colonists to "hear."
-- [x] **Inner Thoughts (`inner_monologue`)**: Soft, cloudy dream bubbles float above pawns, revealing their secret schemes, fears, or romantic feelings to the viewer.
-- [x] **Status Emotes**: Floating icons over heads for chopping, heart emotes for courtship, red anger marks during fights, and sleeping Zzz's.
+### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
+- [ ] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.
+- [ ] **Standing sprites**: replace the circular portrait tokens with standing character sprites that stand on the grass.
+- [ ] **Hovering name tags**: show names on hover (or crisp small name pills under each pawn's feet) instead of always-overlapping labels.
+- [ ] **Per-pawn bubbles**: speech, thought, and 💤 sleep icons float above the *individual* sprite (honoring the slot offset), not covering the whole tile.
 
-### Step 4: Full Interactive On-Screen Dashboard (HUD)
-Move all the heavy information out of Discord and onto the web screen:
+### Step 9: Frame the Game — HUD Upgrade
+- [ ] **Top bar (world header)**: styled wooden/slate banner background; slightly larger resource icons with clear numbers + tooltips; subtle frost texture along the top/bottom edges in Winter.
+- [ ] **Right-side pawn roster drawer**: a clean sidebar with a mini card per colonist — portrait, name, mini health bar, energy bar, current action — at-a-glance status without squinting at the map.
+- [ ] **Bottom-left chronicle log**: RPG dialogue-parchment or dark-glass card styling; highlight the AI Director's world narrative with an accent color/italic, distinct from dry action lines like *"Fern moves W"*.
 
-#### Part 4a: Backend snapshot extension (`feed.py` + tests)
-- [x] Extend the world snapshot with a **colony resource aggregate** (biome wood/food + summed stone/fiber from rucksacks) for the Top Bar.
-- [x] Extend per-pawn snapshot entries with the **full dossier**: `gear` (main_hand/body), active `goal`, `skills`, `relationships`, lineage (`partners`, `mother_id`, `father_id`, `partner_id`), `counters`, and `status`.
-- [x] Add **lore payloads** to the snapshot: `graveyard` epitaphs, `monument` runes/inscription, Architect `patches`, and the seasonal `chronicle`.
-- [x] Tests: assert the extended snapshot shape (dossier fields, aggregate, lore payloads) in `tests/test_stage26.py`.
+### Step 10: Ambient Visual Juice
+- [ ] **Drifting snow FX**: lightweight canvas particle layer dropping soft white snowflakes when it's Winter / Snow.
+- [ ] **Night campfire glow**: warm soft orange radial glow on the tiles immediately around the camp while the outer forest stays in shadow.
+- [ ] **Named legendary beasts**: named predators (e.g. *The Grey Terror* from the log) render as a menacing dark wolf sprite snapping at pawns, distinct from normal wildlife.
 
-#### Part 4b: Client HUD (`web/app.js` + `style.css` + `index.html`)
-- [x] **Top Bar**: Live Season, Weather, Day/Night clock, Campfire %, Shelter %, and Wood/Food/Stone/Fiber resource stockpiles.
-- [x] **Bottom Narrative Ticker**: Real-time scrolling feed of the AI Director's 2-sentence world summary and recent event logs.
-- [x] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
-- [x] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
-
-### Step 5: ngrok Tunnel & Discord Activity Embedding
-*Deployment step — everything below happens on the LXC (or in the Discord Developer Portal), not in the repo.*
-- [x] (Repo prep) Add `deploy/ngrok.service` (systemd, static domain `budget-universe-manila.ngrok-free.dev`, inline `--authtoken=` placeholder, runs as root).
-- [x] On the LXC: install ngrok to `/usr/local/bin/ngrok`, paste the dashboard authtoken into the unit's `ExecStart`, `cp deploy/ngrok.service /etc/systemd/system/` + `systemctl enable --now ngrok` (verified working — static domain never rotates, no re-mapping after restarts).
-- [x] In the Discord Developer Portal: enable the app for Activities and paste `https://budget-universe-manila.ngrok-free.dev/` under **Activities / URL Mappings** (set once — the domain is stable).
-- [x] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
+### Cross-stage verification (each part: implement → test → commit)
+- [ ] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
+- [ ] `node --check web/app.js` on touched client JS.
+- [ ] Keep `README.md` (feature/run notes) and `paper.txt` (client description in §Implementation) in sync in the same part/commit.
+- [ ] Live sanity check after the pass: open `https://budget-universe-manila.ngrok-free.dev/` (or the Rocket Activity in a voice channel) and confirm the zoom, sprites, slotting, HUD, and snow/glow all render.
 
 ---
 
