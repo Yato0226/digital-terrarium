@@ -119,16 +119,68 @@ def test_snapshot_shape():
     snap = feed.build_snapshot()
     for key in (
         "tick", "season", "weather", "day", "extinct", "colony", "biome",
-        "grid", "pawns", "wildlife", "visitors", "raiders", "events",
+        "resources", "grid", "pawns", "wildlife", "visitors", "raiders",
+        "events", "lore",
     ):
         assert key in snap
     assert snap["grid"] == state.DEFAULT_GRID
     assert snap["tick"] == state.world_state["tick"]
     p = snap["pawns"][0]
-    for key in ("id", "name", "pos", "prev_pos", "vitals", "inventory", "action",
-                "flavor", "quote", "inner_monologue", "traits"):
+    for key in ("id", "name", "pos", "prev_pos", "vitals", "inventory", "gear",
+                "goal", "skills", "relationships", "partners", "mother_id",
+                "father_id", "partner_id", "counters", "action", "flavor",
+                "quote", "inner_monologue", "traits"):
         assert key in p
     assert p["prev_pos"] == p["pos"]  # nothing moved yet
+
+
+def test_snapshot_resources_aggregate():
+    state.world_state["biome"]["wood_stock"] = 12
+    state.world_state["biome"]["food_stock"] = 7
+    state.world_state["pawns"]["pawn_1"]["inventory"]["stone"] = 3
+    state.world_state["pawns"]["pawn_1"]["inventory"]["fiber"] = 5
+    snap = feed.build_snapshot()
+    assert snap["resources"] == {"wood": 12, "food": 7, "stone": 3, "fiber": 5}
+
+
+def test_snapshot_dossier_fields():
+    pawn = state.world_state["pawns"]["pawn_1"]
+    pawn["gear"]["main_hand"] = "Stone Axe"
+    pawn["goal"] = {"kind": "gather_wood", "needed": 10, "progress": 4}
+    pawn["skills"]["combat"] = 3
+    pawn["relationships"]["pawn_2"] = 30
+    pawn["partners"] = ["pawn_2"]
+    pawn["counters"]["god_whispers"] = 1
+    snap = feed.build_snapshot()
+    p = next(x for x in snap["pawns"] if x["id"] == "pawn_1")
+    assert p["gear"]["main_hand"] == "Stone Axe"
+    assert p["goal"]["kind"] == "gather_wood"
+    assert p["skills"]["combat"] == 3
+    assert p["relationships"] == {"pawn_2": 30}
+    assert p["partners"] == ["pawn_2"]
+    assert p["counters"]["god_whispers"] == 1
+
+
+def test_snapshot_lore_payloads():
+    ws = state.world_state
+    ws["graveyard"].append(
+        {"id": "pawn_x", "name": "Old Doe", "title": "the Ancient",
+         "cause": "old age", "died_tick": 99, "born_tick": 1, "epitaph": "gone"}
+    )
+    ws["monument"]["done"] = True
+    ws["monument"]["inscription"] = "We carved this."
+    ws["monument"]["runes"].append({"tick": 50, "title": "T1", "text": "R1"})
+    ws["patches"].append({"version": "v1.1", "title": "Patch", "notes": []})
+    ws["chronicle"].append({"season": "Winter", "title": "C1", "text": "T", "tick": 60})
+    snap = feed.build_snapshot()
+    lore = snap["lore"]
+    assert lore["graveyard"][0]["name"] == "Old Doe"
+    assert lore["graveyard"][0]["epitaph"] == "gone"
+    assert lore["monument"]["done"] is True
+    assert lore["monument"]["inscription"] == "We carved this."
+    assert lore["monument"]["runes"][0]["title"] == "T1"
+    assert lore["patches"][0]["version"] == "v1.1"
+    assert lore["chronicle"][0]["title"] == "C1"
 
 
 def test_snapshot_tracks_movement():

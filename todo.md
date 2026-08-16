@@ -119,10 +119,10 @@
 Move all the heavy information out of Discord and onto the web screen:
 
 #### Part 4a: Backend snapshot extension (`feed.py` + tests)
-- [ ] Extend the world snapshot with a **colony resource aggregate** (biome wood/food + summed stone/fiber from rucksacks) for the Top Bar.
-- [ ] Extend per-pawn snapshot entries with the **full dossier**: `gear` (main_hand/body), active `goal`, `skills`, `relationships`, lineage (`partners`, `mother_id`, `father_id`, `partner_id`), `counters`, and `status`.
-- [ ] Add **lore payloads** to the snapshot: `graveyard` epitaphs, `monument` runes/inscription, Architect `patches`, and the seasonal `chronicle`.
-- [ ] Tests: assert the extended snapshot shape (dossier fields, aggregate, lore payloads) in `tests/test_stage26.py`.
+- [x] Extend the world snapshot with a **colony resource aggregate** (biome wood/food + summed stone/fiber from rucksacks) for the Top Bar.
+- [x] Extend per-pawn snapshot entries with the **full dossier**: `gear` (main_hand/body), active `goal`, `skills`, `relationships`, lineage (`partners`, `mother_id`, `father_id`, `partner_id`), `counters`, and `status`.
+- [x] Add **lore payloads** to the snapshot: `graveyard` epitaphs, `monument` runes/inscription, Architect `patches`, and the seasonal `chronicle`.
+- [x] Tests: assert the extended snapshot shape (dossier fields, aggregate, lore payloads) in `tests/test_stage26.py`.
 
 #### Part 4b: Client HUD (`web/app.js` + `style.css` + `index.html`)
 - [ ] **Top Bar**: Live Season, Weather, Day/Night clock, Campfire %, Shelter %, and Wood/Food/Stone/Fiber resource stockpiles.

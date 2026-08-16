@@ -305,6 +305,19 @@ def build_snapshot(decisions=None):
                 "inventory": {
                     k: p["inventory"][k] for k in ("wood", "food", "stone", "fiber")
                 },
+                # Click-to-inspect dossier fields (HUD side card).
+                "gear": {
+                    "main_hand": p["gear"].get("main_hand"),
+                    "body": p["gear"].get("body"),
+                },
+                "goal": p.get("goal"),
+                "skills": dict(p.get("skills", {})),
+                "relationships": dict(p.get("relationships", {})),
+                "partners": list(p.get("partners", [])),
+                "mother_id": p.get("mother_id"),
+                "father_id": p.get("father_id"),
+                "partner_id": p.get("partner_id"),
+                "counters": dict(p.get("counters", {})),
                 "action": d.get("action"),
                 "flavor": d.get("flavor"),
                 "direction": d.get("direction"),
@@ -319,6 +332,8 @@ def build_snapshot(decisions=None):
         )
     _prev_positions.clear()
     _prev_positions.update(now)
+
+    monument = ws.get("monument", {})
     return {
         "tick": ws["tick"],
         "season": biome["season"],
@@ -329,6 +344,14 @@ def build_snapshot(decisions=None):
         "biome": {
             k: biome.get(k)
             for k in ("campfire", "shelter", "wood_stock", "food_stock", "granary", "palisade")
+        },
+        # Colony stockpile aggregate for the HUD top bar: wood/food are the camp
+        # stores, stone/fiber only exist in rucksacks (engine._colony_resource).
+        "resources": {
+            "wood": biome.get("wood_stock", 0),
+            "food": biome.get("food_stock", 0),
+            "stone": engine._colony_resource("stone"),
+            "fiber": engine._colony_resource("fiber"),
         },
         "grid": [row[:] for row in ws["grid"]],
         "pawns": pawns,
@@ -358,6 +381,20 @@ def build_snapshot(decisions=None):
             for r in ws.get("raiders", [])
         ],
         "events": [dict(ev) for ev in ws["history"]],
+        # Lore archives (read-only browsing in the client): graveyard epitaphs,
+        # Monolith runes/inscription, Architect patch notes, seasonal chronicle.
+        "lore": {
+            "graveyard": [dict(g) for g in ws.get("graveyard", [])],
+            "monument": {
+                "wood": monument.get("wood", 0),
+                "stone": monument.get("stone", 0),
+                "done": monument.get("done", False),
+                "inscription": monument.get("inscription"),
+                "runes": [dict(r) for r in monument.get("runes", [])],
+            },
+            "patches": [dict(p) for p in ws.get("patches", [])],
+            "chronicle": [dict(c) for c in ws.get("chronicle", [])],
+        },
     }
 
 
