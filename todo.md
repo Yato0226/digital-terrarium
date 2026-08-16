@@ -99,8 +99,8 @@
 *Goal: Turn the simulation into a real-time, 60 FPS floating diorama that members can watch directly inside Discord voice channels.*
 
 ### Step 1: Lightweight State Broadcast
-- [ ] Set up a minimal WebSocket feed in your backend that broadcasts a clean JSON snapshot of the world whenever a tick completes.
-- [ ] Keep it ultra-lightweight so it consumes barely any extra RAM on your 2 GB container while running quietly in the background.
+- [x] Set up a minimal WebSocket feed in your backend that broadcasts a clean JSON snapshot of the world whenever a tick completes.
+- [x] Keep it ultra-lightweight so it consumes barely any extra RAM on your 2 GB container while running quietly in the background.
 
 ### Step 2: The Floating Isometric Diorama Client
 - [ ] Build a lightweight browser view that renders the 5×5 grid as an isometric floating island cube with cutaway dirt and stone layers underneath.

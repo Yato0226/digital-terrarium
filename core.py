@@ -6,6 +6,7 @@ import requests
 import config
 import engine
 import events
+import feed
 import map_renderer
 import prompts
 import schema
@@ -1038,6 +1039,7 @@ async def run_tick():
                 state.world_state["tick"] += 1
             _notify_extinction()
             state.save_state()
+            await feed.broadcast(feed.build_snapshot())
             return
 
         try:
@@ -1095,9 +1097,26 @@ async def run_tick():
         state.god_whispers.clear()
         state.world_state["tick"] += 1
         state.save_state()
+        # Client snapshot: the LLM's quote/thoughts ride along with the resolved
+        # actions so the web diorama can show bubbles and looping animations.
+        snapshot = feed.build_snapshot(
+            {
+                pid: {
+                    "action": action,
+                    "flavor": flavor,
+                    "direction": target if action == "Move" else None,
+                    "quote": getattr(getattr(data, pid, None), "quote", None),
+                    "inner_monologue": getattr(
+                        getattr(data, pid, None), "inner_monologue", None
+                    ),
+                }
+                for pid, (action, target, flavor, _goal, _title) in intents.items()
+            }
+        )
         print(f"✅ Tick complete. {state.status_summary()}")
 
     # Lock released: god commands can run during the slow LLM/webhook I/O.
+    await feed.broadcast(snapshot)
     pending_season = state.pending_chronicle
     state.pending_chronicle = None
     if pending_season:

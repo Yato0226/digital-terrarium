@@ -6,7 +6,9 @@ from discord.ext import commands
 
 import core
 import engine
+import feed
 import state
+import config
 from config import BOT_COMMAND_PREFIX, GOD_CHANNEL_NAME
 
 intents = discord.Intents.default()
@@ -783,6 +785,11 @@ async def on_ready():
     core.notifier = _dm_adopter
     print(f"🤖 Logged in as {bot.user}")
     print(f"📡 God channel: {GOD_CHANNEL_NAME or 'any channel'}")
+    if config.FEED_ENABLED:
+        try:
+            await feed.start()
+        except OSError as e:
+            print(f"⚠️ World feed failed to start (port {config.FEED_PORT} in use?): {e}")
     if tick_task is None or tick_task.done():
         tick_task = asyncio.create_task(core.tick_loop())
     if state.world_state.get("extinct"):

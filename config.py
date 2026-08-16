@@ -19,3 +19,8 @@ ARCHITECT_TEMPERATURE = float(os.getenv("ARCHITECT_TEMPERATURE", "0.8"))
 COUNCIL_TEMPERATURE = float(os.getenv("COUNCIL_TEMPERATURE", "0.8"))
 TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "60"))
 NOTIFY_USER_ID = os.getenv("NOTIFY_USER_ID", "769082859557355542")
+
+# Phase 6 (Step 1): lightweight world-state broadcast to the web diorama.
+FEED_ENABLED = os.getenv("FEED_ENABLED", "1") == "1"
+FEED_HOST = os.getenv("FEED_HOST", "0.0.0.0")
+FEED_PORT = int(os.getenv("FEED_PORT", "8900"))
