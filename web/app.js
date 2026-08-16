@@ -846,10 +846,14 @@ function makeRosterCard(p) {
   name.textContent = p.title ? `${p.name} ${p.title}` : p.name;
   const hp = document.createElement("div");
   hp.className = "r-bar";
-  hp.innerHTML = `<i class="hp"></i>`;
+  const hpFill = document.createElement("i");
+  hpFill.className = "r-hp";
+  hp.appendChild(hpFill);
   const en = document.createElement("div");
   en.className = "r-bar";
-  en.innerHTML = `<i class="en"></i>`;
+  const enFill = document.createElement("i");
+  enFill.className = "r-en";
+  en.appendChild(enFill);
   const act = document.createElement("div");
   act.className = "r-act";
   act.textContent = actionLabel(p);

@@ -610,8 +610,8 @@ body::before {
   width: 0;
   transition: width .5s ease;
 }
-.r-bar i.hp { background: linear-gradient(90deg, #4caf50, #81c784); }
-.r-bar i.en { background: linear-gradient(90deg, #f9a825, #ffd54f); }
+.r-bar i.r-hp { background: linear-gradient(90deg, #4caf50, #81c784); }
+.r-bar i.r-en { background: linear-gradient(90deg, #f9a825, #ffd54f); }
 .r-act {
   margin-top: 3px;
   font-size: 10px;
