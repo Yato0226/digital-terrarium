@@ -103,17 +103,17 @@
 - [x] Keep it ultra-lightweight so it consumes barely any extra RAM on your 2 GB container while running quietly in the background.
 
 ### Step 2: The Floating Isometric Diorama Client
-- [ ] Build a lightweight browser view that renders the 5×5 grid as an isometric floating island cube with cutaway dirt and stone layers underneath.
-- [ ] Use **Client-Side Interpolation** so the 60-second tick feels like a live game:
-  - [ ] Seconds 0 to 4: Pawns walk diagonally across the diamond grid to their destination.
-  - [ ] Seconds 4 to 12: Speech and thought bubbles float and fade.
-  - [ ] Seconds 12 to 55: Continuous looping animations (swinging axes at trees, foraging bushes, sitting by the fire, sleeping).
-  - [ ] Continuous: Atmospheric particle loops (river water flowing, campfire smoke rising, wind swaying trees).
+- [x] Build a lightweight browser view that renders the 5×5 grid as an isometric floating island cube with cutaway dirt and stone layers underneath.
+- [x] Use **Client-Side Interpolation** so the 60-second tick feels like a live game:
+  - [x] Seconds 0 to 4: Pawns walk diagonally across the diamond grid to their destination.
+  - [x] Seconds 4 to 12: Speech and thought bubbles float and fade.
+  - [x] Seconds 12 to 55: Continuous looping animations (swinging axes at trees, foraging bushes, sitting by the fire, sleeping).
+  - [x] Continuous: Atmospheric particle loops (river water flowing, campfire smoke rising, wind swaying trees).
 
 ### Step 3: Comic Speech & Thought Bubbles
-- [ ] **Outward Speech (`quote`)**: Comic-style dialogue bubbles pop up above character sprites for nearby colonists to "hear."
-- [ ] **Inner Thoughts (`inner_monologue`)**: Soft, cloudy dream bubbles float above pawns, revealing their secret schemes, fears, or romantic feelings to the viewer.
-- [ ] **Status Emotes**: Floating icons over heads for chopping, heart emotes for courtship, red anger marks during fights, and sleeping Zzz's.
+- [x] **Outward Speech (`quote`)**: Comic-style dialogue bubbles pop up above character sprites for nearby colonists to "hear."
+- [x] **Inner Thoughts (`inner_monologue`)**: Soft, cloudy dream bubbles float above pawns, revealing their secret schemes, fears, or romantic feelings to the viewer.
+- [x] **Status Emotes**: Floating icons over heads for chopping, heart emotes for courtship, red anger marks during fights, and sleeping Zzz's.
 
 ### Step 4: Full Interactive On-Screen Dashboard (HUD)
 Move all the heavy information out of Discord and onto the web screen:

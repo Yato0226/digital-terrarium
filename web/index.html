@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terrarium — live diorama</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <canvas id="island" width="1000" height="640"></canvas>
+      <div id="sprites"></div>
+      <div id="bubbles"></div>
+      <div id="emotes"></div>
+      <div id="ticker" class="hidden"></div>
+    </div>
+    <div id="caption">
+      <span id="title">🌿 connecting…</span>
+      <span id="conn" class="off">○ offline</span>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

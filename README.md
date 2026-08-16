@@ -60,6 +60,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Milestone news hub** — Discord no longer broadcasts every tick. Embeds are reserved for high-impact moments: 📜 a new-era chronicle each season, 🪦 fallen-hero eulogies (tombstone inscription + cause of death), ⚙️ annual patch notes, and 🥷🔥🌊☠️ breaking crisis alerts (raids, wildfires, floods, miasma, extinction)
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the milestone embeds
+- **Live isometric web diorama** — a zero-dependency asyncio server (`feed.py`, hand-rolled RFC 6455 WebSocket + static files) broadcasts a clean JSON snapshot after every tick, and a vanilla HTML/CSS/JS client (`web/`) renders it as a floating isometric island: pawns walk diagonally to their tiles (0–4 s), comic speech and cloudy thought bubbles float by (4–12 s), looping animations and particles (campfire smoke, river shimmer, swaying trees, night tint) run the rest of the tick. Open `http://<host>:8900/` in a browser (auto-reconnects; `FEED_PORT`/`FEED_HOST`/`FEED_ENABLED` configurable)
 - **Auto-persist** — survives restarts; `terrarium_state.json` auto-migrates from older saves
 
 ## Quick start
@@ -80,6 +81,8 @@ python main.py
 | `GOD_CHANNEL_NAME` | — | Restrict god commands to one channel (default: any) |
 | `BOT_COMMAND_PREFIX` | — | Command prefix (default `!`) |
 | `TICK_INTERVAL_SECONDS` | — | Seconds per tick (default 60) |
+| `FEED_ENABLED` | — | Serve the live web diorama (default `1`; set `0` to disable) |
+| `FEED_HOST` / `FEED_PORT` | — | Bind host/port for the diorama feed (default `0.0.0.0:8900`; browser clients connect to `http://<host>:8900/`) |
 | `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` | — | Primary/fallback model ids |
 | `LLM_TEMPERATURE` | — | Sampling temperature (default 0.7) |
 | `NOTIFY_USER_ID` | — | Discord user id pinged on total extinction (defaults to a configured id) |

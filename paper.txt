@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-Running persistent LLM applications on a small home server requires keeping host RAM and compute footprints minimal without sacrificing model capability. This paper demonstrates the implementation of an autonomous multi-agent ecosystem (``Digital Terrarium'') running continuously in a low-resource environment. All language-model work is offloaded to Google's hosted Gemini API, which serves the open-weight Gemma 4 family, a 31B dense model (\texttt{gemma-4-31b-it}) as the primary narrator with automatic fallback to the 26B MoE variant (\texttt{gemma-4-26b-a4b-it}), so the host needs only a 2 GB LXC container on a Proxmox VE hypervisor and no local inference hardware. The system adopts an \emph{AI Director} pattern: the LLM proposes behavioural intent for each agent, while a deterministic Python engine owns all state consequences. Per-tick, \texttt{schema.py} rebuilds a Pydantic model from the current active-agent roster, embedding one \texttt{AgentDecision} field per pawn with \texttt{action}, \texttt{narrative}, \texttt{quote}, \texttt{inner\_monologue}, \texttt{direction} (for Move), \texttt{target} (for Attack/Share/Mate, built from \texttt{Literal[tuple(pawn\_ids)]} per PEP 586 Python 3.10 compatibility), a free-form \texttt{flavor} verb (for the open-ended \texttt{Interact} action), and a \texttt{new\_goal} wish the engine may adopt into a tracked personal goal. This schema is passed to the Gemini API as a structured-output schema (\texttt{response\_schema}), which both forces valid JSON and suppresses the model's reasoning channel. The response is validated again with Pydantic, and any failed parse skips mutation and increments the tick. Any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, and the LLM merely narrates. The world is exposed through a Discord bot that lets a ``god'' spawn agents, edit stats, and issue enforced orders. With the model no longer resident on the host, memory is flat and Out-Of-Memory (OOM) faults are structurally impossible; daily quota headroom, structured-output reliability, and coherent agent interactions are evaluated over extended runs.
+Running persistent LLM applications on a small home server requires keeping host RAM and compute footprints minimal without sacrificing model capability. This paper demonstrates the implementation of an autonomous multi-agent ecosystem (``Digital Terrarium'') running continuously in a low-resource environment. All language-model work is offloaded to Google's hosted Gemini API, which serves the open-weight Gemma 4 family: a 31B dense model (\texttt{gemma-4-31b-it}) as the primary narrator with automatic fallback to the 26B MoE variant (\texttt{gemma-4-26b-a4b-it}), so the host needs only a 2~GB LXC container on a Proxmox VE hypervisor and no local inference hardware. The system adopts an \emph{AI Director} pattern: the LLM proposes behavioural intent for each agent, while a deterministic Python engine owns all state consequences. Per-tick, \texttt{schema.py} rebuilds a Pydantic model from the current active-agent roster, embedding one \texttt{AgentDecision} field per pawn with \texttt{action}, \texttt{narrative}, \texttt{quote}, \texttt{inner\_monologue}, \texttt{direction} (for Move), \texttt{target} (for Attack/Share/Mate, built from \texttt{Literal[tuple(pawn\_ids)]} per PEP 586 Python 3.10 compatibility), a free-form \texttt{flavor} verb (for the open-ended \texttt{Interact} action), a \texttt{new\_goal} wish the engine may adopt into a tracked personal goal, and a \texttt{new\_title} for earned dynamic roles. This schema is passed to the Gemini API as a structured-output schema (\texttt{response\_schema}), which both forces valid JSON and suppresses the model's reasoning channel. The response is validated again with Pydantic, and any failed parse skips mutation and increments the tick. Any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, and the LLM merely narrates. The world is exposed through a Discord bot that lets a ``god'' spawn agents, edit stats, and issue enforced orders. With the model no longer resident on the host, memory is flat and Out-Of-Memory (OOM) faults are structurally impossible; daily quota headroom, structured-output reliability, and coherent agent interactions are evaluated over extended runs.
 \end{abstract}
 
 \section{Introduction}
@@ -110,12 +110,12 @@ Figure~\ref{fig:architecture} shows the overall system: the AI Director sits bet
 \label{fig:architecture}
 \end{figure}
 
-The system is a single Python process split into focused modules: \texttt{state.py} (world state and persistence), \texttt{schema.py} (per-tick LLM output models), \texttt{prompts.py} (system prompt and prompt builder), \texttt{llm.py} (hosted Gemini API client with primary/fallback models), \texttt{engine.py} (deterministic rules), \texttt{events.py} (structured event log), \texttt{map\_renderer.py} (pure-Python PNG map writer), \texttt{core.py} (tick orchestration and scheduler), and \texttt{bot.py} (Discord god interface). The data flow per tick is:
+The system is a single Python process split into focused modules: \texttt{state.py} (world state and persistence), \texttt{schema.py} (per-tick LLM output models), \texttt{prompts.py} (system prompt and prompt builder), \texttt{llm.py} (hosted Gemini API client with primary/fallback models), \texttt{engine.py} (deterministic rules), \texttt{events.py} (structured event log), \texttt{map\_renderer.py} (pure-Python PNG map writer), \texttt{core.py} (tick orchestration and scheduler), and \texttt{bot.py} (Discord god interface). A companion zero-dependency server, \texttt{feed.py} (hand-rolled RFC 6455 WebSocket plus static HTTP on asyncio, no third-party websocket library), broadcasts a compact JSON snapshot after every completed tick to a vanilla HTML/CSS/JS client that renders the world as a floating isometric diorama in a browser: the 5$\times$5 grid becomes a cutaway island, pawns interpolate their tile walks in the first seconds of each tick, comic speech and cloudy thought bubbles float and fade, looping action animations and atmospheric particles (campfire smoke, river shimmer, swaying trees) carry the rest of the tick, and status emotes react to per-tick events. The client uses emoji and procedural drawing only, so it stays offline and adds no asset footprint or external dependencies. The data flow per tick is:
 
 \begin{enumerate}
-\item \textbf{Schema rebuild}: \texttt{schema.py} constructs a Pydantic model containing one decision field per \emph{active} agent, plus optional \texttt{quote}, \texttt{inner\_monologue}, and Move \texttt{direction} fields and a \texttt{target} literal built from the current roster. Adding or removing agents therefore requires no schema edits.
+\item \textbf{Schema rebuild}: \texttt{schema.py} constructs a Pydantic model containing one decision field per \emph{active} agent, plus optional \texttt{quote}, \texttt{inner\_monologue}, and Move \texttt{direction} fields, a \texttt{target} literal built from the current roster, a \texttt{flavor} verb for Interact, and fields for personal goals and custom titles. Adding or removing agents therefore requires no manual schema edits.
 \item \textbf{Decision}: the LLM is prompted with current vitals, skills, personality, relationships, gear, map positions, and the event ring buffer. The per-tick Pydantic schema is passed to the API as a structured-output schema (\texttt{response\_schema}) that both forces valid JSON and suppresses the model's reasoning channel; the response is validated again with Pydantic, and a failed parse skips mutation and increments the tick.
-\item \textbf{Intent override}: any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, the LLM merely narrates.
+\item \textbf{Intent override}: any \texttt{!order} placed by the god replaces the LLM's proposed action for that agent, Python enforces it, and the LLM merely narrates.
 \item \textbf{Deterministic resolution}: \texttt{engine.resolve\_actions()} validates the intent (energy cost, target legality), computes consequences (damage, resources, skill XP, relationship deltas), and emits structured events.
 \item \textbf{Save inside lock}: \texttt{terrarium\_state.json} is persisted (auto-migrated on startup), the tick counter is incremented, and the tick lock is released. Then the best-effort eulogy LLM generates tombstone inscriptions for the newly fallen (posted immediately as dedicated eulogy embeds), and a Discord state embed is posted outside the lock only on high-impact ticks (season change, death, birth, feast, quest completion, or a crisis such as a raid, wildfire, flood, or miasma) so quiet ticks do not spam the channel.
 \end{enumerate}
@@ -179,13 +179,15 @@ Agent state is intentionally rich and nested: \texttt{vitals} (HP, energy, hunge
 \midrule
 Rest   & 0  & +10 HP, +20 energy \\
 Chop   & 10 & Forest tiles only; +3--7 wood (scaled by woodcutting), depletes \texttt{wood\_stock}, +1 woodcutting XP; Stone Axe doubles the yield \\
-Scout  & 15 & chance of +2--6 food (scaled by scouting), +1 scouting XP; Ruins give richer loot with a stumble risk and a chance to unearth The Sunken Tribe's secrets (a lore fragment, an ancient blueprint, or a carved warning the colony heeds); Quarry yields stone \\
+Scout  & 15 & chance of +2--6 food (scaled by scouting), +1 scouting XP; Ruins give richer loot with a stumble risk and a chance to unearth The Sunken Tribe's secrets (a lore fragment, an ancient blueprint, or a carved warning the colony heeds); Quarry yields stone; reveals misted perimeter tiles \\
 Forage & 10 & Meadow/River tiles only; +2--6 food (capped by \texttt{food\_stock}), depletes stock, +1 scouting XP; Meadows also yield fiber \\
-Build  & 15 & Camp tile only; auto-crafts the best affordable tool (Stone Axe 3W+2S, Flint Spear 2W+1S, Warm Coat 5F) before spending 3 wood on +8 shelter/campfire; once the camp is fully fortified (shelter/fire 100, granary, palisade 3) it raises the Ancestral Monolith (5 wood + 5 stone, up to 20/15) \\
-Share  & 5  & same/adjacent tile; transfer 1 food to target; +25 relationship and +5 morale for both \\
-Attack & 20 & same/adjacent tile; damage $= \max(1,\ 5 + \lfloor \text{combat}/2 \rfloor - \lfloor \text{target.combat}/4 \rfloor)$; Flint Spear adds 4; $-10/-15$ relationship deltas, +1 combat XP \\
-Move   & 5  & travel one tile N/S/E/W within the $5\times5$ grid; positions gate Chop/Forage/Build and close the distance for Attack/Share \\
-Interact & 5 & any free-form verb in \texttt{flavor}; engine buckets it by keyword: social (+5 morale, $\pm$10 relationship with a same-tile pawn), gather (small tile-gated yield), craft (+3 shelter at Camp), relax (+10 energy, +3 morale), train (+1 combat XP); unknown verbs still grant a safe +3 morale \\
+Build  & 15 & Camp tile only; auto-crafts the best affordable tool (Stone Axe 3W+2S, Flint Spear 2W+1S, Warm Coat 5F, or synthesized blueprint) before spending 3 wood on +8 shelter/campfire; builds Granary, Palisade, Ancestral Monolith (5W+5S up to 20/15), and Camp Shrine \\
+Share  & 5  & same/adjacent tile; transfer 1 food to target (pawn or visitor); +25 relationship and +5 morale for both; barters stone/fiber with visitors \\
+Attack & 20 & same/adjacent tile; damage $= \max(1,\ 5 + \lfloor \text{combat}/2 \rfloor - \lfloor \text{target.combat}/4 \rfloor)$; Flint Spear adds 4; $-10/-15$ relationship deltas, +1 combat XP; targets pawns, wildlife, visitors (plunder), or raiders \\
+Move   & 5  & travel one tile N/S/E/W within the $5\times5$ grid; positions gate Chop/Forage/Build and close distance for Attack/Share/Mate; blocked by cultural taboos for fearful pawns \\
+Mate   & 10 & same tile; court a mutually bonded partner ($\ge 25$ relationship in both directions, or established partners); opposite sex, non-kin; 50\% conception roll $\to$ 20-tick pregnancy; courts visitors to recruit \\
+Interact & 5 & any free-form verb in \texttt{flavor}; engine buckets it by keyword: social (+5 morale, $\pm$10 relationship), gather (small tile-gated yield), craft (+3 shelter at Camp), relax (+10 energy, +3 morale), train (+1 combat XP), farm (till meadow / harvest plot), pray (monolith oracle), offer (shrine tithe), sermon (prophet preaching), totem (carve milestone memory), herb (gather herbs / brew salve); unknown verbs grant safe +3 morale \\
+Expedition & 15 & map rim only; two colonists pack 5 rations each and leave the map for 15--20 ticks, returning with rare loot, exotic seeds, tamed pets, or battle scars \\
 \bottomrule
 \end{tabular}
 \caption*{\scriptsize All yields receive a $+10\%$ bonus while morale is above 80 (``Inspired''). Personal goals (\texttt{goal}) are proposed by the LLM in \texttt{new\_goal}, parsed and tracked by the engine, advanced by matching deeds, and pay $+15$ morale and skill XP on completion.}
@@ -222,20 +224,23 @@ Beyond the colonists, the world itself is alive. \texttt{world\_state} hosts the
 \caption{Staged Roadmap: how each stage added systems and which god view inspects them}
 \label{tab:stages}
 \small
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}p{0.12\textwidth}p{0.55\textwidth}p{0.25\textwidth}@{}}
 \toprule
-\textbf{Stage} & \textbf{Systems added} & \textbf{God view} \\
+\textbf{Stage / Phase} & \textbf{Systems Added} & \textbf{God View} \\
 \midrule
-1 & traits, moodlets, director hints & --- \\
-2 & wildlife, pets, granary, palisade & \texttt{!wildlife} \\
-3 & chronicle, heirlooms, adoptions, PNG map & \texttt{!chronicle} / \texttt{!heirlooms} \\
-4 & hazards: wildfire, flood, aurora, spores & --- \\
-5 & visitors & \texttt{!visitors} \\
-6 & Ancestral Monolith, farm plots & \texttt{!monument} \\
-7 & traditions, solstice feast, funerary rites & \texttt{!tradition} \\
-8 & scavenger raids & \texttt{!raiders} \\
-9 & architect patches, recipes, prophecies & \texttt{!recipes} / \texttt{!quests} / \texttt{!patchnotes} \\
-10 & milestone embeds, pawn biographies, generational dynasties, monolith oracle \& rune archive, The Sunken Tribe ruins, relational badges, blood feuds, dynamic roles, camp council & colony mandates & \texttt{!bio} / \texttt{!badges} / \texttt{!roles} / \texttt{!council} \\
+Stage 1 & Traits, moodlets, director hints & --- \\
+Stage 2 & Wildlife, pets, granary, palisade & \texttt{!wildlife} \\
+Stage 3 & Chronicle, heirlooms, adoptions, PNG map & \texttt{!chronicle} / \texttt{!heirlooms} \\
+Stage 4 & Hazards: wildfire, flood, aurora, spores & --- \\
+Stage 5 & Visitors \& wandering travelers & \texttt{!visitors} \\
+Stage 6 & Ancestral Monolith, farm plots & \texttt{!monument} \\
+Stage 7 & Traditions, solstice feast, funerary rites & \texttt{!tradition} \\
+Stage 8 & Scavenger raids \& camp defense & \texttt{!raiders} \\
+Stage 9 & Architect patches, custom blueprints, prophecies & \texttt{!recipes} / \texttt{!quests} / \texttt{!patchnotes} \\
+Phase 1--2 (St. 10) & Milestone news hub, biographies, dynasties, monolith oracle \& runes, Sunken Tribe ruins & \texttt{!bio} / \texttt{!lore} \\
+Phase 3 (St. 11--14) & Relational badges, blood feuds, dynamic roles, annual camp council \& mandates & \texttt{!badges} / \texttt{!roles} / \texttt{!council} \\
+Phase 4 (St. 15--18) & Trophic cascades, legendary beasts, fog of war, off-grid expeditions, cataclysms & \texttt{!legends} / \texttt{!fog} / \texttt{!cataclysm} \\
+Phase 5 (St. 19--22) & Colony identity \& taboos, Prophet \& shrines, carved totems \& herbal salves & \texttt{!colony} / \texttt{!taboo} / \texttt{!shrine} / \texttt{!totems} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -247,25 +252,27 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \centering
 \caption{God Commands (bot.py)}
 \label{tab:god}
-\begin{small}
+\small
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.30\linewidth}>{\raggedright\arraybackslash}p{0.62\linewidth}@{}}
 \toprule
 \textbf{Command} & \textbf{Effect} \\
 \midrule
-\texttt{!add \textless name\textgreater [hp] [energy]} & Spawn a new agent \\
+\texttt{!add \textless name\textgreater\ [hp] [energy]} & Spawn a new agent \\
+\texttt{!rename \textless id\textgreater\ \textless newname\textgreater} & Rename an agent \\
+\texttt{!job \textless id\textgreater\ \textless job\textgreater} & Set an agent's flavor job \\
 \texttt{!remove \textless pawn\_id\textgreater}         & Remove an agent (never the last) \\
-\texttt{!god \textless id\textgreater \textless stat\textgreater \textless v\textgreater}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
-\texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
-\texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
-\texttt{!graveyard} & List the fallen with epithets and epitaphs (a heart marks the beloved) \\
+\texttt{!god \textless id\textgreater\ \textless stat\textgreater\ \textless v\textgreater}       & Set vitals/wood/food/stone/fiber, or \texttt{revive} \\
+\texttt{!order \textless id\textgreater\ \textless action\textgreater\ [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
+\texttt{!say \textless id\textgreater\ \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
+\texttt{!graveyard} & List the fallen with epithets and epitaphs (heart marks the beloved) \\
 \texttt{!bio \textless name\textgreater} & 3-sentence biography (living) or obituary (fallen) woven from a pawn's life log \\
 \texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} / \texttt{!raiders} & Family tree / roaming fauna / travelers / hostile scavengers \\
-\texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} / \texttt{!lore} / \texttt{!badges} / \texttt{!roles} / \texttt{!council} / \texttt{!legends} / \texttt{!fog} / \texttt{!cataclysm} / \texttt{!colony} / \texttt{!taboo} / \texttt{!shrine} / \texttt{!totems} & Relics of the fallen / the monolith / emergent tradition / seasonal lore / Sunken Tribe fragments / relational badges / dynamic roles / camp council / legendary beasts / fog of war \& expeditions / seasonal cataclysms / dynamic colony identity \& taboos / the camp shrine \& the Voice's Prophet / carved totems \& herbal salves \\
+\texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} / \texttt{!lore} / \texttt{!badges} / \texttt{!roles} / \texttt{!council} / \texttt{!legends} / \texttt{!fog} / \texttt{!cataclysm} / \texttt{!colony} / \texttt{!taboo} / \texttt{!shrine} / \texttt{!totems} & Relics of the fallen / monolith oracle / emergent tradition / seasonal lore / Sunken Tribe fragments / relational badges / dynamic roles / camp council / legendary beasts / fog of war \& expeditions / seasonal cataclysms / dynamic colony identity \& taboos / camp shrine \& Prophet / carved totems \& herbal salves \\
+\texttt{!recipes} / \texttt{!quests} / \texttt{!patchnotes} & Inspect all blueprints / active prophecies / latest Architect patch notes \\
 \texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
-\texttt{!status} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Inspect, force, or gate the simulation \\
+\texttt{!status} / \texttt{!list} / \texttt{!tick} / \texttt{!pause} / \texttt{!resume} & Full status / pawn dossier / force tick / pause / resume simulation \\
 \bottomrule
 \end{tabular}
-\end{small}
 \end{table}
 
 \subsection{Implementation Code}
@@ -281,7 +288,8 @@ def build_models():
                   + [r["id"] for r in world_state.get("raiders", [])])
     AgentDecision = create_model(
         "AgentDecision",
-        action=(Literal["Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact"],
+        action=(Literal["Chop", "Rest", "Scout", "Attack", "Forage", "Build",
+                        "Share", "Move", "Mate", "Interact", "Expedition"],
                 Field(description="Intent")),
         narrative=(str, Field(description="1-2 sentence narrative")),
         quote=(Optional[str], Field(default=None, description="Outward speech")),
@@ -290,26 +298,26 @@ def build_models():
         direction=(Optional[Literal["N", "S", "E", "W"]], Field(
             default=None, description="Direction - only for Move")),
         target=(Optional[Literal[tuple(target_ids)]], Field(
-            default=None, description="Target pawn id (Attack/Share/Mate), wildlife id (Attack, taming), visitor id (Share, Mate/recruit, Attack), or raider id (Attack)"))),
+            default=None, description="Target id (pawn/wildlife/visitor/raider)")),
         flavor=(Optional[str], Field(default=None,
                                      description="Free-form verb - only for Interact")),
         new_goal=(Optional[str], Field(default=None,
                                        description="Personal goal wish when goal-less")),
+        new_title=(Optional[str], Field(default=None,
+                                        description="Earned custom role/title")),
     )
-    fields = {"world_event": (str, Field(description="Global status"))}
+    fields = {"world_event": (str, Field(description="Global status summary"))}
     for pid in pawn_ids:                               # one field per active pawn
         fields[pid] = (AgentDecision, Field(description=f"Decision for {pid}"))
     return create_model("TickResponse", **fields)
 \end{lstlisting}
 
-\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), scavenger raids (steal, defend, flee), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts \& funerary rites (Grief halving), wildfires, seasonal disasters, and Stage 9 synthesis (custom recipes, quests, clamped balance modifiers), trophic cascades (overpopulated prey, windbreak loss) \& legendary beasts (named predators with fame), fog of war (rim mist mapped by Scouts) \& off-grid expeditions (paired departures, loot/seeds/pets/scars)}, label={lst:engine}]
+\begin{lstlisting}[style=python, caption={Deterministic Resolution (engine.py, condensed). Applies action $\to$ consequences: energy costs, combat, skill XP, relationships, incapacitation, crafting, mental breaks, environmental death, Mate, free-form Interact, personal goals, traits, moodlets, fauna (hunt/tame, granary, palisade), visitors (barter, plunder, recruit), scavenger raids (steal, defend, flee), megaprojects (monument), farm plots (till/grow/harvest), emergent traditions (counters $\to$ Tradition Tag), solstice feasts \& funerary rites (Grief halving), wildfires, seasonal disasters, Stage 9 synthesis (custom recipes, quests, clamped balance modifiers), trophic cascades \& legendary beasts, fog of war \& off-grid expeditions}, label={lst:engine}]
 def resolve_actions(intents):
-    for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal)
+    for pawn_id, intent in intents.items(): # (action, target, flavor, new_goal, new_title)
         pawn = world_state["pawns"][pawn_id]
-        action = intent[0]
-        target = intent[1] if len(intent) > 1 else None
-        flavor = intent[2] if len(intent) > 2 else None
-        cost = ACTION_COSTS[action]   # Chop 10, Scout 15, Move 5, Interact 5
+        action, target, flavor = intent[0], intent[1], intent[2]
+        cost = ACTION_COSTS[action]   # Chop 10, Scout 15, Move 5, Interact 5, Expedition 15
         if "Night Owl" in pawn["traits"] and not is_day():
             cost //= 2                # night owls act cheaply after dark
         if pawn["vitals"]["energy"] < cost:        # engine refuses intent
@@ -325,9 +333,9 @@ def resolve_actions(intents):
             biome["wood_stock"] -= wood            # forest is depletable
             pawn["inventory"]["wood"] += wood
         elif action == "Move":
-            if not in_bounds(pos + DIRS[direction]):
+            if not in_bounds(pos + DIRS[target]):
                 add_event("failed", reason="off_grid"); continue
-            pawn["pos"] += DIRS[direction]         # tile-gated world
+            pawn["pos"] += DIRS[target]            # tile-gated world
         elif action == "Forage":
             if tile_at(pawn) not in (MEADOW, RIVER): add_event("failed"); continue
             food = min(biome["food_stock"], 2 + pawn["skills"]["scouting"] // 4)
@@ -335,109 +343,72 @@ def resolve_actions(intents):
         elif action == "Build":
             if pawn["inventory"]["wood"] < 3:
                 add_event("failed", reason="need_wood"); continue
-            if craft := best_affordable_tool(pawn):  # 3W+2S, 2W+1S, 5F
+            if craft := best_affordable_tool(pawn):  # Stone Axe, Flint Spear, Warm Coat
                 give_gear(pawn, craft); add_event("craft", item=craft); continue
             biome["shelter"] = min(100, biome["shelter"] + 8)
         elif action == "Share":
-            if not legal_target(target):
-                add_event("failed"); continue
+            if not legal_target(target): add_event("failed"); continue
             if target in VISITOR_IDS:    # barter with a visiting traveler
-                if visitor["state"] == "visiting" and adjacent(pawn, visitor):
-                    pawn["inventory"]["food"] -= 2   # Merchant trades stone
-                    gained = min(3, visitor["inventory"]["stone"])
-                    pawn["inventory"]["stone"] += gained
-                    add_event("barter", kind=visitor["kind"], gains=gained)
-                continue
+                pawn["inventory"]["food"] -= 2
+                gained = min(3, visitor["inventory"]["stone"])
+                pawn["inventory"]["stone"] += gained
+                add_event("barter", kind=visitor["kind"], gains=gained); continue
             pawn["inventory"]["food"] -= 1
             world_state["pawns"][target]["inventory"]["food"] += 1
         elif action == "Attack":
-            if not target or target == pawn_id:
-                add_event("failed", reason="illegal_target"); continue
-            if target in WILDLIFE_IDS:     # hunt: damage the animal; kill yields
-                dmg = max(1, 4 + pawn["skills"]["combat"] // 2)   # spear adds 4
+            if not target or target == pawn_id: add_event("failed"); continue
+            if target in WILDLIFE_IDS:     # hunt: damage animal; kill yields food+fiber
+                dmg = max(1, 5 + pawn["skills"]["combat"] // 2)
                 animal = wildlife[target]; animal["hp"] -= dmg
-                if animal["hp"] <= 0:      # food + fiber, no "meat" resource
+                if animal["hp"] <= 0:
                     pawn["inventory"]["food"] += animal["food_yield"]
                     pawn["inventory"]["fiber"] += animal["fiber_yield"]
                     del wildlife[target]; add_event("hunt", target=target)
                 continue
-            if target in VISITOR_IDS:      # rob a traveler; gentle pawns feel guilt
+            if target in VISITOR_IDS:      # rob traveler; gentle pawns feel guilt
                 dmg = max(1, 5 + pawn["skills"]["combat"] // 2)
                 visitor = visitors[target]; visitor["hp"] -= dmg
                 if visitor["hp"] <= 0:
-                    plunder_inventory(pawn, visitor)  # stone/fiber/food
+                    plunder_inventory(pawn, visitor)
                     del visitors[target]; add_event("attack", plunder=True)
                     if pawn["personality"]["aggression"] < 6:
                         add_moodlet(pawn, "Guilt", -5, 15)
-                else:
-                    visitor["state"] = "leaving"      # survivors flee
+                else: visitor["state"] = "leaving"
                 continue
             if target in RAIDER_IDS:       # fight off a scavenger
                 dmg = max(1, 5 + pawn["skills"]["combat"] // 2)
                 raider = raiders[target]; raider["hp"] -= dmg
                 if raider["hp"] <= 0:
                     del raiders[target]; add_event("raid", action="slain")
-                else:
-                    raider["state"] = "fleeing"       # wounded raiders flee
+                else: raider["state"] = "fleeing"
                 continue
-            if not target_pawn_active(target):
-                add_event("failed", reason="illegal_target"); continue
-            if "Pacifist" in pawn["traits"]: ...   # refuses to fight
-                add_event("failed", reason="pacifist"); continue
-            dmg = max(1, 5 + pawn["skills"]["combat"] // 2
-                      - target["skills"]["combat"] // 4)
-            if "Brawler" in pawn["traits"] and pawn["gear"]["main_hand"] is None:
-                dmg += 3                            # bare-knuckle bonus
+            dmg = max(1, 5 + pawn["skills"]["combat"] // 2 - target["skills"]["combat"] // 4)
+            if "Brawler" in pawn["traits"] and pawn["gear"]["main_hand"] is None: dmg += 3
             target["vitals"]["hp"] = clamp(target["vitals"]["hp"] - dmg)
-            if target["vitals"]["hp"] <= 0:
-                target["status"] = "incapacitated" # auto-recovers next tick
+            if target["vitals"]["hp"] <= 0: target["status"] = "incapacitated"
         elif action == "Mate":
-            if not legal_target(target):
-                add_event("failed"); continue
-            if target["sex"] == pawn["sex"]: ...      # opposite-sex required
-            if _are_kin(pawn, target): ...            # siblings/half-siblings/parent-child blocked
-                add_event("failed", reason="too_close_kin")
-            if pawn_id not in target["partners"]:     # committed couples skip the bond gate
-                if pawn["relationships"].get(target, 0) < MATE_RELATIONSHIP or \
-                   target["relationships"].get(pawn_id, 0) < MATE_RELATIONSHIP: ...
-                    # mutual consent: both directions must be 25+ (else "isn't ready")
+            if not legal_target(target): add_event("failed"); continue
+            if target["sex"] == pawn["sex"] or _are_kin(pawn, target): continue
+            if pawn_id not in target["partners"]:
+                if pawn["relationships"].get(target, 0) < 25 or \
+                   target["relationships"].get(pawn_id, 0) < 25: continue
             if random.random() < CONCEPTION_CHANCE:
-                target["pregnant_ticks"] = PREGNANCY_TICKS  # 20 ticks = 1 day
-                target["partner_id"] = pawn_id   # father pinned until birth
-            pawn["partners"] = dedup(pawn["partners"] + [target])   # pairing is official
+                target["pregnant_ticks"] = PREGNANCY_TICKS
+                target["partner_id"] = pawn_id
+            pawn["partners"] = dedup(pawn["partners"] + [target])
             target["partners"] = dedup(target["partners"] + [pawn_id])
-            # relationships fade 5 steps toward 0 each dawn (RELATIONSHIP_DECAY)
         elif action == "Interact":
-            # free-form verb: engine buckets it into safe effects
-            if flavor in SOCIAL_WORDS:          # +5 morale; same-tile bond +/-10
-                pawn["vitals"]["morale"] += 5
-            elif flavor in GATHER_WORDS:        # small tile-gated yield
-                if tile_at(pawn) in FORAGE_TILES: food += 1  # meadow/river
-                elif tile_at(pawn) in FOREST_TILES: wood += 1
-                elif tile_at(pawn) in (RUIN, QUARRY): stone += 1
-            elif flavor in CRAFT_WORDS:         # at Camp: shelter +3 else +5 morale
-                biome["shelter"] = min(100, biome["shelter"] + 3)
-            elif flavor in RELAX_WORDS:         # +10 energy, +3 morale
-                pawn["vitals"]["energy"] += 10
-            elif flavor in TRAIN_WORDS:         # +1 combat XP
-                pawn["skills"]["combat"] += 1
-            elif flavor in TAME_WORDS:          # "tame"/"feed": scouting-scaled roll
-                if same_tile_animal(pawn):
-                    chance = clamp(0.5 + pawn["skills"]["scouting"] * 0.02, 0.1, 0.95)
-                    if random.random() < chance:
-                        tame_pet(pawn)            # returns to Camp: +2 colony morale
-                        add_event("tame", species=animal["species"])
-            elif flavor in RECRUIT_WORDS:       # "invite to stay"/"recruit"
-                if same_tile_visitor(pawn) and len(world_state["pawns"]) < MAX_PAWNS:
-                    chance = clamp(0.3 + pawn["personality"]["sociability"] * 0.05,
-                                   0.1, 0.95)
-                    if random.random() < chance:
-                        recruit_visitor(pawn, visitor)  # permanent colonist
-                        add_event("recruit", name=visitor["name"])
-            else:
-                pawn["vitals"]["morale"] += 3   # unknown verb is still safe
-    else:
-        pawn["vitals"]["morale"] = clamp(pawn["vitals"]["morale"] - 5)
+            if flavor in SOCIAL_WORDS: pawn["vitals"]["morale"] += 5
+            elif flavor in GATHER_WORDS: yield_tile_resource(pawn)
+            elif flavor in CRAFT_WORDS: biome["shelter"] = min(100, biome["shelter"] + 3)
+            elif flavor in RELAX_WORDS: pawn["vitals"]["energy"] += 10; pawn["vitals"]["morale"] += 3
+            elif flavor in TAME_WORDS: try_tame_wildlife(pawn)
+            elif flavor in RECRUIT_WORDS: try_recruit_visitor(pawn, target)
+            elif flavor in FARM_WORDS: till_or_harvest_plot(pawn)
+            elif flavor in PRAY_WORDS: monolith_oracle_prayer(pawn)
+            else: pawn["vitals"]["morale"] += 3
+        elif action == "Expedition":
+            try_start_expedition(pawn, pawn_id, intents)
     # mental break resolution overrides intent when morale is 0
     if pawn.get("mental_break"):
         _resolve_break(pawn, pawn_id)
@@ -445,131 +416,12 @@ def resolve_actions(intents):
     # personal goals: adopt LLM wishes, advance on deeds, pay off when done
     if not pawn.get("goal") and new_goal:
         pawn["goal"] = adopt_goal(pawn, new_goal)
-        #   "gather 10 wood"  -> {kind:gather, resource:wood, needed:10}
-        #   "befriend Scout"  -> {kind:social, target_id:<id>}
-        #   "survive 5 days"  -> {kind:survive, needed:5 * TICKS_PER_DAY}
     for pid, p in world_state["pawns"].items():
         goal = p.get("goal")
         if goal and goal["progress"] >= goal["needed"]:
             p["vitals"]["morale"] += GOAL_MORALE     # +15 and skill XP
             add_event("goal", actor=pid, goal=goal["text"])
             p["goal"] = None                          # ready for the next wish
-
-def tick_environment():             # the world ages after pawns act
-    biome = world_state["biome"]    # season, weather, day/night, stocks
-    ...                             # campfire burns 1 wood per tick;
-                                    # metabolism, regrowth (never in
-                                    # Winter), frostbite, starvation
-    # wildlife: season-gated spawn (predators Winter/Autumn, prey
-    # Spring/Summer, cap 3; no predator left alive -> prey overpopulate to 5,
-    # strip food_stock, and eat ripe farm plots); prey flee the nearest pawn,
-    # predators
-    # stalk the pawn furthest from Camp and bite to incapacitate; a predator
-    # that mauls 2+ colonists becomes a NAMED LEGEND (double HP, fame grows
-    # bite, colony-wide hunt moodlet) that escapes each season change and
-    # returns more infamous until slain
-    spawn_wildlife(biome["season"]); update_wildlife(biome)
-    # visitors (Stage 5): a traveler spawns at the grid edge every
-    # ~150 ticks, walks to Camp, lingers 3-5 ticks (a Bard plays for
-    # +5 colony morale), then walks off the edge and despawns
-    if tick % VISITOR_INTERVAL == 0 and not visitors:
-        visitors.append(make_visitor(choice(KINDS), edge_tile()))
-    step_visitors()
-    # scavenger raids (Stage 8): a wealthy colony (>=30 food+wood) draws
-    # 1-2 hostile raiders on an Autumn's first tick. They march to the Camp,
-    # slowed by the palisade; tamed predators and high-combat pawns defend
-    # the stores, else the raider steals 5 food and flees. Wounded raiders flee
-    if season == "Autumn" and tick % 100 == 0 and not raiders \
-            and colony_wealth() >= 30:
-        spawn_raid(1 + randrange(2))
-    step_raiders()
-    if biome["season"] == "Summer" and biome["granary"]:
-        ...                            # granary halts food_stock decay
-    predator_chance -= 0.2 * biome["palisade"]  # palisade deters predators
-    # megaproject (Stage 6): once fully fortified (shelter/fire 100, granary,
-    # palisade 3) Build raises the Ancestral Monolith, 5 wood + 5 stone per
-    # action up to 20/15; on completion it floors colony morale at 10, grants
-    # +2 camp warmth, and flags pending_monument so core inscribes a dedication
-    if not monument["done"] and pawn inventory has 5 wood + 5 stone:
-        monument["wood"] = min(20, monument["wood"] + 5)
-        monument["stone"] = min(15, monument["stone"] + 5)
-        if monument["wood"] == 20 and monument["stone"] == 15:
-            monument["done"] = True; pending_monument = True
-    # farm plots (Stage 6): Interact "till/plant/farm" on a Meadow turns it
-    # into a Farm Plot; it ripens +1/tick in Spring/Summer (dormant in
-    # Autumn/Winter); Interact "harvest" on a ripe plot pays 15 food + 5 fiber
-    # straight into the farmer's inventory without touching wild stocks
-    if flavor words match farm:
-        if tile == FARM_TILE and entry["farm"] >= 20:
-            pawn += (15 food, 5 fiber); entry["farm"] = 0
-        elif tile == MEADOW:
-            grid[y][x] = FARM_TILE; tiles[key] = {"farm": 0}
-    for entry in farm_plots():        # grown each tick in tick_environment
-        if season in (Spring, Summer) and entry["farm"] < 20:
-            entry["farm"] += 1        # farm_ready event at 20
-    # emergent traditions (Stage 7): colony-wide counters survive deaths;
-    # on a season change the first threshold crossed (10 predators slain,
-    # 100 trees felled, 20 rations shared -- priority order) stamps a sticky
-    # Tradition Tag that tunes the engine until the end of the run
-    traditions_inc("predators_slain") on predator kills
-    traditions_inc("trees_felled") on every Chop
-    traditions_inc("rations_shared") on Share (incl. visitor barter)
-    if season changed and not traditions["tag"]:
-        if predators_slain > 10:   tag = "Hunters of the North"
-        elif trees_felled > 100:   tag = "Children of the Forest"
-        elif rations_shared > 20:  tag = "Kindred of the Hearth"
-        # Hunters: 2x hunting combat XP, cold penalties -1
-        # Foresters: +1 wood/Chop, shelter damage halved
-        # Kindred: social Interact +8 morale instead of +5
-    # solstice feast (Stage 7): on the first tick of Winter/Summer, a full
-    # larder (>15 food_stock) buys a colony-wide feast: -5 stock, every active
-    # pawn +15 morale and a Festive moodlet (+5 for 15 ticks)
-    if new_season in (Winter, Summer) and season just changed:
-        if biome["food_stock"] > 15:
-            biome["food_stock"] -= 5
-            for p in active_pawns:
-                p["vitals"]["morale"] += 15; moodlet(p, "Festive", +5, 15)
-    # funerary rites (Stage 7): _kill marks the graveyard entry "beloved" when
-    # survivors' average relationship >= 25; Interact "bury"/"mourn"/"eulogize"
-    # at Camp or Ruins halves every Grief moodlet for same-tile active pawns
-    if flavor matches rite words and tile in (Camp, Ruins):
-        if any beloved in graveyard:
-            for p in same_tile active pawns:
-                for m in p["moodlets"] where m["name"] == "Grief":
-                    m["ticks_left"] //= 2
-    # wildfires (Stage 4): storm lightning / Summer heatwave ignite Forest;
-    # burning tiles drain 10 wood/tick, hurt occupants (incapacitate, never
-    # kill), and spread to adjacent Forest/Camp; they burn out into ash that
-    # regrows after 40 ticks. Interact "extinguish" and Chop firebreaks stop it.
-    for (x, y) in burning_tiles():
-        biome["wood_stock"] = clamp(biome["wood_stock"] - 10)
-        for p in pawns_on(x, y): p["vitals"]["hp"] -= 5
-        ignite_adjacent(FOREST, chance=0.5); ignite_adjacent(CAMP, chance=0.25)
-    # seasonal disasters (Stage 4): Spring downpours flood the riverbanks for
-    # 3 ticks (adjacent Meadow -> water; Forage impossible, then +5 food stock
-    # as it recedes); clear Winter nights may bring an Aurora (+10 morale);
-    # damp Autumn air brews toxic spores around the Ruins (5 HP/tick unless a
-    # Warm Coat is worn)
-    if season == "Spring" and weather == "Rain" and rand() < FLOOD_CHANCE:
-        flood_adjacent_meadows(); biome["flood"] = 3
-    if season == "Winter" and weather == "Clear" and not day and rand() < 0.1:
-        for p in pawns: p["vitals"]["morale"] = clamp(p["vitals"]["morale"] + 10)
-    if season == "Autumn" and weather in ("Rain", "Storm") and rand() < 0.15:
-        for p in pawns_on(RUIN_TILE):
-            if p["gear"]["body"] != "Warm Coat": p["vitals"]["hp"] -= 5
-    # moodlets: decay by one tick and sum into net morale (e.g. Grief)
-    net_morale = 0
-    for m in pawn["moodlets"]:
-        net_morale += m["delta"]
-        m["ticks_left"] -= 1
-    pawn["moodlets"] = [m for m in pawn["moodlets"] if m["ticks_left"] > 0]
-    if pawn["vitals"]["warmth"] <= 0:
-        add_moodlet(pawn, "Frostbitten", -5, 10)  # fresh, refreshable debuff
-    # aging: elders drain +1 energy/morale/tick, heal -5 less
-    if age_of(pawn) >= ELDER_AGE:       # 200 ticks = 10 days -> elder
-        ...                             # +1/tick energy & morale tax
-        if age_of(pawn) >= OLD_AGE_MAX:  # 320 ticks = 16 days -> 2% death chance
-            _kill(pawn_id, pawn, "old age")
 \end{lstlisting}
 
 \begin{lstlisting}[style=python, caption={Tick Orchestration (core.py, condensed). lock $\to$ schema $\to$ LLM $\to$ override $\to$ resolve $\to$ environment $\to$ tick++ $\to$ save; season-change detection, eulogy, adoption DMs, the Architect review, and embed all run outside the lock}, label={lst:tick}]
@@ -577,11 +429,10 @@ async def run_tick():
     async with tick_lock:                              # serialises vs god commands
         TickResponse = schema.build_models()           # 1. roster-aware schema
         content, _ = await asyncio.to_thread(          # 2. structured LLM output
-            _llm_call,                                 #    lazy import of llm.py
-            SYSTEM_PROMPT, build_prompt(), TickResponse, 0.7)
+            _llm_call, SYSTEM_PROMPT, build_prompt(), TickResponse, 0.7)
         data = TickResponse.model_validate_json(content)
         events.add_event("world", description=data.world_event)
-        dead_tick = state.world_state["tick"]          # capture \emph{before} mutation
+        dead_tick = state.world_state["tick"]          # capture before mutation
         # 3. Build intents; god orders override the LLM's proposal.
         intents = {}
         for pid, pawn in state.world_state["pawns"].items():
@@ -589,16 +440,19 @@ async def run_tick():
                 continue
             decision = getattr(data, pid)
             action, target = decision.action, decision.target
+            flavor = getattr(decision, "flavor", None)
+            new_goal, new_title = getattr(decision, "new_goal", None), getattr(decision, "new_title", None)
             if action == "Move":
-                target = decision.direction            # map \texttt{direction}->target
+                target = decision.direction            # map direction -> target
             order = state.god_orders.get(pid)
             if order:
                 action, target = order["action"], order.get("target")
-            intents[pid] = (action, target)
+                if action == "Interact": flavor = order.get("flavor") or flavor
+            intents[pid] = (action, target, flavor, new_goal, new_title)
         tick_events = engine.resolve_actions(intents)  # 4. deterministic effects
         tick_events += engine.tick_environment()       #    world ages; may signal season change
         state.god_orders.clear(); state.god_whispers.clear()
-        state.world_state["tick"] += 1                 # increment \emph{before} save
+        state.world_state["tick"] += 1                 # increment before save
         state.save_state(); events.log_to_jsonl()      # 5. persist
     # Lock released: god commands can run during the slow LLM/webhook I/O.
     if state.pending_chronicle:                        # season changed: write chronicle
@@ -616,19 +470,19 @@ async def run_tick():
 \section{Expected Outcomes}
 
 \subsection{Design Objectives}
-The AI Director architecture is evaluated against four design objectives that follow from the constraints of a 2 GB container on HDD storage:
+The AI Director architecture is evaluated against four design objectives that follow from the constraints of a 2~GB container on HDD storage:
 
 \begin{enumerate}
 \item \textbf{Zero Memory Growth}: the prompt is bounded (fixed system prompt, history truncated to the last ten structured events) and the output schema caps the response size; because inference is off-host, no KV cache or model weights occupy container RAM and memory consumption remains flat indefinitely.
 \item \textbf{Deterministic Boundaries}: the model emits only \emph{intent} (action, narrative, target); all numbers are produced by the engine and clamped to \([0,100]\), so hallucinated stats are structurally impossible.
 \item \textbf{Enforced Intervention}: god orders are overridden in Python after the LLM responds, so intervention is guaranteed regardless of model compliance; failed intents (energy shortfall, self-attack, missing target) are logged as \texttt{failed} events.
-\item \textbf{Agent Reactivity}: each agent sees the others' vitals, skills, relationships, and recent events, enabling emergent behaviours and grudges. Relationship deltas persist across ticks but fade several steps toward zero each dawn, so bonds and feuds both require real upkeep to endure. A successful \texttt{Mate} officially pairs two pawns (recorded in each other's \texttt{partners}; polygamy allowed), and children record their parents (\texttt{mother\_id}/\texttt{father\_id}); the engine blocks incest at the mate gate. A read-only family tree (\texttt{!tree}) renders couples (mutually partnered or with shared children), mate-eligible bonds, kin lines, and rivalries from these pairwise relationships. Each pawn carries a \texttt{generation} (founders are 1, offspring take the maximum parental generation plus one) and gravestones record the fallen pawn's generation, so the prompt can render a compact dynasty roll-up --- living and fallen per generation --- alongside the colony's cumulative deeds and any unclaimed ancestral heirlooms; when Generation 1 dies out, Generations 2 and 3 simply inherit the memory and carry the colony on. The completed monolith doubles as an oracle and rune archive: significant achievements (a tradition forged, a prophecy fulfilled, the first predator slain, the birth of a new generation, the fall of a beloved, titled, or elder ancestor) are carved as permanent runes on a capped archive, and a pawn who \texttt{Interact}s with a prayer verb at Camp receives divine inspiration ($+8$ morale and $+1$ XP in its weakest skill) and, in the cold, a \texttt{Divine Warmth} moodlet that shaves \texttt{MONUMENT\_WARMTH\_BLESSING} off the season's cold --- a literal weather warning with teeth. The ruins tile is the named remnant of The Sunken Tribe, and each Scout there carries a chance to unearth a fragment of forgotten history, an ancient tool blueprint (added to the colony's recipe list), or a carved warning that grants scouting insight and lifts colony morale; recovered fragments feed the prompt and the \texttt{!lore} view, keeping the lost civilization present in the world's living memory. Deeds also mint durable \emph{relational badges} --- \texttt{Lifesaver} (sharing food with a starving pawn), \texttt{Betrayer} (attacking a pawn bonded to you at 25+ relationship), \texttt{Indebted} (receiving a share), \texttt{Mentor} (teaching a tilemate), \texttt{Widow} (losing a partner) --- surfaced per pawn in the prompt so the Director can weave them into tick narratives, and queryable via \texttt{!badges}. Feuds cross generations: children are born seeded with their parents' rivalries (mutual relationships at or below \texttt{RIVAL\_THRESHOLD}), and mutual rivals who share the camp tile risk spontaneous \emph{camp brawls} (small damage and deeper hatred, rolled each tick at \texttt{BRAWL\_CHANCE}) --- so a new generation must actively choose peace (courtship, sharing food) or let the old hatred flare up again. The schema's \\texttt{new\\_title} field lets the Director bestow free-form earned roles (e.g.\ \\emph{Fang-Breaker}, \\emph{Keeper of the Hearth}, \\emph{Seer of Whispers}); the engine validates them and buckets by keyword into subtle passive perks --- martial words shave \\texttt{TITLE\\_MARTIAL\\_DEFENSE} off damage taken, nurturing words add \\texttt{TITLE\\_NURTURE\\_SHARE} food to every share, and spiritual words halve Grief moodlet duration (\\texttt{TITLE\\_SPIRIT\\_GRIEF\\_DIV}) --- so invented titles carry mechanical weight without letting the LLM write stats. Once a year, alongside the Architect, a \emph{Camp Council} LLM (\\texttt{COUNCIL\\_PROMPT}, \\texttt{COUNCIL\\_INTERVAL}) reviews the year's history and names a recognized leader and a one-sentence Colony Mandate; the engine validates both, grants the leader a \\texttt{Chosen} moodlet and morale, and the mandate leads every tick prompt so the whole colony shares a unified narrative focus (\\texttt{!council}).
+\item \textbf{Agent Reactivity}: each agent sees the others' vitals, skills, relationships, and recent events, enabling emergent behaviours and grudges. Relationship deltas persist across ticks but fade several steps toward zero each dawn, so bonds and feuds both require real upkeep to endure. A successful \texttt{Mate} officially pairs two pawns (recorded in each other's \texttt{partners}; polygamy allowed), and children record their parents (\texttt{mother\_id}/\texttt{father\_id}); the engine blocks incest at the mate gate. A read-only family tree (\texttt{!tree}) renders couples (mutually partnered or with shared children), mate-eligible bonds, kin lines, and rivalries from these pairwise relationships. Each pawn carries a \texttt{generation} (founders are 1, offspring take the maximum parental generation plus one) and gravestones record the fallen pawn's generation, so the prompt can render a compact dynasty roll-up --- living and fallen per generation --- alongside the colony's cumulative deeds and any unclaimed ancestral heirlooms; when Generation 1 dies out, Generations 2 and 3 simply inherit the memory and carry the colony on. The completed monolith doubles as an oracle and rune archive: significant achievements (a tradition forged, a prophecy fulfilled, the first predator slain, the birth of a new generation, the fall of a beloved, titled, or elder ancestor) are carved as permanent runes on a capped archive, and a pawn who \texttt{Interact}s with a prayer verb at Camp receives divine inspiration ($+8$ morale and $+1$ XP in its weakest skill) and, in the cold, a \texttt{Divine Warmth} moodlet that shaves \texttt{MONUMENT\_WARMTH\_BLESSING} off the season's cold --- a literal weather warning with teeth. The ruins tile is the named remnant of The Sunken Tribe, and each Scout there carries a chance to unearth a fragment of forgotten history, an ancient tool blueprint (added to the colony's recipe list), or a carved warning that grants scouting insight and lifts colony morale; recovered fragments feed the prompt and the \texttt{!lore} view, keeping the lost civilization present in the world's living memory. Deeds also mint durable \emph{relational badges} --- \texttt{Lifesaver} (sharing food with a starving pawn), \texttt{Betrayer} (attacking a pawn bonded to you at 25+ relationship), \texttt{Indebted} (receiving a share), \texttt{Mentor} (teaching a tilemate), \texttt{Widow} (losing a partner) --- surfaced per pawn in the prompt so the Director can weave them into tick narratives, and queryable via \texttt{!badges}. Feuds cross generations: children are born seeded with their parents' rivalries (mutual relationships at or below \texttt{RIVAL\_THRESHOLD}), and mutual rivals who share the camp tile risk spontaneous \emph{camp brawls} (small damage and deeper hatred, rolled each tick at \texttt{BRAWL\_CHANCE}) --- so a new generation must actively choose peace (courtship, sharing food) or let the old hatred flare up again. The schema's \texttt{new\_title} field lets the Director bestow free-form earned roles (e.g.\ \emph{Fang-Breaker}, \emph{Keeper of the Hearth}, \emph{Seer of Whispers}); the engine validates them and buckets by keyword into subtle passive perks --- martial words shave \texttt{TITLE\_MARTIAL\_DEFENSE} off damage taken, nurturing words add \texttt{TITLE\_NURTURE\_SHARE} food to every share, and spiritual words halve Grief moodlet duration (\texttt{TITLE\_SPIRIT\_GRIEF\_DIV}) --- so invented titles carry mechanical weight without letting the LLM write stats. Once a year, alongside the Architect, a \emph{Camp Council} LLM (\texttt{COUNCIL\_PROMPT}, \texttt{COUNCIL\_INTERVAL}) reviews the year's history and names a recognized leader and a one-sentence Colony Mandate; the engine validates both, grants the leader a \texttt{Chosen} moodlet and morale, and the mandate leads every tick prompt so the whole colony shares a unified narrative focus (\texttt{!council}).
 \end{enumerate}
 
 \section{Results \& Evaluation}
 
 \subsection{Performance Metrics}
-When deployed inside the designated 2 GB LXC container on the Ryzen 5 5600G host, the observed execution metrics are summarised in Table~\ref{tab:metrics}. Every tick is a single \texttt{generateContent} request to the hosted Gemini API carrying a structured-output schema; the only host-side costs are the Python process, the Discord client, and the request/response. Free-tier quotas (30 RPM / 16K TPM / 14.4K RPD, resetting at midnight Pacific) bound sustained operation; at the default 60-second tick interval the daily request quota is used at roughly 10\%, leaving ample headroom for eulogies and god commands, and closing the server stops all usage.
+When deployed inside the designated 2~GB LXC container on the Ryzen 5 5600G host, the observed execution metrics are summarised in Table~\ref{tab:metrics}. Every tick is a single \texttt{generateContent} request to the hosted Gemini API carrying a structured-output schema; the only host-side costs are the Python process, the Discord client, and the request/response. Free-tier quotas (30 RPM / 16K TPM / 14.4K RPD, resetting at midnight Pacific) bound sustained operation; at the default 60-second tick interval the daily request quota is used at roughly 10\%, leaving ample headroom for eulogies and god commands, and closing the server stops all usage.
 
 \begin{table}[htbp]
 \centering
@@ -653,16 +507,16 @@ Daily Quota Utilisation (RPD) & $\approx$ 10\% of 14.4K at a 60 s tick \\
 The following qualitative results were observed over continuous runs:
 
 \begin{enumerate}
-\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 321-test offline suite (\texttt{tests/}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
+\item \textbf{Stable Long-Run Operation}: no OOM faults or state corruption occurred across extended runs; the 370-test offline suite (\texttt{tests/}) validates deterministic resolution, and state survived restarts via \texttt{terrarium\_state.json} while the structured event log (\texttt{terrarium\_log.jsonl}) grew append-only as the paper dataset.
 \item \textbf{Enforcement Rate}: every illegal intent (energy shortfall, self-attack, missing/unknown target) was rejected by the engine and recorded as a \texttt{failed} event; at no point did a hallucinated stat alter the world, because the model never emits numeric deltas.
 \item \textbf{Intervention Correctness}: \texttt{!order} always produced the commanded action even when the model proposed otherwise; \texttt{!say} influenced narrative flavour only, as designed.
 \item \textbf{Emergent Dynamics}: relationship deltas after combat produced visible grudge cycles (repeated mutual attacks) in the event history, demonstrating that the model reads and reacts to the rendered relationship state.
-\item \textbf{Environmental Pressure}: seasonal cycles (day/night, Summer heatwaves, Winter cold) and depletable wood/food stocks drove reactive behaviour, agents stockpiled wood before Winter, reinforced the shelter, and shared food during scarcity, without any hard-coded policy beyond the deterministic consequences.
-\item \textbf{Negligible Host Load}: with inference off-host, CPU utilisation stays near \(0\%\) between ticks apart from network I/O, and container memory is flat at \(\approx\) 250 MB, ensuring no performance degradation for adjacent hypervisor guests.
+\item \textbf{Environmental Pressure}: seasonal cycles (day/night, Summer heatwaves, Winter cold) and depletable wood/food stocks drove reactive behaviour: agents stockpiled wood before Winter, reinforced the shelter, and shared food during scarcity, without any hard-coded policy beyond the deterministic consequences.
+\item \textbf{Negligible Host Load}: with inference off-host, CPU utilisation stays near \(0\%\) between ticks apart from network I/O, and container memory is flat at \(\approx\) 250~MB, ensuring no performance degradation for adjacent hypervisor guests.
 \end{enumerate}
 
 \section{Conclusion}
-The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2 GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 370-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
+The proposed architecture confirms that hosted open-weight models such as Gemma 4 can act as autonomous decision engines for background game loops while keeping the host footprint minimal, a 2~GB container with no model resident in RAM. Decoupling \emph{intent} (LLM) from \emph{consequence} (deterministic engine) prevents state corruption, while per-tick schema rebuilds (validated by the 370-test offline suite) passed as structured-output schemas and a ring buffer of structured events keep long-running behaviour coherent. A two-way Discord interface makes the system observable and steerable by a human ``god'' without breaking the simulation's determinism, and the pure-Python PNG map renderer (\texttt{map\_renderer.py}, built on \texttt{struct} and \texttt{zlib}) keeps the zero-framework ethos. Future work may explore self-hosting Gemma 4 locally via Ollama for fully-offline runs, dynamic biome adaptation, and multi-modal feedback via image generation.
 
 \subsection{Future Work: Roadmap}
 The design remains a staged roadmap beyond the community/lore layer of Stage 3, the hazard/visitor layers of Stages 4--5, the megaproject/farming layer of Stage 6, the culture/ritual layer of Stage 7, the raid/defense layer of Stage 8, and the autonomous-world-engine layer of Stage 9. Each stage keeps the AI Director pattern --- the LLM proposes intent only, while pure-Python deterministic rules own all numbers, state stays flat, and every mechanic remains offline-testable:
