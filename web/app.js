@@ -99,12 +99,6 @@ function iso(x, y) {
   };
 }
 
-function hashHue(name) {
-  let h = 0;
-  for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 360;
-  return h;
-}
-
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
@@ -113,12 +107,6 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[c]);
-}
-
-function pawnFigure(p) {
-  if (p.child) return "👶";
-  if (p.elder) return p.sex === "F" ? "👵" : "👴";
-  return p.sex === "F" ? "👩" : "👨";
 }
 
 function diamond(cx, cy, w, h) {
@@ -477,14 +465,13 @@ function drawIsland(now) {
 function makePawnEl() {
   const el = document.createElement("div");
   el.className = "pawn";
-  const ring = document.createElement("div");
-  ring.className = "ring";
-  const figure = document.createElement("span");
-  figure.className = "figure";
+  const cv = document.createElement("canvas");
+  cv.className = "psprite";
+  cv.width = Sprites.PAWN_CV_W;
+  cv.height = Sprites.PAWN_CV_H;
   const name = document.createElement("span");
   name.className = "name";
-  ring.appendChild(figure);
-  el.appendChild(ring);
+  el.appendChild(cv);
   el.appendChild(name);
   return el;
 }
@@ -500,9 +487,10 @@ function syncPawns(s) {
       rec = {
         id: p.id,
         el,
-        ring: el.querySelector(".ring"),
-        figure: el.querySelector(".figure"),
+        cv: el.querySelector(".psprite"),
         name: el.querySelector(".name"),
+        idleCv: null, walkA: null, walkB: null,
+        spriteSig: null, drawn: "",
         action: null,
         nextEmote: 0,
         phase: Math.random() * 7,
@@ -514,11 +502,16 @@ function syncPawns(s) {
         selectPawn(p.id);
       });
     }
-    const hue = hashHue(p.name);
-    rec.ring.style.background =
-      `radial-gradient(circle at 30% 30%, hsl(${hue} 65% 62%), hsl(${hue} 55% 38%))`;
-    const fig = pawnFigure(p);
-    if (rec.figure.textContent !== fig) rec.figure.textContent = fig;
+    // Re-render the pixel sprite only when its characteristics change.
+    const hue = Sprites.hueFromName(p.name);
+    const sig = `${p.sex}|${p.elder}|${p.child}|${hue}`;
+    if (rec.spriteSig !== sig) {
+      rec.spriteSig = sig;
+      rec.idleCv = Sprites.makePawnSprite(p.sex, p.elder, p.child, hue, (hue + 150) % 360, 0, 0);
+      rec.walkA = Sprites.makePawnSprite(p.sex, p.elder, p.child, hue, (hue + 150) % 360, 1, 1);
+      rec.walkB = Sprites.makePawnSprite(p.sex, p.elder, p.child, hue, (hue + 150) % 360, 0, 0);
+      rec.drawn = "";
+    }
     const label = p.title ? `${p.name} ${p.title}` : p.name;
     if (rec.name.textContent !== label) rec.name.textContent = label;
     rec.el.classList.remove("leaving");
@@ -641,7 +634,7 @@ function addBubble(key, kind, text, rec) {
 // ---- per-tick emotes ----
 function findActorSpot(id) {
   const p = pawns.get(id);
-  if (p) return { x: p.x, y: p.y - 34 };
+  if (p) return { x: p.x, y: p.y - 46 };
   for (const c of creatures.values()) {
     if (c.key === id) return { x: c.x, y: c.y - 26 };
   }
@@ -906,25 +899,34 @@ function frame(now) {
         y = rec.py + (rec.y - rec.py) * t - Math.sin(t * Math.PI) * 10;
         if (elapsed >= WALK_SECONDS) rec.moving = false;
       } else {
-        let bobAmp = 2.5, bobFreq = 520, ringRot = 0;
+        let bobAmp = 2.5, bobFreq = 520, spriteRot = 0;
         switch (rec.action) {
-          case "Chop": bobAmp = 4; bobFreq = 230; ringRot = 0.18; break;
-          case "Forage": bobAmp = 4; bobFreq = 300; ringRot = 0.1; break;
+          case "Chop": bobAmp = 4; bobFreq = 230; spriteRot = 0.16; break;
+          case "Forage": bobAmp = 4; bobFreq = 300; spriteRot = 0.08; break;
           case "Build": bobAmp = 3; bobFreq = 340; break;
-          case "Scout": bobAmp = 3; bobFreq = 700; ringRot = 0.07; break;
+          case "Scout": bobAmp = 3; bobFreq = 700; spriteRot = 0.06; break;
           case "Rest": bobAmp = 1.5; bobFreq = 900; break;
-          case "Attack": bobAmp = 4; bobFreq = 180; ringRot = 0.22; break;
+          case "Attack": bobAmp = 4; bobFreq = 180; spriteRot = 0.2; break;
         }
         const bob = Math.abs(Math.sin(now / bobFreq + rec.phase)) * bobAmp;
         y -= bob;
-        rec.ring.style.transform = ringRot
-          ? `rotate(${Math.sin(now / bobFreq + rec.phase) * ringRot}rad)`
+        rec.cv.style.transform = spriteRot
+          ? `translateX(-50%) rotate(${Math.sin(now / bobFreq + rec.phase) * spriteRot}rad)`
           : "";
         if (elapsed > BUBBLE_DELAY + BUBBLE_LIFE && now > rec.nextEmote) {
           const emo = ACTION_EMOTE[rec.action];
-          if (emo) spawnEmote(emo, x, y - 42);
+          if (emo) spawnEmote(emo, x, y - 46);
           rec.nextEmote = now + 4000 + Math.random() * 4000;
         }
+      }
+      // Animated sprite: idle stance, or alternating walk stride while moving.
+      const want = rec.moving ? (Math.floor(now / 170) % 2 === 0 ? "a" : "b") : "i";
+      if (rec.drawn !== want) {
+        rec.drawn = want;
+        const src = want === "i" ? rec.idleCv : want === "a" ? rec.walkA : rec.walkB;
+        const g = rec.cv.getContext("2d");
+        g.clearRect(0, 0, Sprites.PAWN_CV_W, Sprites.PAWN_CV_H);
+        if (src) g.drawImage(src, 0, 0);
       }
       rec.el.style.left = x + "px";
       rec.el.style.top = y + "px";
@@ -935,7 +937,7 @@ function frame(now) {
       rec.el.style.top = rec.y - bob + "px";
     }
     for (const [, b] of bubbles) {
-      const lift = b.kind === "thought" ? 112 : 86;
+      const lift = b.kind === "thought" ? 124 : 96;
       b.el.style.left = b.rec.x + "px";
       b.el.style.top = b.rec.y - lift + "px";
     }

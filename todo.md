@@ -63,13 +63,13 @@
 - [x] **`web/sprites.js` sprite factory + palettes**: `makeSprite(rows, palette)` rasterizes string grids to offscreen canvases; deterministic hashing for per-tile noise; `imageSmoothingEnabled=false` crisp scaling; exposed as `window.Sprites` (loaded before `app.js`).
 - [x] **Ground textures + object sprites**: coarse 28×14 textures (grass/water/rock/dirt/ash/scorch/farm) upscaled 6× and clipped to the iso diamond + pixel sprites — pine 🌲, rock pile 🪨, ruin wall 💀, tent 🏕️, campfire logs, farm sprouts 🌾, ash mound 🌫️, berry bush 🫐, lily pad 🌊 — cached per tile and rebuilt only when the grid changes.
 - [x] **Rewire `drawIsland()`**: pre-rendered tile sprites replace the colored diamonds + emoji glyphs; water shimmer, wildfire flame/glow, and the campfire flame (2-frame animated) stay live per-frame.
-- [ ] **Pawn sprites**: standing pixel characters (sex/elder/child + hue variants, idle/walk) — Part C.
+- [x] **Pawn sprites**: standing pixel characters (sex/elder/child + hue variants, idle/walk) — Part C.
 - [ ] **Fauna / visitor / raider sprites** + **4-frame animated campfire** — Part D.
 - [ ] **Attribution**: n/a (procedural, zero external assets — note this in `README.md`).
 
 ### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
 - [ ] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.
-- [ ] **Standing sprites**: replace the circular portrait tokens with standing character sprites that stand on the grass.
+- [x] **Standing sprites**: replace the circular portrait tokens with standing character sprites that stand on the grass.
 - [ ] **Hovering name tags**: show names on hover (or crisp small name pills under each pawn's feet) instead of always-overlapping labels.
 - [ ] **Per-pawn bubbles**: speech, thought, and 💤 sleep icons float above the *individual* sprite (honoring the slot offset), not covering the whole tile.
 

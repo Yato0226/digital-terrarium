@@ -389,4 +389,143 @@ function drawFlame(ctx, x, yBottom, now) {
   );
 }
 
-window.Sprites = { getTile, resetTiles, drawFlame, drawSpriteAt, SPRITES };
+// ---- pawn sprites (standing pixel characters, hue-varied per name) ----
+// Native canvas 48x72 (12x18 art at scale 4). Chars: h/H hair, f face, Y eyes,
+// t/T tunic, b belt, L pants, s shoes. 'h' and 't' are recoloured per pawn.
+const PAWN_CV_W = 48;
+const PAWN_CV_H = 72;
+
+const IDLE_M = [
+  "....hhhh....",
+  "...hhhhhh...",
+  "...hhHHhh...",
+  "..hffffffh..",
+  "..ffYffYff..",
+  "..ffffffff..",
+  "..tttttttt..",
+  ".tttttttttt.",
+  ".tttttttttt.",
+  ".tttttttttt.",
+  "..tttttttt..",
+  "..bTTTTTTb..",
+  "..LLLLLLLL..",
+  "..LLLLLLLL..",
+  "...LL..LL...",
+  "...LL..LL...",
+  "...ss..ss...",
+  "...ss..ss...",
+];
+
+const IDLE_F = [
+  "....hhhh....",
+  "...hhhhhh...",
+  "..hhhhhhhh..",
+  "..hffffffh..",
+  "..ffYffYff..",
+  "..hfffffhh..",
+  ".hhttttthh..",
+  ".hhtttttthh.",
+  ".hhtttttthh.",
+  ".tttttttttt.",
+  "..tttttttt..",
+  "..bTTTTTTb..",
+  "..LLLLLLLL..",
+  "..LLLLLLLL..",
+  "...LL..LL...",
+  "...LL..LL...",
+  "...ss..ss...",
+  "...ss..ss...",
+];
+
+// Walk frames: rows 14-17 become a mid-stride stance.
+const WALK_M = [
+  ...IDLE_M.slice(0, 14),
+  "...LL.LL....",
+  "...LL.LL....",
+  "...ss.ss....",
+  "...ss.ss....",
+];
+
+const WALK_F = [
+  ...IDLE_F.slice(0, 14),
+  "...LL.LL....",
+  "...LL.LL....",
+  "...ss.ss....",
+  "...ss.ss....",
+];
+
+const CHILD = [
+  "....hhhh....",
+  "...hhhhhh...",
+  "..hhhhhhhh..",
+  "..ffffffff..",
+  "..fYffYff...",
+  "..ffffffff..",
+  ".tttttttttt.",
+  ".tttttttttt.",
+  ".tttttttttt.",
+  "..tttttttt..",
+  "..LLLLLLLL..",
+  "..LLLLLLLL..",
+  "...LL..LL...",
+  "...ss..ss...",
+];
+
+function hueFromName(name) {
+  let h = 0;
+  for (const ch of String(name)) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return h;
+}
+
+function hsl(h, s, l) {
+  return `hsl(${h}, ${s}%, ${l}%)`;
+}
+
+// frame: 0 = idle stance, 1 = walk stride. bobY lifts the art 1px (walk bob).
+function makePawnSprite(sex, elder, child, hairHue, tunicHue, frame, bobY) {
+  let rows;
+  if (child) {
+    rows = CHILD;
+  } else if (frame === 1) {
+    rows = sex === "F" ? WALK_F : WALK_M;
+  } else {
+    rows = sex === "F" ? IDLE_F : IDLE_M;
+  }
+  const hair = elder ? "#aab2bd" : hsl(hairHue, 45, 40);
+  const sheen = elder ? "#c8cfd8" : hsl(hairHue, 45, 58);
+  const pal = {
+    h: hair,
+    H: sheen,
+    f: "#eec49c",
+    Y: "#1f1f24",
+    t: hsl(tunicHue, 42, 42),
+    T: hsl(tunicHue, 42, 60),
+    b: "#4a3120",
+    L: "#46505e",
+    s: "#33261a",
+  };
+  const src = makeSprite(rows, pal);
+  const scale = child ? 3 : 4;
+  const c = document.createElement("canvas");
+  c.width = PAWN_CV_W;
+  c.height = PAWN_CV_H;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  const w = src.width * scale;
+  const h = src.height * scale;
+  g.drawImage(src, (PAWN_CV_W - w) / 2, PAWN_CV_H - h - (bobY || 0), w, h);
+  return c;
+}
+
+window.Sprites = {
+  getTile,
+  resetTiles,
+  drawFlame,
+  drawSpriteAt,
+  SPRITES,
+  PAWN_CV_W,
+  PAWN_CV_H,
+  makePawnSprite,
+  hueFromName,
+  PAWN_ROWS: { IDLE_M, IDLE_F, WALK_M, WALK_F, CHILD },
+};

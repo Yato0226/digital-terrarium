@@ -133,9 +133,19 @@
 - Commit: `Stage 7: procedural pixel tile sprites`.
 
 ### Part C — Pawn sprites (todo Step 7 + Step 8 "standing sprites")
-- [ ] Standing pixel pawn sprites (sex/elder/child + hue variants, idle/walk).
-- [ ] Replace circular `.ring` tokens; keep name labels + status badges (💤🌀🤰
+- [x] Standing pixel pawn sprites (sex/elder/child + hue variants, idle/walk).
+  **Done:** 12×18 pixel characters (M short hair / F long side-hair, elder = grey
+  hair, CHILD 12×14 drawn at 3×), hair + tunic recoloured per pawn via
+  `hueFromName` (deterministic, same hue family as the old ring); `makePawnSprite`
+  renders idle + two walk-stance canvases at 48×72 (4× nearest-neighbour). Old
+  `hashHue`/`pawnFigure` removed; `Sprites.PAWN_ROWS` export for the verify harness.
+- [x] Replace circular `.ring` tokens; keep name labels + status badges (💤🌀🤰
   emoji stay — they're UI).
+  **Done:** `.pawn` now hosts a `.psprite` canvas (feet-anchored at the iso point)
+  + absolute name tag + soft contact-shadow ::after; selection = pulsing ring under
+  the feet instead of the ring border. Action bob now tilts the sprite canvas;
+  walk = alternating stride frames at 170 ms + the 0–4 s hop; bubbles/emotes lifted
+  for the taller sprites (speech 96 / thought 124, emotes −46).
 - Commit: `Stage 7: pixel pawn sprites`.
 
 ### Part D — Fauna, visitors, raiders, campfire (todo Step 7)
