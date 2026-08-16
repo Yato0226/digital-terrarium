@@ -178,13 +178,68 @@
     return sliceCache.waterTile;
   }
 
-  /** TILE×TILE ground canvas for a tile type at grid (x,y). */
+  function farmCanvas(x, y) {
+    // Tilled soil: dirt base + horizontal furrow rows (darker groove + ridge).
+    const cv = dirtCanvas(x, y);
+    const g = cv.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    for (let f = 0; f < 4; f++) {
+      const fy = 2 + f * 4; // rows 2, 6, 10, 14 of the 16px tile
+      g.fillStyle = "rgba(50,32,16,0.55)";
+      g.fillRect(0, fy, 16, 1);
+      g.fillStyle = "rgba(255,232,185,0.16)";
+      g.fillRect(0, fy + 1, 16, 1);
+    }
+    return cv;
+  }
+
+  function ashCanvas(x, y) {
+    // Pale gray ash field (after a fire or miasma has passed).
+    const cv = makeCanvas(16, 16);
+    const g = cv.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    for (let j = 0; j < 16; j++) {
+      for (let i = 0; i < 16; i++) {
+        const n = noise(x * 16 + i, y * 16 + j);
+        const v = 66 + (n - 0.5) * 22 - (n > 0.8 ? 30 : 0);
+        g.fillStyle = "rgb(" + Math.max(0, Math.round(v)) + "," +
+          Math.max(0, Math.round(v * 0.9)) + "," + Math.max(0, Math.round(v * 0.84)) + ")";
+        g.fillRect(i, j, 1, 1);
+      }
+    }
+    return cv;
+  }
+
+  function scorchCanvas(x, y) {
+    // Charred black earth with faint ember specks (wildfire tile).
+    const cv = makeCanvas(16, 16);
+    const g = cv.getContext("2d");
+    g.imageSmoothingEnabled = false;
+    for (let j = 0; j < 16; j++) {
+      for (let i = 0; i < 16; i++) {
+        const n = noise(x * 16 + i, y * 16 + j);
+        let r, g2, b;
+        if (n > 0.93) { r = 130; g2 = 62; b = 28; }       // ember speck
+        else if (n > 0.86) { r = 74; g2 = 50; b = 36; }
+        else { r = 42 - n * 14; g2 = 36 - n * 12; b = 32 - n * 10; }
+        g.fillStyle = "rgb(" + Math.max(0, Math.round(r)) + "," +
+          Math.max(0, Math.round(g2)) + "," + Math.max(0, Math.round(b)) + ")";
+        g.fillRect(i, j, 1, 1);
+      }
+    }
+    return cv;
+  }
+
+  /** 16×16 ground canvas for a tile type at grid (x,y). */
   function ground(type, x, y) {
     const key = "ground|" + type + "|" + x + "|" + y;
     if (!sliceCache[key]) {
       let tile16;
       if (type === "grass") { tile16 = grassCanvas(x, y); }
       else if (type === "dirt") { tile16 = dirtCanvas(x, y); }
+      else if (type === "farm") { tile16 = farmCanvas(x, y); }
+      else if (type === "ash") { tile16 = ashCanvas(x, y); }
+      else if (type === "scorch") { tile16 = scorchCanvas(x, y); }
       else if (type === "water") { tile16 = waterCanvas(); }
       else { tile16 = grassCanvas(x, y); }
       sliceCache[key] = tile16;

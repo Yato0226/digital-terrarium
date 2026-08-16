@@ -14,7 +14,7 @@ const path = require("path");
 // ---------- canvas 2d context stub ----------
 function grad() { return { addColorStop: () => {} }; }
 const ctxStub = () => ({
-  arc: () => {}, beginPath: () => {}, clearRect: () => {}, clip: () => {},
+  arc: () => {}, arcTo: () => {}, beginPath: () => {}, clearRect: () => {}, clip: () => {},
   closePath: () => {}, createLinearGradient: grad, createRadialGradient: grad,
   drawImage: () => {}, fill: () => {}, fillRect: () => {},
   lineTo: () => {}, moveTo: () => {}, quadraticCurveTo: () => {},
@@ -131,6 +131,16 @@ global.document = {
   },
 };
 
+// atlas.js loads its PNGs via `new Image()`; simulate an instant decode so
+// `Atlas.ready` resolves and the Atlas-driven renderer is exercised.
+global.Image = class {
+  set src(v) {
+    this._src = v;
+    queueMicrotask(() => { if (this.onload) this.onload(); });
+  }
+  get src() { return this._src; }
+};
+
 // Seed the HUD/panel elements.
 seeded("stage");
 seeded("hud");
@@ -174,6 +184,8 @@ global.requestAnimationFrame = (cb) => { rafCb = cb; return 1; };
 const root = path.join(__dirname, "..");
 const clientSrc =
   fs.readFileSync(path.join(root, "web", "sprites.js"), "utf8") +
+  "\n;\n" +
+  fs.readFileSync(path.join(root, "web", "atlas.js"), "utf8") +
   "\n;\n" +
   fs.readFileSync(path.join(root, "web", "app.js"), "utf8");
 eval(clientSrc);
@@ -250,6 +262,18 @@ try {
   if (logEl.children.length !== 2) throw new Error(`log rows expected 2, got ${logEl.children.length}`);
   if (byId.sprites.children.length !== 9) throw new Error(`pawn+creature els expected 9, got ${byId.sprites.children.length}`);
   now = frames(20, now);
+
+  // Top-down board: Atlas is wired in and pawns anchor to tile centres.
+  if (typeof Atlas === "undefined") throw new Error("Atlas not loaded (atlas.js eval failed)");
+  for (const key of ["tree1", "cottage", "water", "wellTop", "grass"]) {
+    if (!Atlas._slices || !Atlas._slices[key]) throw new Error(`Atlas slice "${key}" missing`);
+  }
+  // Fern (pawn[0]) sits at camp (2,2): tile-centre x = ORIGIN_X (550px);
+  // y = 430 minus the resting bob (±3).
+  const fernEl = byId.sprites.children[0];
+  if (!fernEl || fernEl.style.left !== "550px") throw new Error(`camp pawn x expected 550px, got ${fernEl && fernEl.style.left}`);
+  const fernTop = parseFloat(fernEl.style.top);
+  if (!(fernTop >= 420 && fernTop <= 432)) throw new Error(`camp pawn y expected ~430 (rest bob), got ${fernTop}`);
 
   // The roster bars must actually get widths (regression for the .r-hp/.r-en
   // class mismatch that nuked applySnapshot on every tick).

@@ -160,13 +160,26 @@ All slices are pixel boxes into `Serene_Village_16x16.png` (304×720 = 19×45 ti
   section + `paper.txt` §credits.
 - Commit: `Stage 12: vendor Serene Village tileset + tile atlas`. ✅
 
-### Part B — Top-down terrain renderer (todo Step 12)
-- [ ] Replace iso geometry with top-down (`TILE=128`, map centered, `top(x,y)`).
-- [ ] Rewrite `drawIsland()` → `drawWorld()`: backdrop + board frame + ground
+### Part B — Top-down terrain renderer ✅ (todo Step 12)
+- [x] Replace iso geometry with top-down (`TILE=128`, map centered, `top(x,y)`).
+- [x] Rewrite `drawIsland()` → `drawWorld()`: backdrop + board frame + ground
   tiles (vendored) + shore transitions + farm/ash/scorch + seasonal tint.
-- [ ] Water animation: 14-frame waves overlay on river tiles.
-- [ ] Wire `Atlas.ground()` into the grid-signature tile cache.
-- Commit: `Stage 12: top-down terrain renderer`.
+- [x] Water animation: 14-frame waves overlay on river tiles.
+- [x] Wire `Atlas.ground()` into the grid-signature tile cache.
+- Commit: `Stage 12: top-down terrain renderer`. ✅
+
+Notes landed with Part B:
+- **Bank lips are procedural** — the user-locked `shoreN/S/E/W` slices are a
+  *diagonal sandy beach* scene (the band runs NW→SE; N/S pieces span 74px, not
+  one tile), so straight river banks are drawn as a foam rim on water edges +
+  a dark earthy lip on adjacent land edges (`drawBankLips`), reading cleanly as
+  a river embankment.
+- **`Atlas.ground()` already caches per (type,x,y)** 16×16 canvases, so no
+  separate `lastGridSig`/`Sprites.getTile` cache is needed — `lastGridSig` was
+  removed and the grid pass draws ground + animated water per frame.
+- **Transitional stand-ins**: trees/cottage/bushes/rocks/ruins/sprouts/ash are
+  still drawn on the canvas from `Sprites.SPRITES` (Part B); Part C replaces
+  them with DOM y-sorted vendored sprites.
 
 ### Part C — Standing objects + y-sort (todo Step 12)
 - [ ] DOM object layer: trees (forest), berry bushes (meadow), rocks (quarry),

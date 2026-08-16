@@ -1,45 +1,50 @@
-/* Phase 6 Steps 2–4: the floating isometric diorama client + interactive HUD.
+/* Phase 6 Step 12: top-down sprite world client (vendored LimeZu tileset) + HUD.
  *
  * Timeline for each 60s tick (matches TICK_INTERVAL_SECONDS):
- *   0–4s   pawns whose tile changed walk diagonally across the island
+ *   0–4s   pawns whose tile changed walk across the board
  *   4–12s  speech (quote) and thoughts (inner_monologue) hit the corner chat box
  *   12–60s looping idle animation + periodic action emotes
- *   always floating smoke, river shimmer, swaying trees, night tint
+ *   always floating smoke, animated river, swaying trees, night tint
  *
- * Step 4 HUD: top resource/stockpile bar + campfire/shelter gauges, a
- * scrolling bottom narrative log, click-to-inspect pawn dossiers, a
- * lore-archives panel (graveyard, monolith runes, chronicle, patch notes),
- * and a bottom-right chat box showing pawn dialogue instead of floating
- * comic bubbles.
+ * The world renders as a flat 5×5 top-down board: the wooden frame + ground
+ * pass + animated water + effects are drawn on canvas; standing objects
+ * (trees, cottage, campfire, …), pawns and creatures are DOM sprites y-sorted
+ * by their footprint depth (z-index = anchorY * 10).
  *
- * Zero dependencies: vanilla JS + Canvas2D + DOM overlays.
+ * World art is vendored from "Serene Village — revamped" by LimeZu (CC-BY 4.0,
+ * web/assets/); pawns/creatures stay procedural (web/sprites.js).
+ *
+ * Zero runtime downloads: vanilla JS + Canvas2D + DOM overlays.
  */
 "use strict";
 
 const STAGE_W = 1100;
 const STAGE_H = 900;
-const TILE_W = 168;
-const TILE_H = 84;
-const ORIGIN_X = 550;
-const ORIGIN_Y = 212;
+// Top-down board: a 5×5 tile map, each tile 128px (16px art × 8 nearest).
+const TILE = 128;
+const BOARD = 5;
+const ORIGIN_X = 550;   // board centre x (stage centre)
+const ORIGIN_Y = 430;   // board centre y
+const FRAME = 34;       // wooden board frame thickness around the map
 const MAX_ZOOM = 1.6;
 
 const WALK_SECONDS = 4;
 const BUBBLE_DELAY = 4;
 const BUBBLE_LIFE = 8;
 
-// Diamond-formation offsets (screen px) for stacked pawns on one tile, keyed by
-// the pawn's sorted slot on that tile — stable across ticks, so a pawn keeps its
-// corner while neighbours come and go (they shuffle over the walk window).
+// Top-down slot offsets (screen px) for stacked pawns on one tile, keyed by
+// the pawn's sorted slot on that tile — stable across ticks, so a pawn keeps
+// its corner while neighbours come and go (they shuffle over the walk window).
+// Spread is tuned to a 128px tile so up to ~10 pawns don't overlap too much.
 const SLOT_OFFSETS = [
   [0, 0],
-  [-11, -6], [11, -6],
-  [0, 8],
-  [-11, -18], [11, -18],
-  [0, -20],
-  [-22, -6], [22, -6],
-  [0, 20],
-  [-22, -18], [22, -18],
+  [-14, -8], [14, -8],
+  [0, 10],
+  [-14, -22], [14, -22],
+  [0, -24],
+  [-28, -8], [28, -8],
+  [0, 26],
+  [-28, -22], [28, -22],
 ];
 function slotOffset(i) {
   return SLOT_OFFSETS[i] || [0, 0];
@@ -118,16 +123,16 @@ let selectedId = null;
 let lastSnapTick = -1;
 let lastLogTick = -1;
 let lastChatTick = -1;
-let lastGridSig = null;
 let loreTab = "graveyard";
 let rosterSig = null;
 const rosterCards = new Map();  // pawn id -> roster card element
 
 // ---- small helpers ----
-function iso(x, y) {
+/** Tile-centre screen point for grid (x, y) — top-down 5×5 board. */
+function top(x, y) {
   return {
-    x: ORIGIN_X + (x - y) * (TILE_W / 2),
-    y: ORIGIN_Y + (x + y) * (TILE_H / 2),
+    x: ORIGIN_X + (x - (BOARD - 1) / 2) * TILE,
+    y: ORIGIN_Y + (y - (BOARD - 1) / 2) * TILE,
   };
 }
 
@@ -139,14 +144,6 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[c]);
-}
-
-function diamond(cx, cy, w, h) {
-  ctx.moveTo(cx, cy - h / 2);
-  ctx.lineTo(cx + w / 2, cy);
-  ctx.lineTo(cx, cy + h / 2);
-  ctx.lineTo(cx - w / 2, cy);
-  ctx.closePath();
 }
 
 function spawnEmote(emoji, x, y) {
@@ -268,67 +265,65 @@ function drawMountains(season, day) {
   drawRidge(545, 120, night ? "rgba(6,14,32,0.95)" : "rgba(56,82,118,0.85)", 3.7, winter && !night);
 }
 
-function drawGroundShadow() {
-  const cx = ORIGIN_X;
-  const cy = ORIGIN_Y + 4 * TILE_H + 1.2 * TILE_H + 28; // just below the rock tip
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, 0.4);
-  const g = ctx.createRadialGradient(0, 0, 14, 0, 0, 3.05 * TILE_W);
-  g.addColorStop(0, "rgba(0,0,0,0.5)");
-  g.addColorStop(0.55, "rgba(0,0,0,0.26)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
+// ---- canvas: the top-down board ----
+let atlasReady = false;
+Atlas.onReady(() => { atlasReady = true; });
+
+/** Map pixel bounds (the 5×5 tile area). */
+function mapBounds() {
+  const min = top(0, 0);
+  const max = top(BOARD - 1, BOARD - 1);
+  return {
+    x: min.x - TILE / 2,
+    y: min.y - TILE / 2,
+    w: max.x - min.x + TILE,
+    h: max.y - min.y + TILE,
+  };
+}
+
+function roundRectPath(x, y, w, h, r) {
   ctx.beginPath();
-  ctx.arc(0, 0, 3.05 * TILE_W, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
 }
 
-function drawRoots(now) {
-  const tfc = ORIGIN_Y + 2 * TILE_H;
-  const midY = tfc + 18; // dirt-lip center
-  const tipY = midY + (5 * TILE_H) / 2;
-  const spread = (5 * TILE_W) / 2;
-  const ts = [0.14, 0.3, 0.46, 0.62, 0.8];
-  ctx.strokeStyle = "#3b2a1c";
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  for (const tt of ts) {
-    const px = spread * tt;
-    const py = tipY - (tipY - midY) * tt;
-    for (const side of [-1, 1]) {
-      const seed = tt * 41.7 + (side > 0 ? 13.3 : 7.7);
-      const sway = Math.sin(now / 800 + seed) * 6;
-      const len = 20 + 16 * Math.abs(Math.sin(seed * 2.9));
-      ctx.beginPath();
-      ctx.moveTo(ORIGIN_X + side * px, py);
-      ctx.quadraticCurveTo(
-        ORIGIN_X + side * px + sway * 0.4,
-        py + len * 0.45,
-        ORIGIN_X + side * px + sway,
-        py + len
-      );
-      ctx.stroke();
-    }
-  }
-  for (const seed of [1.1, 2.6]) {
-    const sway = Math.sin(now / 850 + seed * 5) * 5;
-    const len = 16 + 14 * Math.abs(Math.sin(seed * 4.1));
-    ctx.beginPath();
-    ctx.moveTo(ORIGIN_X + (seed - 2) * 14, tipY);
-    ctx.quadraticCurveTo(
-      ORIGIN_X + (seed - 2) * 14 + sway * 0.4,
-      tipY + len * 0.45,
-      ORIGIN_X + (seed - 2) * 14 + sway,
-      tipY + len
-    );
-    ctx.stroke();
-  }
+/** Season-tinted overlay colour for the map area. */
+function groundTint(season) {
+  const s = String(season || "").toLowerCase();
+  if (s.includes("winter")) return "rgba(205,225,250,0.16)";
+  if (s.includes("autumn")) return "rgba(255,166,80,0.10)";
+  if (s.includes("summer")) return "rgba(255,244,170,0.06)";
+  return "rgba(190,255,180,0.07)"; // spring
 }
 
-// ---- canvas: the floating island ----
-function drawIsland(now) {
+function isWaterTile(tile) { return tile === "🌊"; }
+
+/** Ground-type key for Atlas.ground() from a grid emoji. */
+function groundKey(tile) {
+  if (tile === "🪨" || tile === "💀") return "dirt";
+  if (tile === "🌾") return "farm";
+  if (tile === "🌫️") return "ash";
+  if (tile === "🔥") return "scorch";
+  return "grass";
+}
+
+/** [x, y, w, h] band rect along one edge of a TILE-sized tile. */
+function edgeBand(edge, px, py, size) {
+  if (edge === 0) return [px, py, TILE, size];              // N
+  if (edge === 1) return [px, py + TILE - size, TILE, size]; // S
+  if (edge === 2) return [px, py, size, TILE];              // W
+  return [px + TILE - size, py, size, TILE];                // E
+}
+
+function drawWorld(now) {
   ctx.clearRect(0, 0, STAGE_W, STAGE_H);
   if (!snap) return;
   const grid = snap.grid;
@@ -380,88 +375,59 @@ function drawIsland(now) {
     ctx.fill();
   }
 
-  // --- soft ground shadow beneath the floating chunk ---
-  drawGroundShadow();
-
-  // --- floating island chunk: rock strata + dirt drop ---
-  const tfc = ORIGIN_Y + 2 * TILE_H; // top-face diamond center y
-  const tfw = 5 * TILE_W;
-  const tfh = 5 * TILE_H;
-  const layers = [
-    { cy: tfc + 165, scale: 0.68, fill: "#131a26", edge: "#0c1119" },
-    { cy: tfc + 124, scale: 0.78, fill: "#1e2c3c", edge: "#15202c" },
-    { cy: tfc + 84, scale: 0.89, fill: "#33465c", edge: "#263548" },
-    { cy: tfc + 46, scale: 1.0, fill: "#5a4035", edge: "#46301f" },
-  ];
-  for (const L of layers) {
-    ctx.beginPath();
-    diamond(ORIGIN_X, L.cy, tfw * L.scale, tfh * L.scale);
-    ctx.fillStyle = L.fill;
-    ctx.fill();
-    ctx.strokeStyle = L.edge;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // Dirt lip directly under the grass rim.
-  ctx.beginPath();
-  diamond(ORIGIN_X, tfc + 18, tfw, tfh);
-  ctx.fillStyle = "#6b4a35";
+  // --- wooden board frame: the diorama sits on a tabletop ---
+  const m = mapBounds();
+  const f = { x: m.x - FRAME, y: m.y - FRAME, w: m.w + FRAME * 2, h: m.h + FRAME * 2 };
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundRectPath(f.x + 12, f.y + 18, f.w, f.h, 20);
   ctx.fill();
-  ctx.strokeStyle = "#4e342e";
+  ctx.restore();
+  // dark outer wood, warm inner planks, subtle top-light bevel
+  ctx.fillStyle = "#3b2a1c";
+  roundRectPath(f.x, f.y, f.w, f.h, 16);
+  ctx.fill();
+  ctx.fillStyle = "#573d26";
+  roundRectPath(f.x + 6, f.y + 6, f.w - 12, f.h - 12, 11);
+  ctx.fill();
+  ctx.fillStyle = "#6e4f33";
+  roundRectPath(f.x + 10, f.y + 10, f.w - 20, f.h - 20, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,220,160,0.22)";
   ctx.lineWidth = 2;
+  roundRectPath(f.x + 11, f.y + 11, f.w - 22, f.h - 22, 7);
   ctx.stroke();
+  // recessed map well inside the frame
+  ctx.fillStyle = "#241a10";
+  roundRectPath(m.x - 3, m.y - 3, m.w + 6, m.h + 6, 3);
+  ctx.fill();
 
-  // Dangling roots off the dirt band.
-  drawRoots(t);
-
-  // Two-tone grass rim around the top face.
-  ctx.beginPath();
-  diamond(ORIGIN_X, tfc, tfw, tfh);
-  ctx.strokeStyle = "#1d4d20";
-  ctx.lineWidth = 12;
-  ctx.stroke();
-  ctx.beginPath();
-  diamond(ORIGIN_X, tfc, tfw - 8, tfh - 4);
-  ctx.strokeStyle = "#2e7d32";
-  ctx.lineWidth = 4;
-  ctx.stroke();
-
-  // Pre-rendered pixel-art tile sprites (cached; rebuilt only when the grid changes).
-  const gridSig = grid.join("\n");
-  if (gridSig !== lastGridSig) {
-    lastGridSig = gridSig;
-    Sprites.resetTiles();
-  }
+  // --- ground pass: flat Atlas tiles, 8× nearest-neighbour upscale ---
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
-      const tile = grid[y][x];
-      const c = iso(x, y);
-      ctx.drawImage(Sprites.getTile(tile, x, y), c.x - TILE_W / 2, c.y - TILE_H / 2);
+      drawGroundTile(grid[y][x], x, y, grid, t);
     }
   }
 
-  // Living effects over the tiles: water shimmer, wildfire glow + flame.
+  // --- standing objects (procedural stand-ins; DOM y-sorted in Part C) ---
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
-      const tile = grid[y][x];
-      const c = iso(x, y);
-      if (tile === "🌊") {
-        ctx.fillStyle = "rgba(255,255,255,0.5)";
-        for (let i = 0; i < 3; i++) {
-          const phase = ((t / 900) * (0.6 + (x + y) * 0.06) + i * 0.33) % 1;
-          ctx.beginPath();
-          ctx.arc(c.x + (phase - 0.5) * 80, c.y + (i - 1) * 12, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (tile === "🔥") {
+      drawStandin(grid[y][x], x, y);
+    }
+  }
+
+  // Living effects over the tiles: wildfire glow + flame.
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[y].length; x++) {
+      if (grid[y][x] === "🔥") {
+        const c = top(x, y);
         const a = 0.14 + 0.09 * Math.sin(t / 140 + x * 2);
         const g = ctx.createRadialGradient(c.x, c.y - 4, 4, c.x, c.y - 4, 60);
         g.addColorStop(0, `rgba(255,120,40,${a})`);
         g.addColorStop(1, "rgba(255,120,40,0)");
         ctx.fillStyle = g;
         ctx.fillRect(c.x - 60, c.y - 64, 120, 120);
-        Sprites.drawFlame(ctx, c.x, c.y + 30, t);
+        Sprites.drawFlame(ctx, c.x, c.y + 34, t);
       }
     }
   }
@@ -469,15 +435,15 @@ function drawIsland(now) {
   // Campfire flame + smoke (camp is always the (2,2) tile).
   const campfire = (snap.biome && snap.biome.campfire) || 0;
   if (campfire > 0) {
-    const camp = iso(2, 2);
+    const camp = top(2, 2);
     const flick = 0.55 + 0.2 * Math.sin(t / 90) + 0.1 * Math.sin(t / 47 + 2);
     const g = ctx.createRadialGradient(camp.x, camp.y - 10, 2, camp.x, camp.y - 10, 54);
     g.addColorStop(0, `rgba(255,170,60,${0.5 * flick})`);
     g.addColorStop(1, "rgba(255,120,30,0)");
     ctx.fillStyle = g;
     ctx.fillRect(camp.x - 54, camp.y - 64, 108, 108);
-    Sprites.drawFlame(ctx, camp.x, camp.y + 26, t);
-    spawnSmoke(camp.x + 14, camp.y - 18);
+    Sprites.drawFlame(ctx, camp.x, camp.y + 34, t);
+    spawnSmoke(camp.x + 14, camp.y - 26);
   }
 
   // Rising smoke.
@@ -497,12 +463,19 @@ function drawIsland(now) {
     ctx.fill();
   }
 
+  // Seasonal ground tint over the map.
+  const tint = groundTint(season);
+  if (tint) {
+    ctx.fillStyle = tint;
+    ctx.fillRect(m.x, m.y, m.w, m.h);
+  }
+
   // Night tint (lighter — the sky itself is already dark).
   if (snap.day === 0) {
     ctx.fillStyle = "rgba(10, 14, 40, 0.22)";
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     if (campfire > 0) {
-      const camp = iso(2, 2);
+      const camp = top(2, 2);
       const flick = 0.75 + 0.25 * Math.sin(t / 150) * Math.sin(t / 61);
       // Screen-blend warm pools over the dark tint: a wide falloff keeps the
       // outer forest in shadow while a bright ring lights camp + neighbours.
@@ -538,6 +511,67 @@ function drawIsland(now) {
       ctx.fillStyle = `rgba(235,242,255,${0.3 + 0.35 * tw})`;
       ctx.fill();
     }
+  }
+}
+
+// ---- ground tile pass ----
+function drawGroundTile(tile, x, y, grid, t) {
+  const c = top(x, y);
+  const px = c.x - TILE / 2;
+  const py = c.y - TILE / 2;
+  if (isWaterTile(tile)) {
+    // Animated river: 14-frame subtle wave strip, phase-offset per tile.
+    const frame = Atlas.waterFrame(Math.floor(t / 120) + x * 5 + y * 2);
+    ctx.drawImage(frame, 0, 0, 16, 16, px, py, TILE, TILE);
+  } else if (atlasReady) {
+    const g = Atlas.ground(groundKey(tile), x, y);
+    ctx.drawImage(g, 0, 0, 16, 16, px, py, TILE, TILE);
+  } else {
+    ctx.fillStyle = "#3c5a2e"; // pre-atlas fallback
+    ctx.fillRect(px, py, TILE, TILE);
+  }
+  drawBankLips(tile, x, y, px, py, grid);
+}
+
+/** River banks: foam rim on water edges + earthy lip on land edges. */
+function drawBankLips(tile, x, y, px, py, grid) {
+  const water = isWaterTile(tile);
+  const dirs = [[0, -1, 0], [0, 1, 1], [-1, 0, 2], [1, 0, 3]];
+  for (const [dx, dy, edge] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (ny < 0 || nx < 0 || ny >= grid.length || nx >= grid[ny].length) continue;
+    const nTile = grid[ny][nx];
+    if (water && nTile !== "🌊") {
+      const [bx, by, bw, bh] = edgeBand(edge, px, py, 12);
+      ctx.fillStyle = "rgba(215,240,255,0.5)";
+      ctx.fillRect(bx, by, bw, bh);
+    } else if (!water && nTile === "🌊") {
+      const [bx, by, bw, bh] = edgeBand(edge, px, py, 12);
+      ctx.fillStyle = "rgba(42,58,34,0.55)";
+      ctx.fillRect(bx, by, bw, bh);
+    }
+  }
+}
+
+/** Transitional Part B stand-ins: procedural objects on the canvas.
+ *  Part C replaces these with DOM y-sorted sprites from the vendored atlas. */
+function drawStandin(tile, x, y) {
+  const c = top(x, y);
+  if (tile === "🌲") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.pine, c.x, c.y + 30, 5);
+  } else if (tile === "🏕️") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.tent, c.x - 24, c.y + 34, 4);
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.logs, c.x + 24, c.y + 38, 3);
+  } else if (tile === "🫐") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.berry, c.x, c.y + 34, 4);
+  } else if (tile === "🪨") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.rock, c.x, c.y + 36, 5);
+  } else if (tile === "💀") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.ruin, c.x, c.y + 36, 5);
+  } else if (tile === "🌾") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.sprout, c.x, c.y + 38, 4);
+  } else if (tile === "🌫️") {
+    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.ashmound, c.x, c.y + 38, 4);
   }
 }
 
@@ -611,8 +645,8 @@ function syncPawns(s) {
     rec.el.classList.remove("leaving");
 
     const slot = slots.get(p.id) || [0, 0];
-    const from = iso(p.prev_pos[0], p.prev_pos[1]);
-    const to = iso(p.pos[0], p.pos[1]);
+    const from = top(p.prev_pos[0], p.prev_pos[1]);
+    const to = top(p.pos[0], p.pos[1]);
     // Start the walk from the pawn's previous *slot* so re-slotting (a neighbour
     // leaving the tile) reads as a little shuffle instead of a teleport.
     rec.px = from.x + (rec.lastSlot ? rec.lastSlot[0] : slot[0]);
@@ -716,7 +750,7 @@ function syncCreatures(s) {
     }
     rec.name.textContent = e.label;
     rec.name.style.display = e.label ? "block" : "none";
-    const p = iso(e.pos[0], e.pos[1]);
+    const p = top(e.pos[0], e.pos[1]);
     rec.x = p.x;
     rec.y = p.y;
     rec.el.classList.remove("leaving");
@@ -1158,7 +1192,7 @@ function frame(now) {
       rec.el.style.left = rec.x + "px";
       rec.el.style.top = rec.y - bob + "px";
     }
-    drawIsland(now);
+    drawWorld(now);
   } else {
     ctx.clearRect(0, 0, STAGE_W, STAGE_H);
   }

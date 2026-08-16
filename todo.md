@@ -92,7 +92,7 @@
 - [x] **`web/atlas.js` tile atlas**: image loader + named slice table (`Atlas.slice`/`Atlas.scaled`/`Atlas.ground`/frame strips) with all user-verified pixel boxes — trees, bush, flowers, cottage, rocks, ruins, dirt, water+shore, fences, path, well (two-part).
 - [x] **`web/atlas.html` contact sheet**: labeled 19×45 master-sheet grid + campfire/water frames (dev tool + user reference).
 - [ ] **`README.md` + `paper.txt` attribution**: Serene Village credit line + client-description update (same part/commit as the code).
-- [ ] **Part B — top-down terrain renderer**: replace iso geometry with `TILE=128` top-down (`top(x,y)`), rewrite `drawIsland()` → `drawWorld()` (backdrop + board frame + vendored ground + shore transitions + farm/ash/scorch + seasonal tint), 14-frame water animation.
+- [x] **Part B — top-down terrain renderer**: replace iso geometry with `TILE=128` top-down (`top(x,y)`), rewrite `drawIsland()` → `drawWorld()` (backdrop + board frame + vendored ground + shore transitions + farm/ash/scorch + seasonal tint), 14-frame water animation. *(Bank lips are procedural — the pack's sand "coast band" is a diagonal beach, not axis-aligned river banks; `Atlas.ground()` caches 16×16 tiles internally, no separate grid-signature cache.)*
 - [ ] **Part C — standing objects + y-sort**: DOM object layer (trees/bush/rocks/ruins/cottage+campfire/well/fences), y-sorted z-index by footprint, wildfire flame/glow.
 - [ ] **Part D — pawns/creatures top-down**: tile-center anchors, compact slot offsets, walk interpolation/action bobs/emotes/badges/hover pills preserved.
 - [ ] **Part E — ambient effects pass**: campfire smoke + night glow, snow veil, night tint, river shimmer adapted to top-down.
