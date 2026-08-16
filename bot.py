@@ -471,6 +471,23 @@ async def chronicle_cmd(ctx):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="lore")
+@is_god_channel()
+async def lore_cmd(ctx):
+    """!lore — read the fragments recovered from The Sunken Tribe's ruins."""
+    lore = state.world_state.get("lore") or []
+    if not lore:
+        await ctx.send(
+            f"💀 The ruins of {engine.SUNKEN_TRIBE} guard their secrets still — "
+            "send a Scout to unearth them."
+        )
+        return
+    lines = [f"💀 **Fragments of {engine.SUNKEN_TRIBE}**"]
+    for frag in lore[-10:]:
+        lines.append(f"- {frag['text']}")
+    await ctx.send("\n".join(lines))
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

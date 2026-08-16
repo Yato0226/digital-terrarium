@@ -30,8 +30,8 @@
 - [x] Colonists can pray at the monolith to receive prophetic visions, divine inspiration, or weather warnings.
 
 ### Step 10: Ancient Pre-History (The Lost Tribe)
-- [ ] Turn the Ruins tile into the named remnants of an ancient civilization (*The Sunken Tribe*).
-- [ ] Scouts exploring the ruins discover fragments of forgotten history, ancient tool blueprints, and carved warnings.
+- [x] Turn the Ruins tile into the named remnants of an ancient civilization (*The Sunken Tribe*).
+- [x] Scouts exploring the ruins discover fragments of forgotten history, ancient tool blueprints, and carved warnings.
 
 ---
 

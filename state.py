@@ -16,6 +16,7 @@ failed_intents = {}
 
 MAX_CHRONICLE = 24  # keep the last N seasonal chronicle entries
 MAX_PATCHES = 8  # keep the last N Architect patch records for !patchnotes
+MAX_LORE = 12  # keep the last N recovered lore fragments from the ruins
 
 # Transient seasonal-chronicle signal (not persisted): set by engine.tick_environment
 # to the new season name when the season turns, consumed by core.run_tick after the
@@ -288,6 +289,7 @@ def reset_world():
     world_state["grid"] = [row[:] for row in DEFAULT_GRID]
     world_state["wildlife"] = []
     world_state["chronicle"] = []
+    world_state["lore"] = []
     world_state["heirlooms"] = []
     world_state["adoptions"] = {}
     world_state["extinct"] = False
@@ -449,6 +451,10 @@ def load_state():
             world_state["heirlooms"] = loaded["heirlooms"]
         else:
             world_state.setdefault("heirlooms", [])
+        if "lore" in loaded:
+            world_state["lore"] = loaded["lore"][-MAX_LORE:]
+        else:
+            world_state.setdefault("lore", [])
         if "adoptions" in loaded:
             world_state["adoptions"] = loaded["adoptions"]
         else:

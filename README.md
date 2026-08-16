@@ -44,6 +44,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Heirlooms** — titled pawns drop their tools as relics on death; claim them to pass on skills (`!heirlooms`)
 - **Autonomous world engine** — every 400 ticks (one year) an **Architect LLM** reviews the world's fortunes and emits a bounded balance patch (regrowth/cold/spawn multipliers clamped to `[0.7, 1.3]`), optionally synthesizing a new tool blueprint (crafted via `Build`, tier 4+) or seeding a **world prophecy** — a colony-wide quest (hunt, chop, stockpile, or survive) that pays shared morale and a custom title when completed. Patches post as ⚙️ *Terrarium Patch Notes* embeds (`!patchnotes`) and are queryable via `!recipes` and `!quests`
 - **Pawn adoption** — any Discord user can `!adopt` a pawn and get DM notifications about its births, goals, breaks, and deaths
+- **Ancient pre-history** — the Ruins 💀 are the remnants of **The Sunken Tribe**: Scouts there sometimes unearth fragments of forgotten history, an ancient tool **blueprint** (craftable `Sunken Harpoon` / `Tidal Shawl`, tier 4), or a carved **warning** that the colony heeds (+2 scouting XP, +5 colony morale). Recovered lore feeds the prompt and `!lore`
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Milestone news hub** — Discord no longer broadcasts every tick. Embeds are reserved for high-impact moments: 📜 a new-era chronicle each season, 🪦 fallen-hero eulogies (tombstone inscription + cause of death), ⚙️ annual patch notes, and 🥷🔥🌊☠️ breaking crisis alerts (raids, wildfires, floods, miasma, extinction)
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the milestone embeds
@@ -93,7 +94,8 @@ python main.py
 | `!monument` | Inspect the Ancestral Monolith (dedication, permanent runes, oracle) |
 | `!tradition` | Inspect the colony's emergent Tradition Tag (or its progress toward one) |
 | `!chronicle` | Read the seasonal chronicle of the terrarium |
-| `!recipes` | List all known blueprints (base + Architect-synthesized) |
+| `!lore` | Read the fragments recovered from The Sunken Tribe's ruins |
+| `!recipes` | List all known blueprints (base + Architect-synthesized + ancient) |
 | `!quests` / `!prophecies` | View the world's active objectives and progress |
 | `!patchnotes` | Read the latest autonomous balance notes from the Architect |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |

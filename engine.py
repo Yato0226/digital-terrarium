@@ -116,6 +116,43 @@ MONUMENT_WARMTH_BLESSING = 6
 MONUMENT_WARMTH_MOODLET_DELTA = 2
 MONUMENT_WARMTH_BLESSING_TICKS = 20
 
+# Stage 10 (Phase 2) ancient pre-history: the Ruins as the Sunken Tribe's remnants.
+SUNKEN_TRIBE = "The Sunken Tribe"
+RUIN_DISCOVERY_CHANCE = 0.25
+RUIN_WARNING_XP = 2
+RUIN_WARNING_MORALE = 5
+LORE_FRAGMENTS = (
+    "A mosaic of a drowned city, its towers half-swallowed by black water.",
+    "A cracked tablet reads: 'We were the Sunken Tribe, and the sea did not spare us.'",
+    "Pottery stamped with a spiral wave-sign — the mark of the Sunken Tribe.",
+    "A mural shows the Sunken Tribe raising a great wall against the rising tide.",
+    "A bone whistle, salt-crusted, still holds the sea's breath.",
+    "A child's half-finished toy boat carved from driftwood.",
+    "A charred ledger lists offerings 'to the deep' that were never made.",
+    "Rusting fishhooks the size of a hand, left in a stone jar.",
+)
+RUIN_WARNINGS = (
+    "'When the river burns, flee to high ground' — a wall warning, faint but legible.",
+    "'The floods come twice; the second flood takes what the first spared.'",
+    "'Do not sleep beside the water in thaw' — carved in the old tongue.",
+    "'The grey walkers come with the winter cold; keep the fire fed.'",
+    "'Beware the drowned ones who rise at night' — a lintel carved in haste.",
+)
+RUIN_BLUEPRINTS = {
+    "Sunken Harpoon": {
+        "materials": {"wood": 4, "stone": 2},
+        "slot": "main_hand",
+        "tier": 4,
+        "bonus": {"combat": 3},
+    },
+    "Tidal Shawl": {
+        "materials": {"fiber": 6, "stone": 1},
+        "slot": "body",
+        "tier": 4,
+        "bonus": {"scouting": 2, "fiber": 2},
+    },
+}
+
 # Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
 FARM_TILE = "🌾"
 FARM_GROW_TICKS = 20
@@ -1513,6 +1550,60 @@ def _do_chop(pawn, pawn_id):
     )
 
 
+def _ruin_discovery(pawn, pawn_id):
+    """A scout at the Sunken Tribe's ruins uncovers lore, a blueprint, or a warning.
+
+    Returns the discovery event, or None if nothing new remains to be found.
+    """
+    lore = state.world_state.setdefault("lore", [])
+    kind = random.choice(("lore", "blueprint", "warning"))
+    if kind == "blueprint":
+        fresh = [
+            name
+            for name in RUIN_BLUEPRINTS
+            if name not in state.world_state.setdefault("custom_recipes", {})
+        ]
+        if fresh:
+            name = random.choice(fresh)
+            state.world_state["custom_recipes"][name] = dict(RUIN_BLUEPRINTS[name])
+            return events.add_event(
+                "discovery",
+                actor=pawn_id,
+                data={"kind": "blueprint", "item": name},
+                description=f"{pawn['name']} unearths an ancient blueprint among the ruins: **{name}**.",
+            )
+        kind = "lore"
+    if kind == "lore":
+        text = random.choice(LORE_FRAGMENTS)
+        lore.append({"tick": state.world_state["tick"], "text": text})
+        del lore[:-state.MAX_LORE]
+        return events.add_event(
+            "discovery",
+            actor=pawn_id,
+            data={"kind": "lore", "text": text},
+            description=(
+                f"{pawn['name']} unearths a fragment of forgotten history: {text}"
+            ),
+        )
+    text = random.choice(RUIN_WARNINGS)
+    lore.append({"tick": state.world_state["tick"], "text": text})
+    del lore[:-state.MAX_LORE]
+    for _ in range(RUIN_WARNING_XP):
+        _gain_skill(pawn, "scouting")
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active":
+            p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + RUIN_WARNING_MORALE)
+    return events.add_event(
+        "discovery",
+        actor=pawn_id,
+        data={"kind": "warning", "text": text},
+        description=(
+            f"{pawn['name']} reads a carved warning among the ruins: {text} "
+            f"the colony heeds it (+{RUIN_WARNING_MORALE} morale)."
+        ),
+    )
+
+
 def _do_scout(pawn, pawn_id):
     if not _pay_cost(pawn, "Scout"):
         return events.add_event(
@@ -1543,6 +1634,10 @@ def _do_scout(pawn, pawn_id):
                 data={"food": 0, "tile": "ruins", "damage": 3},
                 description=f"{pawn['name']} disturbs something in the ruins and takes 3 damage.",
             )
+        if random.random() < RUIN_DISCOVERY_CHANCE:
+            discovery = _ruin_discovery(pawn, pawn_id)
+            if discovery:
+                return discovery
         food = 4 + skill // 3 + random.choice([0, 1])
         pawn["inventory"]["food"] += food
         _goal_nudge(pawn, food, resource="food")
