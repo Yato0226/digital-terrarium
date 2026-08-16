@@ -419,11 +419,12 @@ function drawWorld(now) {
       if (grid[y][x] === "🔥") {
         const c = top(x, y);
         const a = 0.14 + 0.09 * Math.sin(t / 140 + x * 2);
-        const g = ctx.createRadialGradient(c.x, c.y - 4, 4, c.x, c.y - 4, 60);
+        // Top-down: wildfire glow centered on the tile.
+        const g = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, 60);
         g.addColorStop(0, `rgba(255,120,40,${a})`);
         g.addColorStop(1, "rgba(255,120,40,0)");
         ctx.fillStyle = g;
-        ctx.fillRect(c.x - 60, c.y - 64, 120, 120);
+        ctx.fillRect(c.x - 60, c.y - 60, 120, 120);
         Sprites.drawFlame(ctx, c.x, c.y + 34, t);
       }
     }
@@ -434,12 +435,13 @@ function drawWorld(now) {
   if (campfire > 0) {
     const camp = top(2, 2);
     const flick = 0.55 + 0.2 * Math.sin(t / 90) + 0.1 * Math.sin(t / 47 + 2);
-    const g = ctx.createRadialGradient(camp.x, camp.y - 10, 2, camp.x, camp.y - 10, 54);
+    // Top-down: glow centered on the camp tile itself.
+    const g = ctx.createRadialGradient(camp.x, camp.y, 2, camp.x, camp.y, 54);
     g.addColorStop(0, `rgba(255,170,60,${0.5 * flick})`);
     g.addColorStop(1, "rgba(255,120,30,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(camp.x - 54, camp.y - 64, 108, 108);
-    spawnSmoke(camp.x + 14, camp.y - 26);
+    ctx.fillRect(camp.x - 54, camp.y - 54, 108, 108);
+    spawnSmoke(camp.x, camp.y - 8);
   }
 
   // Rising smoke.

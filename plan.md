@@ -252,7 +252,7 @@ Notes landed with Part D:
   creatures/pawns are actually removed from the DOM.
 
 ### Part E — Ambient effects pass (todo Step 12)
-- [ ] Campfire smoke + night glow centered on camp; snow veil; night tint;
+- [x] Campfire smoke + night glow centered on camp; snow veil; night tint;
   river shimmer — all adapted to the new geometry.
 - Commit: `Stage 12: ambient effects for top-down`.
 
