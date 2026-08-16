@@ -166,6 +166,20 @@ body::before {
 }
 .pawn:hover .name, .pawn.selected .name { opacity: 1; }
 
+/* soft contact shadow at the creature's feet (mirrors the pawn shadow) */
+.creature::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 44px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(rgba(0,0,0,.35), transparent 70%);
+  z-index: -1;
+}
+
 /* selected pawn (click-to-inspect): pulsing ring under their feet */
 .pawn.selected::after {
   background: radial-gradient(rgba(255,213,79,.35), transparent 70%);

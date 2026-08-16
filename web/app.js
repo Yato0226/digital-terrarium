@@ -29,6 +29,7 @@ const FRAME = 34;       // wooden board frame thickness around the map
 const MAX_ZOOM = 1.6;
 
 const WALK_SECONDS = 4;
+const CREATURE_GLIDE = 1.2; // seconds for a creature to glide between tiles
 const BUBBLE_DELAY = 4;
 const BUBBLE_LIFE = 8;
 
@@ -695,6 +696,19 @@ function syncCreatures(s) {
     entries.push({ dom: "r:" + r.id, key: r.id, species: "raider", dark: false, label: "", pos: r.pos });
   }
   const seen = new Set();
+  // Slot stacked creatures per tile (stable by dom key) so wildlife/visitors/
+  // raiders on one tile don't pile up at the exact centre.
+  const tiles = new Map();
+  for (const e of entries) {
+    const key = e.pos[0] + "," + e.pos[1];
+    if (!tiles.has(key)) tiles.set(key, []);
+    tiles.get(key).push(e);
+  }
+  for (const list of tiles.values()) list.sort((a, b) => (a.dom < b.dom ? -1 : 1));
+  const slots = new Map();
+  for (const list of tiles.values()) {
+    for (let i = 0; i < list.length; i++) slots.set(list[i].dom, slotOffset(i));
+  }
   for (const e of entries) {
     seen.add(e.dom);
     let rec = creatures.get(e.dom);
@@ -710,7 +724,7 @@ function syncCreatures(s) {
       el.appendChild(cv);
       el.appendChild(name);
       spritesEl.appendChild(el);
-      rec = { dom: e.dom, key: e.key, el, cv, name, sig: "", x: 0, y: 0, phase: Math.random() * 7 };
+      rec = { dom: e.dom, key: e.key, el, cv, name, sig: "", px: 0, py: 0, x: 0, y: 0, phase: Math.random() * 7, moving: false, created: false };
       creatures.set(e.dom, rec);
     }
     const sig = `${e.species}|${e.dark ? 1 : 0}`;
@@ -723,9 +737,20 @@ function syncCreatures(s) {
     }
     rec.name.textContent = e.label;
     rec.name.style.display = e.label ? "block" : "none";
-    const p = top(e.pos[0], e.pos[1]);
-    rec.x = p.x;
-    rec.y = p.y;
+    const slot = slots.get(e.dom) || [0, 0];
+    const c = top(e.pos[0], e.pos[1]);
+    const nx = c.x + slot[0];
+    const ny = c.y + slot[1];
+    if (!rec.created) {
+      // First appearance: land directly (no glide from the origin corner).
+      rec.px = nx; rec.py = ny; rec.x = nx; rec.y = ny;
+      rec.moving = false; rec.created = true;
+    } else {
+      rec.px = rec.x; rec.py = rec.y;
+      rec.x = nx; rec.y = ny;
+      // Re-slotting (a neighbour leaving the tile) reads as a short shuffle.
+      rec.moving = rec.px !== rec.x || rec.py !== rec.y;
+    }
     rec.el.classList.remove("leaving");
   }
   for (const [dom, rec] of creatures) {
@@ -1165,9 +1190,21 @@ function frame(now) {
     }
     for (const rec of creatures.values()) {
       const bob = Math.abs(Math.sin(now / 700 + rec.phase)) * 3;
-      rec.el.style.left = rec.x + "px";
-      rec.el.style.top = rec.y - bob + "px";
-      rec.el.style.zIndex = String(Objects.depthZ(rec.y));
+      let cx = rec.x, cy = rec.y;
+      // Glide between tiles (wildlife/visitors/raiders have no prev_pos in the
+      // snapshot, so we animate the delta we saw on the previous snapshot).
+      if (rec.moving) {
+        if (elapsed < CREATURE_GLIDE) {
+          const t = Math.min(1, elapsed / CREATURE_GLIDE);
+          cx = rec.px + (rec.x - rec.px) * easeInOut(t);
+          cy = rec.py + (rec.y - rec.py) * easeInOut(t);
+        } else {
+          rec.moving = false;
+        }
+      }
+      rec.el.style.left = cx + "px";
+      rec.el.style.top = cy - bob + "px";
+      rec.el.style.zIndex = String(Objects.depthZ(cy));
     }
     Objects.tick(now);
     drawWorld(now);

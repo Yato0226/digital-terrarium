@@ -42,6 +42,7 @@ function makeClassList() {
     contains: (c) => set.has(c),
     has: (c) => set.has(c),
     clear: () => set.clear(),
+    [Symbol.iterator]: () => set[Symbol.iterator](),
   };
 }
 
@@ -186,6 +187,15 @@ global.WebSocket = WS;
 let rafCb = null;
 global.requestAnimationFrame = (cb) => { rafCb = cb; return 1; };
 
+// Deterministic clock: applySnapshot reads performance.now() (snapTime) and
+// the frame loop compares it against the raf timestamp, so both must share a
+// clock for walk/glide timing assertions. Advance `perfNow` before each send.
+let perfNow = 100;
+Object.defineProperty(globalThis, "performance", {
+  value: { now: () => perfNow },
+  configurable: true,
+});
+
 // ---------- load the real client ----------
 const root = path.join(__dirname, "..");
 const clientSrc =
@@ -269,6 +279,7 @@ let err = null;
 try {
   await new Promise((r) => setTimeout(r, 0)); // drain image-load microtasks
   let now = 100;
+  perfNow = now;
 
   send(snap1);
   const title1 = byId.title._text;
@@ -353,11 +364,15 @@ try {
     { tick: 41, type: "death", actor: "p4", target: null, description: "Oak passes into the winter dark.", data: {} },
     { tick: 41, type: "farm_ready", actor: null, target: null, description: "A plot of berries ripens.", data: {} },
   ];
+  perfNow = now;
   send(snap2);
   if (byId.rosterBody.children.length !== 5) throw new Error(`roster cards expected 5 after birth, got ${byId.rosterBody.children.length}`);
   if (logEl.children.length !== 5) throw new Error(`log rows expected 5, got ${logEl.children.length}`);
   if (chatEl.children.length !== 4) throw new Error(`chat rows expected 4 after second tick, got ${chatEl.children.length}`);
   now = frames(60, now);
+  // Let the leaving-element removal timers fire so the DOM matches the real
+  // client (creatures purged from snap2 vanish instead of lingering).
+  await new Promise((r) => setTimeout(r, 700));
 
   // Third snapshot: world reset (tick drops) — log and roster must reset.
   const snap3 = JSON.parse(JSON.stringify(snap2));
@@ -367,6 +382,7 @@ try {
   snap3.day = 1;
   snap3.pawns = snap3.pawns.slice(0, 2);
   snap3.events = [{ tick: 0, type: "birth", actor: "p1", target: "p5", description: "A child is born.", data: {} }];
+  perfNow = now;
   send(snap3);
   if (byId.rosterBody.children.length !== 2) throw new Error(`roster cards expected 2 after reset, got ${byId.rosterBody.children.length}`);
   if (logEl.children.length !== 0) throw new Error(`log rows expected 0 after reset, got ${logEl.children.length}`);
@@ -390,9 +406,16 @@ try {
   ];
   snap4.biome.campfire = 70;
   snap4.pawns = snap4.pawns.slice(0, 1);
-  snap4.wildlife = [];
-  snap4.visitors = [];
-  snap4.raiders = [];
+  // Stacked creatures on the camp tile (Deer + Rabbit + Merchant) exercise the
+  // per-tile creature slots; the legendary wolf starts on its own tile.
+  snap4.wildlife = [
+    { id: "wl1", species: "Deer", name: null, pos: [2, 2], state: "idle" },
+    { id: "wl2", species: "Rabbit", name: null, pos: [2, 2], state: "idle" },
+    { id: "wl3", species: "Wolf", name: "The Grey Terror", pos: [3, 3], state: "stalking" },
+  ];
+  snap4.visitors = [{ id: "visit_1", kind: "Merchant", name: "Tilly", pos: [2, 2], state: "visiting" }];
+  snap4.raiders = [{ id: "scavenger_1", pos: [0, 4], state: "marching" }];
+  perfNow = now;
   send(snap4);
   now = frames(5, now);
   const campObjs = [...byId.sprites.children].filter((el) => el.classList.contains("obj"));
@@ -403,15 +426,52 @@ try {
   if (!fcv || fcv.width !== 80 || fcv.height !== 80) throw new Error(`campfire canvas expected 80x80, got ${fcv && fcv.width}x${fcv && fcv.height}`);
   // Toggle the fire out and back on — the pit must survive both transitions.
   snap4.biome.campfire = 0;
+  perfNow = now;
   send(snap4);
   now = frames(10, now);
   snap4.biome.campfire = 70;
+  perfNow = now;
   send(snap4);
   now = frames(20, now);
+  // Extra frames so the reused Merchant finishes gliding to the camp tile.
+  now = frames(60, now);
 
-  console.log("OK: client booted; 4 snapshots + 110 frames; HUD/roster/log/slots all correct");
+  // Creature slots: the three camp-tile creatures must not overlap, and every
+  // creature on the board must land on a distinct (slot-adjusted) position.
+  const creatureEls = [...byId.sprites.children].filter((el) => el.classList.contains("creature"));
+  if (creatureEls.length !== 5) throw new Error(`creature els expected 5 on camp board, got ${creatureEls.length}`);
+  const posSet = new Set();
+  for (const el of creatureEls) {
+    const key = `${parseFloat(el.style.left).toFixed(1)}|${parseFloat(el.style.top).toFixed(1)}`;
+    if (posSet.has(key)) throw new Error(`creature overlap: two creatures at ${key}`);
+    posSet.add(key);
+  }
+
+  // Fifth snapshot: the Grey Terror lopes from (3,3) to (4,3). The glide
+  // should start interpolating mid-walk, then settle exactly on the target.
+  const snap5 = JSON.parse(JSON.stringify(snap4));
+  snap5.tick = 56;
+  snap5.wildlife = snap5.wildlife.map((w) => (w.id === "wl3" ? { ...w, pos: [4, 3] } : w));
+  perfNow = now;
+  send(snap5);
+  now = frames(1, now);
+  const wolfEl = [...byId.sprites.children].find((el) => {
+    if (!el.classList.contains("creature")) return false;
+    return parseFloat(el.style.left) > 600; // the wolf is the only creature at x>600
+  });
+  if (!wolfEl) throw new Error("wolf creature not found");
+  const glideX = parseFloat(wolfEl.style.left);
+  if (!(glideX > 600 && glideX < 806)) throw new Error(`wolf mid-glide x expected in (600,806), got ${glideX}`);
+  now = frames(80, now);
+  const settledX = parseFloat(wolfEl.style.left);
+  const settledY = parseFloat(wolfEl.style.top);
+  if (Math.abs(settledX - 806) > 0.01) throw new Error(`wolf glide x expected 806 after settling, got ${settledX}`);
+  if (!(settledY >= 554 && settledY <= 558)) throw new Error(`wolf glide y expected ~558 (bob), got ${settledY}`);
+
+  console.log("OK: client booted; 5 snapshots + 266 frames; HUD/roster/log/slots all correct");
   console.log(`OK: roster bar widths hp=${hpW} en=${enW}; roster cards=${byId.rosterBody.children.length}; log rows=${logEl.children.length}`);
   console.log(`OK: objects: ${[...byId.sprites.children].filter((el) => el.classList.contains("obj")).length} sprites y-sorted, campfire canvas ${fcv.width}x${fcv.height}`);
+  console.log("OK: creatures slot-stacked on shared tiles and glide between tiles");
   process.exit(0);
 } catch (e) {
   err = e;

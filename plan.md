@@ -223,11 +223,33 @@ Notes landed with Part C:
   The test grid construction was also fixed to use explicit full-emoji cells
   (`"🌲🌲…".split("")` had been producing lone UTF-16 surrogates).
 
-### Part D — Pawns/creatures in top-down space (todo Step 12)
-- [ ] Reposition pawn/creature DOM to tile centers (`top()` coords).
-- [ ] Compact slot offsets for stacked pawns.
-- [ ] Keep walk interpolation, action bobs, emotes, badges, hover pills.
-- Commit: `Stage 12: top-down pawns + creatures`.
+### Part D — Pawns/creatures in top-down space ✅ (todo Step 12)
+- [x] Reposition pawn/creature DOM to tile centers (`top()` coords).
+- [x] Compact slot offsets for stacked pawns + stacked creatures.
+- [x] Keep walk interpolation, action bobs, emotes, badges, hover pills.
+- Commit: `Stage 12: top-down pawns + creatures`. ✅
+
+Notes landed with Part D:
+- **Creature slots**: `syncCreatures` groups entries by tile, sorts by `dom`
+  key, and assigns `slotOffset(i)` — the same spread used by pawns. This
+  prevents Deer/Rabbit/Merchant piling up at the exact tile centre when they
+  share a tile. Slots recompute on every snapshot, so a neighbor's departure
+  triggers a small "shuffle" glide from the old slot to the new one.
+- **Creature glide** (`CREATURE_GLIDE = 1.2`): wildlife/visitors/raiders have
+  no `prev_pos` in the snapshot, so the glide is inferred: on the first
+  snapshot a creature appears, `created = false` lands it at the target
+  directly (no glide from the origin corner); on subsequent snapshots, the
+  delta between old and new screen positions is animated via `easeInOut`
+  over the glide window, matching the pawn walk pattern.
+- **Creature contact shadow**: `.creature::after` mirrors the existing
+  `.pawn::after` — a soft `radial-gradient` ellipse at the creature's feet
+  with `z-index: -1`, grounding characters on the top-down board.
+- **Deterministic test clock**: the smoke test stubs `performance.now()`
+  (a controllable `perfNow` variable) so `snapTime` and the `raf` timestamp
+  share a clock; `perfNow = now` is set before each `send()` call to make
+  walk/glide timing assertions deterministic. A 700ms `await` between snap2
+  and snap3 lets the leaving-element `setTimeout(650)` timers fire so stale
+  creatures/pawns are actually removed from the DOM.
 
 ### Part E — Ambient effects pass (todo Step 12)
 - [ ] Campfire smoke + night glow centered on camp; snow veil; night tint;
