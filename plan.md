@@ -169,10 +169,20 @@
 - Commit: `Stage 7: pixel fauna, visitors, raiders, campfire`.
 
 ### Part E — Un-stack the pawns (todo Step 8)
-- [ ] Isometric slotting: multi-pawn tiles arrange in a small diamond formation
+- [x] Isometric slotting: multi-pawn tiles arrange in a small diamond formation
   (top-left, bottom-right, top-right…) instead of one overlapping blob.
-- [ ] Per-pawn bubbles + 💤/badges float above the *individual* slot offset.
-- [ ] Hover name pills (keep always-on option if simpler); crisp small labels.
+  **Done:** per-tick, pawns on the same tile are sorted by id and assigned a stable
+  corner from `SLOT_OFFSETS` (11 diamond positions; beyond that it loops back).
+  Positions interpolate from the pawn's *previous* slot, so a neighbour leaving
+  reads as a little shuffle rather than a teleport. Bubbles/emotes/zzz inherit the
+  slotted position automatically (they all read `rec.x/rec.y`).
+- [x] Per-pawn bubbles + 💤/badges float above the *individual* slot offset.
+  **Done:** free because speech/thought bubbles and per-tick emotes are positioned
+  from the slotted `rec.x/rec.y` each frame; the 💤/🌀 marks live inside the pawn
+  element itself.
+- [x] Hover name pills (keep always-on option if simpler); crisp small labels.
+  **Done:** names are now hidden pills that fade in on `:hover` (and stay while a
+  pawn is selected) — kills the always-on overlap on multi-pawn tiles.
 - Commit: `Stage 8: pawn slotting + per-pawn bubbles`.
 
 ### Part F — HUD framing (todo Step 9)

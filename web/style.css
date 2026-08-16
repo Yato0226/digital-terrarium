@@ -121,18 +121,28 @@ body::before {
 }
 
 .pawn .name {
+  /* hover name pill: hidden until hovered (or selected) to de-clutter stacked tiles */
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  font-size: 11px;
+  left: 50%;
+  bottom: -2px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
   font-weight: 600;
   color: #fff;
   text-shadow: 0 1px 2px #000, 0 0 4px rgba(0,0,0,.8);
+  background: rgba(12, 14, 18, .78);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 9px;
+  padding: 1px 7px;
+  max-width: 130px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease;
 }
+.pawn:hover .name, .pawn.selected .name { opacity: 1; }
 
 /* selected pawn (click-to-inspect): pulsing ring under their feet */
 .pawn.selected::after {

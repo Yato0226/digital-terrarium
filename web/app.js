@@ -26,6 +26,23 @@ const WALK_SECONDS = 4;
 const BUBBLE_DELAY = 4;
 const BUBBLE_LIFE = 8;
 
+// Diamond-formation offsets (screen px) for stacked pawns on one tile, keyed by
+// the pawn's sorted slot on that tile — stable across ticks, so a pawn keeps its
+// corner while neighbours come and go (they shuffle over the walk window).
+const SLOT_OFFSETS = [
+  [0, 0],
+  [-11, -6], [11, -6],
+  [0, 8],
+  [-11, -18], [11, -18],
+  [0, -20],
+  [-22, -6], [22, -6],
+  [0, 20],
+  [-22, -18], [22, -18],
+];
+function slotOffset(i) {
+  return SLOT_OFFSETS[i] || [0, 0];
+}
+
 const ACTION_EMOTE = {
   Chop: "🪓", Forage: "🧺", Build: "🔨", Scout: "🔭", Attack: "⚔️",
   Share: "🍞", Mate: "💕", Interact: "✨", Rest: "💤",
@@ -476,6 +493,19 @@ function makePawnEl() {
 
 function syncPawns(s) {
   const seen = new Set();
+  // Slot stacked pawns in a small diamond formation inside their tile. Sort by
+  // id per tile so each pawn keeps a stable corner across ticks.
+  const tiles = new Map();
+  for (const p of s.pawns) {
+    const key = p.pos[0] + "," + p.pos[1];
+    if (!tiles.has(key)) tiles.set(key, []);
+    tiles.get(key).push(p);
+  }
+  for (const list of tiles.values()) list.sort((a, b) => (a.id < b.id ? -1 : 1));
+  const slots = new Map();
+  for (const list of tiles.values()) {
+    for (let i = 0; i < list.length; i++) slots.set(list[i].id, slotOffset(i));
+  }
   for (const p of s.pawns) {
     seen.add(p.id);
     let rec = pawns.get(p.id);
@@ -493,6 +523,7 @@ function syncPawns(s) {
         nextEmote: 0,
         phase: Math.random() * 7,
         px: 0, py: 0, x: 0, y: 0, moving: false,
+        lastSlot: [0, 0],
       };
       pawns.set(p.id, rec);
       rec.el.addEventListener("click", (ev) => {
@@ -514,10 +545,16 @@ function syncPawns(s) {
     if (rec.name.textContent !== label) rec.name.textContent = label;
     rec.el.classList.remove("leaving");
 
+    const slot = slots.get(p.id) || [0, 0];
     const from = iso(p.prev_pos[0], p.prev_pos[1]);
     const to = iso(p.pos[0], p.pos[1]);
-    rec.px = from.x; rec.py = from.y;
-    rec.x = to.x; rec.y = to.y;
+    // Start the walk from the pawn's previous *slot* so re-slotting (a neighbour
+    // leaving the tile) reads as a little shuffle instead of a teleport.
+    rec.px = from.x + (rec.lastSlot ? rec.lastSlot[0] : slot[0]);
+    rec.py = from.y + (rec.lastSlot ? rec.lastSlot[1] : slot[1]);
+    rec.x = to.x + slot[0];
+    rec.y = to.y + slot[1];
+    rec.lastSlot = slot;
     rec.moving = rec.px !== rec.x || rec.py !== rec.y;
     if (rec.action !== p.action) {
       rec.action = p.action;

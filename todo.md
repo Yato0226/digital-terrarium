@@ -68,10 +68,10 @@
 - [ ] **Attribution**: n/a (procedural, zero external assets — note this in `README.md`).
 
 ### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
-- [ ] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.
+- [x] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.
 - [x] **Standing sprites**: replace the circular portrait tokens with standing character sprites that stand on the grass.
-- [ ] **Hovering name tags**: show names on hover (or crisp small name pills under each pawn's feet) instead of always-overlapping labels.
-- [ ] **Per-pawn bubbles**: speech, thought, and 💤 sleep icons float above the *individual* sprite (honoring the slot offset), not covering the whole tile.
+- [x] **Hovering name tags**: show names on hover (or crisp small name pills under each pawn's feet) instead of always-overlapping labels.
+- [x] **Per-pawn bubbles**: speech, thought, and 💤 sleep icons float above the *individual* sprite (honoring the slot offset), not covering the whole tile.
 
 ### Step 9: Frame the Game — HUD Upgrade
 - [ ] **Top bar (world header)**: styled wooden/slate banner background; slightly larger resource icons with clear numbers + tooltips; subtle frost texture along the top/bottom edges in Winter.
