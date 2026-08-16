@@ -481,12 +481,20 @@ async def monument_cmd(ctx):
     if mon.get("done"):
         msg = (
             "🗿 **Ancestral Monolith** — complete! It anchors colony morale "
-            "(never below 10) and warms the camp (+2 insulation)."
+            "(never below 10), warms the camp (+2 insulation), and answers prayers "
+            "(`Interact` with *pray* at Camp for divine inspiration or a weather warning)."
         )
         if mon.get("inscription"):
             msg += f"\n*“{mon['inscription']}”*"
         else:
             msg += "\n*No dedication has been carved yet.*"
+        runes = mon.get("runes") or []
+        if runes:
+            msg += "\n\n**Permanent runes:**"
+            for r in reversed(runes):
+                msg += f"\n- **{r['title']}** (day {r.get('tick', 0) // engine.TICKS_PER_DAY}) — {r['text']}"
+        else:
+            msg += "\n\nNo runes have been carved yet."
         await ctx.send(msg)
         return
     if mon.get("wood", 0) or mon.get("stone", 0):

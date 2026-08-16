@@ -36,7 +36,7 @@ POSTING_ENABLED = True
 # pawn dossier) is only posted on ticks that produced at least one of these.
 MILESTONE_EVENT_TYPES = (
     "season", "death", "birth", "feast", "tradition", "monument_complete",
-    "quest_complete", "raid", "fire_start", "fire_damage", "flood", "miasma",
+    "quest_complete", "rune", "raid", "fire_start", "fire_damage", "flood", "miasma",
 )
 
 # Event types that fire a standalone Breaking Crisis Alert embed.

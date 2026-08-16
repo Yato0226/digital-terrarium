@@ -108,6 +108,14 @@ MONUMENT_STONE_PER_BUILD = 5
 MONUMENT_MORALE_FLOOR = 10
 MONUMENT_INSULATION = 2
 
+# Stage 9 (Phase 2) monolith oracle & rune archive.
+MONUMENT_RUNE_MAX = 12
+MONUMENT_PRAY_MORALE = 8
+MONUMENT_PRAY_XP = 1
+MONUMENT_WARMTH_BLESSING = 6
+MONUMENT_WARMTH_MOODLET_DELTA = 2
+MONUMENT_WARMTH_BLESSING_TICKS = 20
+
 # Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
 FARM_TILE = "🌾"
 FARM_GROW_TICKS = 20
@@ -375,8 +383,10 @@ def _inspire_bonus(pawn, amount):
 INTERACT_WORDS = {
     "social": ("talk", "chat", "comfort", "gossip", "encourage", "teach", "groom",
                "dance", "sing", "laugh", "play", "greet", "joke", "discuss", "joke"),
-    "relax": ("meditat", "pray", "watch", "daydream", "sit", "nap", "bathe",
-              "contemplate", "stargaze", "dream", "sunbathe", "reflect"),
+    "relax": ("watch", "daydream", "sit", "nap", "bathe",
+              "stargaze", "dream", "sunbathe"),
+    "pray": ("pray", "worship", "revere", "venerate", "commune", "prayer",
+             "oracle", "invoke", "meditat", "contemplate", "reflect"),
     "train": ("train", "practice", "spar", "exercise", "lift", "stretch", "drill"),
     "craft": ("carv", "craft", "mend", "repair", "weave", "whittle", "sew", "tend"),
     "recruit": ("invite", "recruit", "welcome", "hire", "persuade", "settle", "ask to stay", "stay"),
@@ -948,6 +958,10 @@ def _complete_quest(q, actor=None):
         target = state.world_state["pawns"].get(actor)
         if target:
             target["title"] = title
+    _carve_rune(
+        f"Prophecy fulfilled: {q.get('title', 'the quest')}",
+        f"The colony sees {q.get('title', 'the prophecy')} come to pass.",
+    )
     return events.add_event(
         "quest_complete",
         actor=actor,
@@ -1769,6 +1783,10 @@ def _do_build(pawn, pawn_id):
         ):
             monument["done"] = True
             state.pending_monument = True
+            _carve_rune(
+                "The Monolith Rises",
+                "The colony raised the Ancestral Monolith with wood and stone and blood.",
+            )
             return events.add_event(
                 "monument_complete",
                 actor=pawn_id,
@@ -1874,7 +1892,13 @@ def _do_attack(pawn, pawn_id, target):
         if animal["hp"] <= 0:
             state.world_state["wildlife"].remove(animal)
             if spec["kind"] == "predator":
+                before = state.world_state["traditions"].get("predators_slain", 0)
                 _traditions_inc("predators_slain", 1)
+                if before == 0:
+                    _carve_rune(
+                        "The First Predator Falls",
+                        f"{pawn['name']} slew the first great predator to threaten the colony.",
+                    )
             pawn["inventory"]["food"] += spec["food_yield"]
             pawn["inventory"]["fiber"] += spec["fiber_yield"]
             _goal_nudge(pawn, spec["food_yield"], resource="food")
@@ -2325,6 +2349,44 @@ def _share_with_visitor(pawn, pawn_id, visitor):
     )
 
 
+def _do_pray(pawn, pawn_id):
+    """Pray at the completed monolith: divine inspiration and, in the cold, a weather blessing.
+
+    Returns None when prayer has no oracle to answer (monolith unfinished or the
+    pawn is not at Camp), letting _do_interact fall back to a quiet meditation.
+    """
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if not monument.get("done"):
+        return None
+    if _tile_at(*pawn["pos"]) != BUILD_TILE:
+        return None
+    effects = []
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + MONUMENT_PRAY_MORALE)
+    effects.append(f"+{MONUMENT_PRAY_MORALE} morale (divine inspiration)")
+    weakest = min(pawn["skills"], key=pawn["skills"].get)
+    for _ in range(MONUMENT_PRAY_XP):
+        _gain_skill(pawn, weakest)
+    effects.append(f"+{MONUMENT_PRAY_XP} {weakest} XP")
+    biome = state.world_state["biome"]
+    cold = SEASON_COLD[biome["season"]] + (0 if is_day() else 3) + WEATHER_COLD[biome["weather"]]
+    if cold > 0:
+        _add_moodlet(
+            pawn,
+            "Divine Warmth",
+            MONUMENT_WARMTH_MOODLET_DELTA,
+            MONUMENT_WARMTH_BLESSING_TICKS,
+        )
+        effects.append("a vision warns of the cold — Divine Warmth shields you")
+    return events.add_event(
+        "pray",
+        actor=pawn_id,
+        data={"effects": effects},
+        description=f"{pawn['name']} prays at the monolith. ({', '.join(effects)})",
+    )
+
+
 def _do_interact(pawn, pawn_id, flavor):
     """Free-form Interact: engine buckets any verb into safe, context effects."""
     if not _pay_cost(pawn, "Interact"):
@@ -2423,6 +2485,13 @@ def _do_interact(pawn, pawn_id, flavor):
     elif _in_words(verb, INTERACT_WORDS["train"]):
         _gain_skill(pawn, "combat")
         effects.append("+1 combat XP")
+    elif _in_words(verb, INTERACT_WORDS["pray"]):
+        prayed = _do_pray(pawn, pawn_id)
+        if prayed is not None:
+            return prayed
+        pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 10)
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
+        effects.append("+10 energy, +3 morale (a quiet meditation)")
     elif _in_words(verb, INTERACT_WORDS["relax"]):
         pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 10)
         pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
@@ -2746,8 +2815,18 @@ def _give_birth(mother, mother_id, result):
     child["child_ticks"] = CHILD_MATURITY
     child["mother_id"] = mother_id
     child["father_id"] = mother.get("partner_id")
+    first_second_gen = child.get("generation", 1) >= 2 and not any(
+        e.get("generation", 1) >= 2
+        for e in list(state.world_state["pawns"].values())
+        + list(state.world_state["graveyard"])
+    )
     mother["partner_id"] = None
     state.world_state["pawns"][child_id] = child
+    if first_second_gen:
+        _carve_rune(
+            "The Second Generation Rises",
+            f"{name} is the first child of a new generation to inherit the colony.",
+        )
     result.append(
         events.add_event(
             "birth",
@@ -2813,6 +2892,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         cold = max(0, cold - COAT_INSULATION)
     if _tradition() == HUNTERS_TAG:
         cold = max(0, cold - HUNTERS_COLD_REDUCTION)
+    if any(m["name"] == "Divine Warmth" for m in pawn.get("moodlets", [])):
+        cold = max(0, cold - MONUMENT_WARMTH_BLESSING)
     near_camp = _manhattan(pawn["pos"], CAMP_POS) <= CAMP_RANGE
     near_fire = lit and near_camp
     monument = state.world_state.setdefault(
@@ -3137,6 +3218,36 @@ def _seasonal_feast():
     )
 
 
+def _carve_rune(title, detail):
+    """Record a permanent achievement rune on the monolith (capped archive).
+
+    Only possible once the monolith stands. The rune event is staged on
+    state.pending_runes so resolve_actions/tick_environment surface it in the
+    Discord feed. Returns the event, or None if the monolith is unfinished.
+    """
+    monument = state.world_state.setdefault(
+        "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    )
+    if not monument.get("done"):
+        return None
+    runes = monument.setdefault("runes", [])
+    runes.append({"tick": state.world_state["tick"], "title": title, "text": detail})
+    del runes[:-MONUMENT_RUNE_MAX]
+    ev = events.add_event(
+        "rune",
+        data={"title": title},
+        description=f"A new rune is carved into the monolith: {title}.",
+    )
+    state.pending_runes.append(ev)
+    return ev
+
+
+def _drain_runes():
+    evs = list(state.pending_runes)
+    state.pending_runes.clear()
+    return evs
+
+
 def _evaluate_tradition():
     """Assign the colony's first tradition tag once its history crosses a threshold."""
     traditions = state.world_state.setdefault(
@@ -3154,6 +3265,7 @@ def _evaluate_tradition():
     else:
         return None
     traditions["tag"] = tag
+    _carve_rune(f"The {tag} tradition is born", f"The colony's way of life is sealed: {tag}.")
     return events.add_event(
         "tradition",
         data={"tag": tag},
@@ -3477,6 +3589,7 @@ def tick_environment():
             result.append(_kill(pawn_id, pawn, cause))
 
     _update_titles()
+    result += _drain_runes()
     return result
 
 
@@ -3630,4 +3743,5 @@ def resolve_actions(intents):
         if goal and goal.get("kind") == "survive":
             _goal_nudge(pawn, 1, kind="survive")
 
+    resulting += _drain_runes()
     return resulting

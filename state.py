@@ -27,6 +27,11 @@ pending_chronicle = None
 # write the inscription. Cleared in reset_world.
 pending_monument = None
 
+# Transient rune events (not persisted): engine._carve_rune records a permanent
+# rune in the monolith and stages its event here; resolve_actions/tick_environment
+# drain it into tick_events so runes surface in the Discord feed. Cleared in reset_world.
+pending_runes = []
+
 NAME_POOL = [
     "Willow", "Bramble", "Moss", "Fern", "Hazel", "Ash", "Rowan", "Ivy",
     "Thistle", "Clover", "Birch", "Cedar", "Ember", "Sable", "Onyx", "Rune",
@@ -275,7 +280,7 @@ def make_pawn(
 
 
 def reset_world():
-    global pending_chronicle, pending_monument
+    global pending_chronicle, pending_monument, pending_runes
     world_state["tick"] = 1
     world_state["history"] = []
     world_state["biome"] = default_biome()
@@ -289,7 +294,7 @@ def reset_world():
     world_state["tiles"] = {}
     world_state["visitors"] = []
     world_state["raiders"] = []
-    world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None}
+    world_state["monument"] = {"wood": 0, "stone": 0, "done": False, "inscription": None, "runes": []}
     world_state["traditions"] = {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0}
     world_state["custom_recipes"] = {}
     world_state["active_quests"] = []
@@ -297,6 +302,7 @@ def reset_world():
     world_state["patches"] = []
     pending_chronicle = None
     pending_monument = None
+    pending_runes = []
     failed_intents.clear()
     world_state["pawns"] = {
         "pawn_1": make_pawn(
@@ -464,6 +470,7 @@ def load_state():
         monument.setdefault("stone", 0)
         monument.setdefault("done", False)
         monument.setdefault("inscription", None)
+        monument.setdefault("runes", [])
         traditions = world_state.setdefault(
             "traditions",
             {"tag": None, "predators_slain": 0, "trees_felled": 0, "rations_shared": 0},

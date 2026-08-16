@@ -112,7 +112,11 @@ def build_prompt():
         "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
     )
     if monument.get("done"):
-        biome_line += " | 🗿 The Ancestral Monolith stands, anchoring the colony"
+        runes = len(monument.get("runes") or [])
+        biome_line += (
+            f" | 🗿 Monolith stands ({runes} runes carved) — "
+            f"Interact with 'pray' at Camp for oracle blessings"
+        )
     elif monument.get("wood", 0) or monument.get("stone", 0):
         biome_line += (
             f" | 🗿 Monolith under construction "
