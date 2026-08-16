@@ -226,12 +226,14 @@ def make_pawn(
     job=None,
     sex=None,
     traits=None,
+    generation=1,
 ):
     if traits is None:
         traits = random.sample(TRAITS, k=random.choice((1, 2)))
     return {
         "id": pawn_id,
         "name": name,
+        "generation": generation,
         "job": job or "Wanderer",
         "sex": sex or random.choice(("M", "F")),
         "status": "active",  # active | incapacitated
@@ -355,6 +357,8 @@ def _migrate_pawn(pawn_id, pawn):
         base["child_ticks"] = pawn["child_ticks"]
     if pawn.get("status") in ("active", "incapacitated"):
         base["status"] = pawn["status"]
+    if isinstance(pawn.get("generation"), int) and pawn["generation"] >= 1:
+        base["generation"] = pawn["generation"]
     if isinstance(pawn.get("goal"), dict):
         base["goal"] = pawn["goal"]
     for key in ("mother_id", "father_id", "partner_id"):

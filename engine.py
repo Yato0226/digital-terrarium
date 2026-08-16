@@ -1381,6 +1381,26 @@ def render_family_tree():
     return "\n".join(lines)
 
 
+def render_dynasty():
+    """Compact generational roll-up: 'Gen 1: Lumberjack 🪦, Scout; Gen 2: Willow'.
+
+    Living pawns and graveyard tombstones are grouped by generation so the
+    prompt always knows which generation carries the colony (ancestors
+    permanently referenced, never forgotten).
+    """
+    living = state.world_state["pawns"]
+    gens = {}
+    for pid, p in living.items():
+        gens.setdefault(p.get("generation", 1), []).append(f"{p['name']}")
+    for g in state.world_state["graveyard"]:
+        gens.setdefault(g.get("generation", 1), []).append(f"{g['name']} 🪦")
+    if not gens:
+        return ""
+    return "Dynasty: " + "; ".join(
+        f"Gen {g}: {', '.join(sorted(names))}" for g, names in sorted(gens.items())
+    )
+
+
 def _do_rest(pawn, pawn_id):
     heal = RECOVER_HEAL - (ELDER_REST_PENALTY if is_elder(pawn) else 0)
     pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] + heal)
@@ -2716,6 +2736,11 @@ def _give_birth(mother, mother_id, result):
         energy=NEWBORN_ENERGY,
         job=random.choice(state.JOB_POOL),
         traits=traits,
+        generation=max(
+            mother.get("generation", 1),
+            (father or {}).get("generation", 1),
+        )
+        + 1,
     )
     child["pos"] = list(mother["pos"])
     child["child_ticks"] = CHILD_MATURITY
@@ -3055,6 +3080,7 @@ def _kill(pawn_id, pawn, cause):
         "cause": cause,
         "died_tick": state.world_state["tick"],
         "born_tick": pawn.get("born_tick", 0),
+        "generation": pawn.get("generation", 1),
         "epitaph": f"Here lies {pawn['name']}, taken by {cause}.",
         "beloved": _is_beloved(pawn_id, pawn),
     }

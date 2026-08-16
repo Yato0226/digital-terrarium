@@ -22,8 +22,8 @@
 - [x] Viewers can inspect living elders or read the full life stories of ancestors buried in the graveyard.
 
 ### Step 8: Generational Handoffs & Dynasties
-- [ ] When Generation 1 dies out, Generation 2 and 3 take over the colony.
-- [ ] Ancestral graves, inherited heirlooms, and family deeds remain permanently referenced in future prompt contexts so ancestors are never forgotten.
+- [x] When Generation 1 dies out, Generation 2 and 3 take over the colony.
+- [x] Ancestral graves, inherited heirlooms, and family deeds remain permanently referenced in future prompt contexts so ancestors are never forgotten.
 
 ### Step 9: The Monolith as an Oracle & Rune Archive
 - [ ] Significant colony achievements get carved into the Ancestral Monolith as permanent historical runes.

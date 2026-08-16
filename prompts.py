@@ -180,6 +180,7 @@ def build_prompt():
         title_txt = f", Title: {pawn['title']}" if pawn.get("title") else ""
         job_txt = f", Job: {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
         sex_txt = f", Sex {pawn['sex']}" if pawn.get("sex") in ("M", "F") else ""
+        gen_txt = f", Gen {pawn.get('generation', 1)}"
         age_txt = f", Age {engine.age_of(pawn) // engine.TICKS_PER_DAY} days"
         stage_txt = ", Elder" if engine.is_elder(pawn) else ""
         preg_txt = ", Pregnant" if pawn.get("pregnant_ticks", 0) > 0 else ""
@@ -215,7 +216,7 @@ def build_prompt():
             f"Fiber {inv['fiber']}, Gear {pawn['gear']['main_hand']}/{pawn['gear']['body']}, "
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
-            f"Personality {pawn['personality']}{sex_txt}{age_txt}{stage_txt}{job_txt}"
+            f"Personality {pawn['personality']}{sex_txt}{gen_txt}{age_txt}{stage_txt}{job_txt}"
             f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{break_txt}{traits_txt}{mood_txt}"
             f"{goal_txt}{rel_txt}{heir_txt}"
         )
@@ -227,10 +228,28 @@ def build_prompt():
     fallen_line = ""
     if fallen:
         names = ", ".join(
-            f"{g['name']} ({g['cause']})" + (" 💖" if g.get("beloved") else "")
+            f"{g['name']} (Gen {g.get('generation', 1)}, {g['cause']})"
+            + (" 💖" if g.get("beloved") else "")
             for g in fallen
         )
         fallen_line = f"\nThe fallen: {names}"
+
+    dynasty_txt = engine.render_dynasty()
+    legacy_bits = []
+    deeds = state.world_state.get("traditions", {})
+    if deeds.get("trees_felled") or deeds.get("predators_slain") or deeds.get("rations_shared"):
+        legacy_bits.append(
+            f"The colony's deeds: {deeds['trees_felled']} trees felled, "
+            f"{deeds['predators_slain']} predators slain, "
+            f"{deeds['rations_shared']} rations shared"
+        )
+    unclaimed = [
+        h["name"] for h in state.world_state.get("heirlooms", []) if not h.get("owner")
+    ]
+    if unclaimed:
+        legacy_bits.append("Relics awaiting a bearer: " + ", ".join(unclaimed))
+    legacy_txt = "Legacy: " + "; ".join(legacy_bits) if legacy_bits else ""
+    memory_txt = "\n".join(t for t in (dynasty_txt, legacy_txt) if t)
 
     creator_lines = []
     for pid, order in state.god_orders.items():
@@ -270,6 +289,7 @@ def build_prompt():
 Recent terrarium history: {history}
 
 Biome: {biome_line}{fallen_line}
+{memory_txt}
 
 Tradition: {tradition_txt}
 
