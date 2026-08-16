@@ -149,10 +149,23 @@
 - Commit: `Stage 7: pixel pawn sprites`.
 
 ### Part D — Fauna, visitors, raiders, campfire (todo Step 7)
-- [ ] Pixel sprites: deer, rabbit, wolf, bear (normal + named dark variant).
-- [ ] Visitor sprites: merchant, wanderer, bard.
-- [ ] Raider sprite.
-- [ ] 4-frame animated campfire.
+- [x] Pixel sprites: deer, rabbit, wolf, bear (normal + named dark variant).
+  **Done:** 18×16 deer (antlers + eye), 18×14 wolf (ears + tail), 18×15 bear,
+  12×10 rabbit — side-view silhouettes drawn via `mk()` (auto-pads every row to
+  width W so hand-authored art can't misalign). `makeCreatureSprite(species, dark)`
+  renders each into a shared 72×68 canvas (feet at bottom); named legendary beasts
+  (`w.name` set) pick the `dark` palette automatically (also lands the Part G
+  "legendary beasts" item).
+- [x] Visitor sprites: merchant, wanderer, bard.
+  **Done:** 14×17 humanoids at 4× — Merchant (wide-brim hat + pack), Wanderer
+  (green hood), Bard (feathered cap + lute). `syncCreatures` maps `v.kind` →
+  species; old `VISITOR_EMOJI`/`.fig` removed.
+- [x] Raider sprite.
+  **Done:** 14×17 dark-hooded figure with a red bandana (🥷 emoji retired);
+  raiders render at the same 4× scale as visitors.
+- [x] 4-frame animated campfire.
+  **Done:** two extra flame frames (`flame2`, `flame3`); `FLAME_FRAMES` = 4 and
+  `drawFlame` cycles them at ~150 ms (wildfire flame picks this up too).
 - Commit: `Stage 7: pixel fauna, visitors, raiders, campfire`.
 
 ### Part E — Un-stack the pawns (todo Step 8)
@@ -174,7 +187,9 @@
 ### Part G — Ambient juice (todo Step 10)
 - [ ] Drifting snow FX when Winter/Snow.
 - [ ] Night campfire glow across tiles around camp while forest stays shadowed.
-- [ ] Named legendary beasts render as menacing dark wolf/bear.
+- [x] Named legendary beasts render as menacing dark wolf/bear.
+  **Done (early, with Part D):** named wildlife gets the `dark` palette variant
+  in `makeCreatureSprite`.
 - Commit: `Stage 10: ambient snow, glow, legendary beasts`.
 
 ## Verification per part (AGENTS.md workflow)

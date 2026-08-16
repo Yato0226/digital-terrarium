@@ -76,7 +76,13 @@ body::before {
   margin-top: -72px;
 }
 
-.creature { width: 52px; height: 60px; margin-left: -26px; margin-top: -60px; }
+.creature {
+  /* 72x68 sprite canvas + name tag; feet land on the anchor. */
+  width: 72px;
+  height: 80px;
+  margin-left: -36px;
+  margin-top: -68px;
+}
 
 .pawn.leaving, .creature.leaving { animation: pawn-leave .6s ease-in both; }
 
@@ -146,22 +152,28 @@ body::before {
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.5));
 }
 
-.creature .fig {
-  display: block;
-  font-size: 30px;
-  line-height: 1;
-  filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+.creature .psprite {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: 72px;
+  height: 68px;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .creature .name {
-  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   font-size: 9.5px;
   color: #fff;
   text-shadow: 0 1px 2px #000;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 52px;
 }
 
 /* floating status marks (rest zzz, mental break spiral) */

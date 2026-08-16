@@ -64,7 +64,7 @@
 - [x] **Ground textures + object sprites**: coarse 28×14 textures (grass/water/rock/dirt/ash/scorch/farm) upscaled 6× and clipped to the iso diamond + pixel sprites — pine 🌲, rock pile 🪨, ruin wall 💀, tent 🏕️, campfire logs, farm sprouts 🌾, ash mound 🌫️, berry bush 🫐, lily pad 🌊 — cached per tile and rebuilt only when the grid changes.
 - [x] **Rewire `drawIsland()`**: pre-rendered tile sprites replace the colored diamonds + emoji glyphs; water shimmer, wildfire flame/glow, and the campfire flame (2-frame animated) stay live per-frame.
 - [x] **Pawn sprites**: standing pixel characters (sex/elder/child + hue variants, idle/walk) — Part C.
-- [ ] **Fauna / visitor / raider sprites** + **4-frame animated campfire** — Part D.
+- [x] **Fauna / visitor / raider sprites** + **4-frame animated campfire** — Part D.
 - [ ] **Attribution**: n/a (procedural, zero external assets — note this in `README.md`).
 
 ### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
@@ -81,7 +81,7 @@
 ### Step 10: Ambient Visual Juice
 - [ ] **Drifting snow FX**: lightweight canvas particle layer dropping soft white snowflakes when it's Winter / Snow.
 - [ ] **Night campfire glow**: warm soft orange radial glow on the tiles immediately around the camp while the outer forest stays in shadow.
-- [ ] **Named legendary beasts**: named predators (e.g. *The Grey Terror* from the log) render as a menacing dark wolf sprite snapping at pawns, distinct from normal wildlife.
+- [x] **Named legendary beasts**: named predators (e.g. *The Grey Terror* from the log) render as a menacing dark sprite (dark palette variant of their species) distinct from normal wildlife — landed with Part D.
 
 ### Cross-stage verification (each part: implement → test → commit)
 - [ ] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).

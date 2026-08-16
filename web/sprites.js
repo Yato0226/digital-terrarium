@@ -155,7 +155,7 @@ const SPRITES = {
     "..bbbbbbbbbb.",
   ], SPRITE_PAL),
 
-  // Flame frames (9x12) — two frames alternate in drawFlame().
+  // Flame frames (9x12) — frames alternate in drawFlame() (4-frame campfire).
   flame0: makeSprite([
     "....o....",
     "...ooo...",
@@ -183,6 +183,34 @@ const SPRITES = {
     "...oyyo..",
     "....o....",
     ".........",
+  ], SPRITE_PAL),
+  flame2: makeSprite([
+    "...ooo...",
+    "..oyyyo..",
+    ".oyyyyyo.",
+    ".oyyyyyyo",
+    "oyyyyyyyo",
+    "oyyyyyyyo",
+    "oyyyyyyyo",
+    ".oyyyyyyo",
+    ".oyyyyyyo",
+    "..oyyyyo.",
+    "...oyyo..",
+    "....o....",
+  ], SPRITE_PAL),
+  flame3: makeSprite([
+    "....o....",
+    "...oyyo..",
+    "..oyyyyo.",
+    "..oyyyyyo",
+    ".oyyyyyyo",
+    "oyyyyyyyo",
+    "oyyyyyyyo",
+    ".oyyyyyyo",
+    "..oyyyyyo",
+    "..oyyyyo.",
+    "...oyyo..",
+    "....o....",
   ], SPRITE_PAL),
 
   // Farm sprouts (11x4).
@@ -220,7 +248,7 @@ const SPRITES = {
   ], SPRITE_PAL),
 };
 
-const FLAME_FRAMES = [SPRITES.flame0, SPRITES.flame1];
+const FLAME_FRAMES = [SPRITES.flame0, SPRITES.flame1, SPRITES.flame2, SPRITES.flame3];
 
 // ---- ground texture (28x14 coarse canvas, upscaled 6x) ----
 const GROUND = {
@@ -374,9 +402,9 @@ function resetTiles() {
   tileCache.clear();
 }
 
-// ---- animated flame (2 frames, 130 ms each) ----
+// ---- animated flame (4 frames, ~150 ms each) ----
 function drawFlame(ctx, x, yBottom, now) {
-  const frame = Math.floor(now / 130) % 2;
+  const frame = Math.floor(now / 150) % FLAME_FRAMES.length;
   ctx.imageSmoothingEnabled = false;
   const cv = FLAME_FRAMES[frame];
   const scale = 3;
@@ -517,6 +545,221 @@ function makePawnSprite(sex, elder, child, hairHue, tunicHue, frame, bobY) {
   return c;
 }
 
+// ---- creature / visitor / raider sprites ----
+// mk() pads every row to W dots so hand-authored art can't misalign.
+function mk(W, rows) {
+  return rows.map((r) => String(r).padEnd(W, ".").slice(0, W));
+}
+
+// Canvas shared by all creatures: wildlife, visitors, raiders.
+const CREATURE_CV_W = 72;
+const CREATURE_CV_H = 68;
+
+const CREATURE_ROWS = {
+  // Deer — side view, facing left, antlers + 4 legs (18 wide).
+  deer: mk(18, [
+    "..aa...aa",
+    "..aa...aa",
+    ".aaaa..aa",
+    ".aaaa....",
+    ".hhhhhhh.",
+    ".hhhehhhh",
+    ".hhhhhhhhh",
+    ".hhhhhhhhhhhh",
+    "hhhhhhhhhhhhhh",
+    "hhhhhhhhhhhhhhh",
+    "hhhhhhhhhhhhhh",
+    ".hhhhhhhhhhhh",
+    ".bbbbbbbbbbbb",
+    ".bb..bb..bb..bb",
+    ".bb..bb..bb..bb",
+    ".bb..bb..bb..bb",
+  ]),
+  // Wolf — side view, ears + tail (18 wide).
+  wolf: mk(18, [
+    "..ww.w",
+    ".www.w........w",
+    ".wwwwww.ww.....w",
+    ".wwewwwwww.....w",
+    "wwwwwwwwwwwww..w",
+    "wwwwwwwwwwwwwww.",
+    ".wwwwwwwwwwwwwww",
+    ".wwwwwwwwwwwwww.",
+    "..wwwwwwwwwwww..",
+    "..wwww.wwwwwww..",
+    ".wwww...wwwww...",
+    ".wwww...wwwww...",
+    ".wwww...wwwww...",
+    ".ww.....wwww....",
+  ]),
+  // Bear — bulky body, small ears (18 wide).
+  bear: mk(18, [
+    ".....ww",
+    "....wwww",
+    "...wwwwww",
+    "..wwwwwwwww",
+    ".wwwwwwwwwww",
+    ".wwwwwwwwwwww",
+    "wwwwwwwwwwwwww",
+    "wwwwwwwwwwwwwww",
+    "wwwwwwwwwwwwwww",
+    ".wwwwwwwwwwwwww",
+    ".wwwwwwwwwwwwww",
+    ".wwwwwwwwwwwwww",
+    ".wwww...wwwwww",
+    ".www.....wwww",
+    ".www.....wwww",
+  ]),
+  // Rabbit — long ears, small body (12 wide).
+  rabbit: mk(12, [
+    "..rr.rrrr",
+    "..rr..rrr",
+    ".rrr.rrrr",
+    ".rrrrrrrr",
+    "rrrrrrrrr",
+    "rrrrrrrr.",
+    ".rrrrrrr.",
+    ".rr.rrr..",
+    "..r..r...",
+    ".....r...",
+  ]),
+  // Merchant — wide hat + pack (14 wide).
+  merchant: mk(14, [
+    "..hhhhhhhhhh",
+    "..hhhhhhhhhh",
+    "...tttttttt",
+    "...tttttttt",
+    "...ffffffff",
+    "...fYffYff",
+    "..tttttttttt",
+    ".ttttttttttt",
+    ".ttttttttttt",
+    ".ttttttttttt",
+    "..tttttttttt",
+    "..tttttttttt",
+    "..bbbbbbbbbb",
+    "...LL..LL",
+    "...LL..LL",
+    "...ss..ss",
+    "...ss..ss",
+  ]),
+  // Wanderer — hooded traveller (14 wide).
+  wanderer: mk(14, [
+    "....gggg",
+    "...gggggg",
+    "...gggggg",
+    "...ggffgg",
+    "...fffffff",
+    "...fYffYff",
+    "..ggggggggg",
+    ".ggggggggggg",
+    ".ggggggggggg",
+    ".ggggggggggg",
+    "..ggggggggg",
+    "..ggggggggg",
+    "..bbbbbbbbbb",
+    "...LL...LL",
+    "...LL...LL",
+    "...ss...ss",
+    "...ss...ss",
+  ]),
+  // Bard — feathered cap + lute (14 wide).
+  bard: mk(14, [
+    "......rr",
+    ".....rrrr",
+    "...rrrrrrrr",
+    "...rrrrrrrr",
+    "...ffttttff",
+    "...fYttttYf",
+    "..pppppppppp",
+    ".pppppppppppp",
+    ".pppppppppppp",
+    ".pppppppppppp",
+    "..pppppppppp",
+    ".llppppppppp",
+    "..llppppppp.",
+    "...LL..LL",
+    "...LL..LL",
+    "...ss..ss",
+    "...ss..ss",
+  ]),
+  // Raider — dark hood + red bandana (14 wide).
+  raider: mk(14, [
+    ".....dd",
+    "....dddd",
+    "....dddd",
+    "....dddd",
+    "....rrrr",
+    "...drrdrr",
+    "..ddddddddd",
+    ".ddddddddddd",
+    ".ddddddddddd",
+    ".ddddddddddd",
+    "..ddddddddd",
+    "..bbbbbbbbb",
+    "..LLLLLLLLL",
+    "...LL...LL",
+    "...LL...LL",
+    "...ss...ss",
+    "...ss...ss",
+  ]),
+};
+
+const CREATURE_PALS = {
+  deer: {
+    pal: { h: "#a9744f", a: "#c9a06a", b: "#6b4a2f", e: "#1a1a1a" },
+    dark: { h: "#3d2b20", a: "#2f221a", b: "#241812", e: "#000000" },
+  },
+  wolf: {
+    pal: { w: "#8d949e", e: "#1a1a1a" },
+    dark: { w: "#3c4048", e: "#000000" },
+  },
+  bear: {
+    pal: { w: "#7a5238", e: "#1a1a1a" },
+    dark: { w: "#3a251a", e: "#000000" },
+  },
+  rabbit: {
+    pal: { r: "#cfd4da", e: "#1a1a1a" },
+    dark: { r: "#6e727a", e: "#000000" },
+  },
+  merchant: {
+    pal: { h: "#8a5a3b", t: "#c9a06a", f: "#eec49c", Y: "#1f1f24", b: "#6b4a2f", L: "#46505e", s: "#33261a" },
+  },
+  wanderer: {
+    pal: { g: "#4a7a3a", f: "#eec49c", Y: "#1f1f24", b: "#6b4a2f", L: "#46505e", s: "#33261a" },
+  },
+  bard: {
+    pal: { r: "#b03a48", p: "#6a4a8a", l: "#8a6a4a", f: "#eec49c", Y: "#1f1f24", L: "#46505e", s: "#33261a" },
+  },
+  raider: {
+    pal: { d: "#3a3a40", r: "#a03030", b: "#2a2a30", L: "#46505e", s: "#1f1f24" },
+  },
+};
+
+const CREATURE_SCALE = {
+  deer: 3, wolf: 3, bear: 3, rabbit: 4,
+  merchant: 4, wanderer: 4, bard: 4, raider: 4,
+};
+
+// species: deer/rabbit/wolf/bear/merchant/wanderer/bard/raider.
+// dark: legendary-named wildlife get the darker palette.
+function makeCreatureSprite(species, dark) {
+  const rows = CREATURE_ROWS[species] || CREATURE_ROWS.deer;
+  const entry = CREATURE_PALS[species] || CREATURE_PALS.deer;
+  const pal = dark && entry.dark ? entry.dark : entry.pal;
+  const src = makeSprite(rows, pal);
+  const scale = CREATURE_SCALE[species] || 3;
+  const c = document.createElement("canvas");
+  c.width = CREATURE_CV_W;
+  c.height = CREATURE_CV_H;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  const w = src.width * scale;
+  const h = src.height * scale;
+  g.drawImage(src, (CREATURE_CV_W - w) / 2, CREATURE_CV_H - h, w, h);
+  return c;
+}
+
 window.Sprites = {
   getTile,
   resetTiles,
@@ -528,4 +771,8 @@ window.Sprites = {
   makePawnSprite,
   hueFromName,
   PAWN_ROWS: { IDLE_M, IDLE_F, WALK_M, WALK_F, CHILD },
+  CREATURE_CV_W,
+  CREATURE_CV_H,
+  makeCreatureSprite,
+  CREATURE_ROWS,
 };

@@ -26,8 +26,6 @@ const WALK_SECONDS = 4;
 const BUBBLE_DELAY = 4;
 const BUBBLE_LIFE = 8;
 
-const VISITOR_EMOJI = { Merchant: "🧳", Wanderer: "🥾", Bard: "🎻" };
-
 const ACTION_EMOTE = {
   Chop: "🪓", Forage: "🧺", Build: "🔨", Scout: "🔭", Attack: "⚔️",
   Share: "🍞", Mate: "💕", Interact: "✨", Rest: "💤",
@@ -569,13 +567,23 @@ function syncPawns(s) {
 function syncCreatures(s) {
   const entries = [];
   for (const w of s.wildlife || []) {
-    entries.push({ dom: "w:" + w.id, key: w.id, emoji: w.emoji || "🐾", label: w.name || w.species, pos: w.pos });
+    entries.push({
+      dom: "w:" + w.id, key: w.id,
+      species: String(w.species || "deer").toLowerCase(),
+      dark: !!w.name, // legendary-named beasts get the dark palette
+      label: w.name || w.species, pos: w.pos,
+    });
   }
   for (const v of s.visitors || []) {
-    entries.push({ dom: "v:" + v.id, key: v.id, emoji: VISITOR_EMOJI[v.kind] || "🎒", label: v.name || v.kind, pos: v.pos });
+    entries.push({
+      dom: "v:" + v.id, key: v.id,
+      species: String(v.kind || "wanderer").toLowerCase(),
+      dark: false,
+      label: v.name || v.kind, pos: v.pos,
+    });
   }
   for (const r of s.raiders || []) {
-    entries.push({ dom: "r:" + r.id, key: r.id, emoji: "🥷", label: "", pos: r.pos });
+    entries.push({ dom: "r:" + r.id, key: r.id, species: "raider", dark: false, label: "", pos: r.pos });
   }
   const seen = new Set();
   for (const e of entries) {
@@ -584,17 +592,26 @@ function syncCreatures(s) {
     if (!rec) {
       const el = document.createElement("div");
       el.className = "creature";
-      const fig = document.createElement("span");
-      fig.className = "fig";
+      const cv = document.createElement("canvas");
+      cv.className = "psprite";
+      cv.width = Sprites.CREATURE_CV_W;
+      cv.height = Sprites.CREATURE_CV_H;
       const name = document.createElement("span");
       name.className = "name";
-      el.appendChild(fig);
+      el.appendChild(cv);
       el.appendChild(name);
       spritesEl.appendChild(el);
-      rec = { dom: e.dom, key: e.key, el, fig, name, x: 0, y: 0, phase: Math.random() * 7 };
+      rec = { dom: e.dom, key: e.key, el, cv, name, sig: "", x: 0, y: 0, phase: Math.random() * 7 };
       creatures.set(e.dom, rec);
     }
-    rec.fig.textContent = e.emoji;
+    const sig = `${e.species}|${e.dark ? 1 : 0}`;
+    if (rec.sig !== sig) {
+      rec.sig = sig;
+      const src = Sprites.makeCreatureSprite(e.species, e.dark);
+      const g = rec.cv.getContext("2d");
+      g.clearRect(0, 0, Sprites.CREATURE_CV_W, Sprites.CREATURE_CV_H);
+      g.drawImage(src, 0, 0);
+    }
     rec.name.textContent = e.label;
     rec.name.style.display = e.label ? "block" : "none";
     const p = iso(e.pos[0], e.pos[1]);
