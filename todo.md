@@ -130,10 +130,10 @@ Move all the heavy information out of Discord and onto the web screen:
 - [ ] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
 - [ ] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
 
-### Step 5: Cloudflare Named Tunnel & Discord Activity Embedding
-- [ ] Set up a permanent named tunnel in your Cloudflare Zero Trust dashboard pointing to your local terrarium port.
-- [ ] Install the background connector on your container so it auto-starts on boot.
-- [ ] Paste your permanent HTTPS address into the Discord Developer Portal under **Activities / URL Mappings**.
+### Step 5: Cloudflare Tunnel & Discord Activity Embedding
+- [ ] Expose the diorama with a **Cloudflare Quick Tunnel**: `cloudflared tunnel --url http://localhost:8900` — no dashboard or account setup, the ad-hoc `*.trycloudflare.com` URL is live instantly.
+- [ ] (Optional hardening) Run `cloudflared` under a supervisor on the container so it auto-starts on boot — note the Quick Tunnel URL **rotates on every restart**, so re-paste it in the Discord Developer Portal when it does (for plain browser viewing it doesn't matter).
+- [ ] Paste your HTTPS address into the Discord Developer Portal under **Activities / URL Mappings**.
 - [ ] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
 
 ---
