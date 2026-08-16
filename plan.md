@@ -1,4 +1,4 @@
-# Plan — Phase 6 Step 6+: The Gorgeous Diorama (pixel-art client pass)
+# Plan — Phase 6 Step 6+: Top-Down 2D Sprite World (vendored Serene Village tileset)
 
 > **This file is the working plan + continuity anchor.** Update it after every part
 > lands (tick the boxes, note decisions). If the conversation gets compacted, read
@@ -7,53 +7,86 @@
 
 ---
 
-## Current status (updated: chat box part H landed)
+## Current status (updated: decision reversed — procedural → vendored sprite pack)
 
-- **Decision — pixel art source: PROCEDURAL.** User chose *Procedural pixel art*
-  (hand-authored pixel maps in JS, drawn with nearest-neighbor scaling) over
-  vendoring Kenney PNGs. Keeps the repo's "zero external assets / offline / tiny"
-  ethos and `paper.txt`'s "no asset footprint" claim. `AGENTS.md`/`paper.txt`
-  wording about "emoji + procedural canvas" stays mostly accurate — the client
-  *was* emoji + procedural canvas and now becomes procedural *pixel-art* canvas.
-- **Decision — emoji are NOT banned.** User: "i did say hate emoji but i did not
-  say do not use it." So: pixel art replaces the **world rendering** (tiles, pawns,
-  creatures, visitors, raiders, decorations). **Emoji stay** in HUD chips, gauges,
-  emotes, log markers, dossier/lore icons, badges — anything that is UI, not the
-  diorama itself. (Part H removed the floating speech/thought bubbles — dialogue
-  now lives in the corner chat box, so the "bubbles" slot in that list is gone.)
-- **Hotfix (shipped before Part H):** the deployed UI was frozen — the roster
-  update queried `.r-hp`/`.r-en` while `makeRosterCard` built bars with
-  `innerHTML '<i class="hp">'`, so `querySelector` returned null and threw a
-  TypeError on every snapshot, killing `applySnapshot` before `updateLog`.
-  Fixed by building the bar fills with `createElement` + matching classes and
-  aligning the CSS selectors. Shipped `tests/smoke_client.js` (DOM-stubbed boot
-  of the real client across stacked/walking pawns, night+snow, wildlife,
-  visitors, raiders, deaths and world resets, asserting HUD/roster/log/chat
-  output and bar widths) + `tests/test_web_client.py` pytest wrapper, so this
-  class of selector/creation drift fails the suite instead of the live diorama.
-- **Decision — map size: VISUAL ZOOM ONLY** (user chose "Visual zoom only", no
-  engine/grid changes). 5×5 grid stays; we scale the client so the island fills
-  ~55–65% of screen height.
-- Kenney packs were downloaded to `%TEMP%\opencode\kenney\` (landscape / dungeon /
-  farm / water / chars / micro) purely as visual reference for palette & tile size.
-  **None are vendored.** Do not commit them.
+- **Decision — pixel art source: VENDORED.** Reverses the earlier *procedural pixel
+  art* decision. User chose a real sprite pack for the world rendering: **LimeZu
+  "Serene Village — revamped"** (free, CC-BY 4.0) — the exact cozy-cottage
+  aesthetic smallville's own town map references. Asset acquired:
+  `Serene_Village_revamped_v1.9.zip` (622 kB, downloaded to
+  `D:\FDM\Serene_Village_revamped_v1.9.zip`; extracted working copy in
+  `%TEMP%\opencode\serene\extracted\`).
+- **Decision — what gets vendored art:** the **world rendering** — terrain
+  (grass/water/rock/dirt), standing objects (trees, bushes, rocks, cottage,
+  campfire, well, fences), overlays (farm/ash/scorch, animated water + flame).
+  **Pawns, wildlife, visitors, raiders stay procedural** (`sprites.js`) — the pack's
+  characters come from the paid *Modern Interiors* set, and our hue-varied pixel
+  pawns already match the top-down scale. Emoji stay in HUD/UI (unchanged policy).
+- **The visual style changes from iso floating island → flat top-down** (Stardew /
+  smallville style): a bordered game-board view of the 5×5 grid, y-sorted sprites.
+  This reverses the "floating island cube + atmospheric sky" look from Parts A–H.
+- **Attribution required (CC-BY 4.0):** add a credit to `README.md`, `paper.txt`,
+  and a small credit line in the client (footer of `atlas.html` + a "🗺️ art" note in
+  the HUD tooltip or index). See the license section below.
+- Vendored files (all tiny): `Serene_Village_16x16.png` (304×720 = 19×45 tiles of
+  16×16, 85 kB), `campfire.png` (64×16 = 4 frames), `water_waves.png` (224×16 =
+  14 frames). Total ≈ 87 kB.
 - `node` is available (v22.18.0) for `node --check` on client JS.
+
+## What the sheet contains (verified by ASCII tile-dump so far)
+
+Master sheet `Serene_Village_16x16.png`, tile grid 19 cols × 45 rows, tiles at
+(col,row):
+
+- **Grass:** solid flat grass (5,0); grass textures rows 29–30 and 33–34.
+- **Water:** open water (1,37); water-with-edge (0,37)/(0,38)/(1,38); grass↔water
+  coast autotiles (1,1)/(2,1)/(1,2) and the coast-blend band rows 9–19.
+- **Rock/cliff:** boulders/stone mounds (1,15),(2,15),(3,15); cliffs (0,18),
+  (0,19), (1,28),(2,28); rock bands rows 35–36 and 43–44.
+- **House/cottage:** wall tiles row 23 (cols 0–5), roof tiles row 24 (cols 0–2,
+  gray + yellow trim), soil/foundation rows 25–26. Exact 2×2 composition to be
+  confirmed visually.
+- **Farmland:** striped tilled soil (0,21),(1,21),(2,21),(0,22),(1,22),(2,22)
+  and rows 25–26.
+- **Well:** (0,20). **Fences:** (4,15),(5,15),(4,16). **Bridges/planks:** (4,18)+.
+- Animated: `campfire.png` 4 frames, `water_waves.png` 14 frames.
+
+### ✅ Atlas LOCKED (user-verified in GIMP, 2026-08-17) — see `web/TILES.md`
+All slices are pixel boxes into `Serene_Village_16x16.png` (304×720 = 19×45 tiles):
+
+- **Trees 🌲 (3 variants):** `(144,201,32,39)`, `(177,201,32,39)`, `(208,201,32,39)` —
+  rounded leafy canopies + trunks. V1/V2 near-identical greens, V3 blue-tinted.
+- **Bush 🫐:** `(113,194,14,14)` rounded green bush. **Flowers:** `(65,194,14,13)`.
+- **Cottage 🏕️ (complete pre-composed):** `(87,404,67,55)` — roof, door, windows,
+  stone foundation, yard. Scale to ~128px wide for the camp tile.
+- **Rocks 🪨:** `(3,298,24,22)` — 2-rock overlay (fine at scale).
+- **Ruins 💀:** `(0,48,47,32)` — scatter of small gray stones (rubble).
+- **Dirt 🌾:** `(96,16,12,48)` — brown soil strip; furrows painted procedurally.
+- **Water 🌊:** `(141,84,8,8)` flat blue. **Shore N** `(59,67,74,14)`, **S** `(59,94,74,14)`,
+  **E** `(126,75,12,29)`, **W** `(55,75,12,29)`.
+- **Fence:** H rail `(64,276,48,11)`, V post `(102,244,4,43)`. **Path:** `(35,158,26,15)`.
+- **Well ⛲:** round top `(191,530,8,7)` + bottom `(192,537,6,4)` — stack exactly these
+  two (a wider crop catches the cottage roof).
+- **Not in pack:** campfire (keep `campfire.png` 4-frame), sprout row (procedural).
 
 ## Client file map (current)
 
 - `web/index.html` — HUD bar, gauges, stock chips, stage (canvas+sprites+emotes+
-  chat+log), dossier panel, lore panel. Loads `app.js` only.
-- `web/style.css` — dark void bg with star specks, 1000×640 stage, circular pawn
-  rings, emotes, HUD, log, chat, panels.
-- `web/app.js` (827 lines) — geometry `STAGE_W=1000 STAGE_H=640 TILE_W=120
-  TILE_H=60 ORIGIN=(500,250)`; `drawIsland()` draws flat cutaway diamonds + colored
-  tile diamonds + emoji glyphs + campfire/smoke/night tint; pawns/creatures as DOM
-  with circular rings + emoji figures; emotes; HUD; dossier; lore;
-  WebSocket `connect()` → `applySnapshot()` → `frame()` rAF loop.
-- `feed.py` serves any file under `web/` with proper content type (`.js` maps to
-  `text/javascript`), so **adding `web/sprites.js` needs NO Python change**.
+  chat+log), dossier panel, roster drawer, lore panel. Loads `sprites.js` + `app.js`.
+- `web/style.css` — dark void bg, 1100×900 stage, pawn/creature DOM sprites,
+  emotes, HUD, log, chat, panels.
+- `web/app.js` (1211 lines) — iso geometry `STAGE_W=1100 STAGE_H=900 TILE_W=168
+  TILE_H=84 ORIGIN=(550,212)`; `drawIsland()` (sky, mountains, floating cube,
+  tiles); DOM pawns/creatures at iso coords with slot offsets; chat/log/dossier/
+  lore/HUD; WebSocket → `applySnapshot()` → `frame()`.
+- `web/sprites.js` (778 lines) — procedural pixel art: `makeSprite()`, ground
+  textures, tile assembly (`getTile`), 4-frame flame, pawn/creature/visitor/raider
+  sprites. **Pawns + creatures + fallback objects stay here.**
+- `feed.py` serves any file under `web/` (`.png` → `image/png`, `.js` → JS), so
+  **adding `web/atlas.js`, `web/atlas.html`, `web/assets/*.png` needs NO Python
+  change.**
 
-## Snapshot data model (what the client renders)
+## Snapshot data model (unchanged — client is read-only)
 
 - `s.grid` — 5×5 of emoji tile strings. Possible values:
   `🌲` forest · `🫐` meadow · `🪨` quarry · `🌊` river · `💀` ruins · `🏕️` camp ·
@@ -65,217 +98,149 @@
   🌲🫐🌊🌲🌲
   🌲🌲🌲🌲🌲
   ```
-- `s.pawns[]` — id, name, job, title, sex (M/F), status, pos [x,y], prev_pos,
-  vitals {hp,energy,hunger,warmth,morale}, inventory {wood,food,stone,fiber},
-  gear {main_hand,body}, goal, skills, relationships, partners, mother/father/
-  partner_id, action, flavor, direction, quote, inner_monologue, mental_break,
-  traits, pregnant (bool), child (bool), elder (bool).
-- `s.wildlife[]` — id, species (`Deer`/`Rabbit` = prey, `Wolf`/`Bear` = predator),
-  name (named legendary beasts!), pos, state, emoji.
-- `s.visitors[]` — id, kind (`Merchant`/`Wanderer`/`Bard`), name, pos, state.
-- `s.raiders[]` — id, pos, state.
-- `s.biome` — campfire, shelter, wood_stock, food_stock, granary, palisade.
-- `s.resources` — wood/food/stone/fiber aggregates for HUD.
-- `s.lore` — graveyard (epitaphs, beloved flag), monument (wood/stone/done/
-  inscription/runes), patches, chronicle.
-- `s.events[]` — per-tick events with `type`, `actor`, `target`, `description`;
-  emotes/log filter `e.tick === s.tick - 1`.
+- `s.pawns[]` — id, name, job, title, sex, status, pos [x,y], prev_pos, vitals,
+  inventory, gear, goal, skills, relationships, partners, mother/father/partner_id,
+  action, flavor, direction, quote, inner_monologue, mental_break, traits,
+  pregnant/child/elder (bool).
+- `s.wildlife[]` / `s.visitors[]` / `s.raiders[]` — id, species/kind, name, pos,
+  state. `s.biome` — campfire, shelter, wood/food_stock, granary, palisade.
+  `s.resources` — HUD aggregates. `s.lore` — graveyard/monument/patches/chronicle.
+  `s.events[]` — per-tick events (`e.tick === s.tick - 1` for emotes/log).
 
-## Design — procedural pixel-art system
+## Design — top-down sprite renderer (vendored tiles, y-sorted sprites)
 
-- **New file `web/sprites.js`**, loaded in `index.html` before `app.js`.
-- Sprite = array of equal-length strings (rows), each char maps to a palette
-  color. `makeSprite(rows, palette)` renders once to an offscreen canvas; drawn
-  scaled with `ctx.imageSmoothingEnabled = false` (crisp nearest-neighbor).
-- Palettes per sprite group (ground, objects, pawns, fauna, visitors, raiders).
-  Pawn hue variant: tint hair/tunic by `hashHue(name)` for variety.
-- **Tiles:** pre-render each tile type to a canvas sized to the iso diamond
-  footprint (2:1) with a textured ground (grass/water/stone/dirt patterns) plus
-  object sprites standing on top (pine tree, rock pile, ruin wall, tent + campfire,
-  farm sprouts, flame, ash).
-- **Pawns:** standing pixel character (~16×24 px art, upscaled), variants for
-  sex (hair/tunic), elder (grey, cane maybe), child (smaller). Idle + walk frames.
-- **Fauna/visitors/raiders:** pixel sprites per species/kind; named legendary
-  beasts (Wolf/Bear with `name`) get a dark "menacing" variant (Step 10).
-- **Campfire:** 4-frame animated pixel flame sprite on the camp tile (Step 7).
+- **New file `web/atlas.js`** (loaded before `app.js`, after `sprites.js`):
+  - Loads the three vendored PNGs via `new Image()` (same-origin; `feed.py` serves
+    them; `file://` works too — drawImage never reads pixels back).
+  - `Atlas.tile(sheet, col, row)` → cached 16×16 canvas slice (nearest-neighbour).
+  - Tile-type → sheet-coord table (the atlas) — single file to tweak when the user
+    corrects a tile.
+  - `Atlas.ground(type, x, y)` → pre-rendered ground-tile canvas (grass variants
+    chosen deterministically per (type,x,y) like the old `GROUND` noise).
+  - `Atlas.standSprite(type, x, y)` → cached canvas of the standing object for a
+    tile (tree/bush/rock/ruin/cottage/farm) sized to TILE.
+- **Geometry:** `TILE = 128` (16 px art × 8 nearest-neighbour), map 5×5 = 640×640,
+  centered in the 1100×900 stage (`MAP_X≈230, MAP_Y≈130`). Board fills ~55–65% of
+  stage height like Part A. `resize()` scale cap stays `MAX_ZOOM=1.6`.
+- **Render layers (bottom → top):**
+  1. Canvas: soft dark vignette backdrop + rounded wooden board frame (procedural
+     gradients/rects — cheap, no extra assets) around the map.
+  2. Canvas: ground layer — one vendored tile per grid cell (grass/water/rock/
+     dirt/farm/ash/scorch), shore transitions where river meets land, seasonal
+     tint overlay (winter snow-white, autumn warm, summer bright).
+  3. DOM (inside `#sprites`): standing objects + pawns + creatures, **y-sorted by
+     z-index** (`z = Math.round(anchorY_px * 10)`), so a pawn walks behind a tree
+     it's north of and in front of one it's south of.
+- **Standing objects as DOM canvas sprites** (cached, rebuilt on grid-signature
+  change): forest → tree; meadow → berry bush + flowers; quarry → rock pile;
+  ruins → ruined stone; camp → cottage + animated campfire + well + fences;
+  farm → sprouts. Wildfire tile → flame overlay (campfire frames) + glow.
+- **Pawns/creatures:** same DOM canvas-sprite machinery as today, anchored at the
+  tile center (feet at bottom). Compact slot offsets for stacked pawns (small ring
+  around center, not the iso diamond). Walk interpolation unchanged (0–4 s).
+- **Live effects (kept, adapted):** 14-frame animated river waves (canvas overlay
+  on water tiles), 4-frame campfire + smoke particles + night glow, snow veil,
+  night tint, per-tick emotes, 💤/🌀/🤰 badges, hover name pills.
+- **HUD/panels/chat/log/dossier/lore/roster:** unchanged (all DOM, already
+  top-down agnostic). Only coordinate plumbing (`iso()` → `top()`) and z-index
+  change.
 
 ## Parts to implement (one commit each; tick todo.md per part)
 
-### Part A — Scale, depth & atmosphere (todo Step 6)
-- [x] Zoom: bump geometry so island fills ~55–65% of stage height. Candidate:
-  `TILE_W=200 TILE_H=100`, stage ~1200×900, ORIGIN centered (~600, ~360). Recheck
-  `resize()` scale cap (currently `min(...,1)`) so the island reads big on large
-  screens too. Compute final numbers in code; goal: island total (top face +
-  thickness) ≈ 55–65% of screen height.
-  **Done:** `TILE_W=168 TILE_H=84`, stage 1100×900, `ORIGIN=(550,212)`. Island
-  spans y≈164→688 (524 px = 58% of 900); `resize()` cap raised `min(...,1)` →
-  `MAX_ZOOM=1.6` so it stays ~58% up to 1440p windows.
-- [x] 3D thickness: replace flat cutaway diamonds with a real dirt drop (20–30px),
-  dark rock strata, dangling roots under the grass rim.
-  **Done:** dirt lip (+18px + 46px dirt layer), 4 tapered rock strata
-  (`#131a26`→`#33465c`), quadratic-curve roots with sway off the dirt band; two-tone
-  grass rim.
-- [x] Soft ground shadow: blurred dark oval beneath the island.
-  **Done:** elliptical radial gradient (`scale(1,0.4)` circle) anchored just below
-  the rock tip.
-- [x] Atmospheric background: deep gradient (midnight navy winter, warm dusk
-  summer), twinkling stars, distant mountain silhouette.
-  **Done:** season/day sky gradient, 56 twinkling stars at night, two mountain
-  ridges (snow-capped in winter days), horizon haze, sun/moon glow, lighter night
-  tint.
-- Commit msg: `Stage 6: diorama zoom, depth, shadow, atmosphere`.
+### Part A — Vendor assets + atlas + contact sheet (todo Step 12 new)
+- [ ] Copy `Serene_Village_16x16.png`, `campfire.png`, `water_waves.png` →
+  `web/assets/` (done, uncommitted).
+- [ ] `web/assets/ATTRIBUTION.md` — LimeZu, Serene Village revamped, CC-BY 4.0,
+  link + date.
+- [ ] `web/atlas.js` — image loader, tile slicer, tile→coord table (best-guess
+  mapping; corrected after user eyeballs the contact sheet).
+- [ ] `web/atlas.html` — labeled contact sheet of all 19×45 master tiles +
+  campfire/water frames (dev tool; also serves as the user's PNG reference).
+- [ ] Client credit: small line in `atlas.html` footer + `README.md` attribution
+  section + `paper.txt` §credits.
+- Commit: `Stage 12: vendor Serene Village tileset + tile atlas`.
 
-### Part B — Pixel tile sprites (todo Step 7 first checkboxes)
-- [x] `web/sprites.js` sprite factory + palettes.
-  **Done:** `makeSprite(rows, palette)` rasterizes string-grid sprites to offscreen
-  canvases; shared `SPRITE_PAL`; deterministic `hash2/hash3` for per-tile noise.
-- [x] Ground textures per tile type + object sprites: pine 🌲, rock pile 🪨, ruin
-  wall 💀, tent 🏕️, farm 🌾, flame 🔥, ash 🌫️, water shimmer 🌊, berry meadow 🫐.
-  **Done:** coarse 28×14 ground canvases (grass/water/rock/dirt/ash/scorch/farm
-  palettes with per-type rules) upscaled 6× nearest-neighbour, diamond-clipped,
-  softly shaded; pixel sprites: pine, rock (programmatic rows), ruin wall, tent,
-  campfire logs, 2-frame flame, sprouts, berry bush, ash mound, lily pad. Camp tile
-  = tent + logs; flame stays live per-frame in app.js.
-- [x] Rewire `drawIsland()` to draw pre-rendered tile sprites instead of colored
-  diamonds + emoji glyphs.
-  **Done:** `Sprites.getTile()` cache keyed by `type:x,y`, rebuilt only on grid
-  signature change; water shimmer + wildfire flame/glow + campfire flame remain
-  dynamic; `TILE_STYLE`/glyph loop removed.
-- Commit: `Stage 7: procedural pixel tile sprites`.
+### Part B — Top-down terrain renderer (todo Step 12)
+- [ ] Replace iso geometry with top-down (`TILE=128`, map centered, `top(x,y)`).
+- [ ] Rewrite `drawIsland()` → `drawWorld()`: backdrop + board frame + ground
+  tiles (vendored) + shore transitions + farm/ash/scorch + seasonal tint.
+- [ ] Water animation: 14-frame waves overlay on river tiles.
+- [ ] Wire `Atlas.ground()` into the grid-signature tile cache.
+- Commit: `Stage 12: top-down terrain renderer`.
 
-### Part C — Pawn sprites (todo Step 7 + Step 8 "standing sprites")
-- [x] Standing pixel pawn sprites (sex/elder/child + hue variants, idle/walk).
-  **Done:** 12×18 pixel characters (M short hair / F long side-hair, elder = grey
-  hair, CHILD 12×14 drawn at 3×), hair + tunic recoloured per pawn via
-  `hueFromName` (deterministic, same hue family as the old ring); `makePawnSprite`
-  renders idle + two walk-stance canvases at 48×72 (4× nearest-neighbour). Old
-  `hashHue`/`pawnFigure` removed; `Sprites.PAWN_ROWS` export for the verify harness.
-- [x] Replace circular `.ring` tokens; keep name labels + status badges (💤🌀🤰
-  emoji stay — they're UI).
-  **Done:** `.pawn` now hosts a `.psprite` canvas (feet-anchored at the iso point)
-  + absolute name tag + soft contact-shadow ::after; selection = pulsing ring under
-  the feet instead of the ring border. Action bob now tilts the sprite canvas;
-  walk = alternating stride frames at 170 ms + the 0–4 s hop; bubbles/emotes lifted
-  for the taller sprites (speech 96 / thought 124, emotes −46).
-- Commit: `Stage 7: pixel pawn sprites`.
+### Part C — Standing objects + y-sort (todo Step 12)
+- [ ] DOM object layer: trees (forest), berry bushes (meadow), rocks (quarry),
+  ruins, cottage + animated campfire (camp), well/fences decor.
+- [ ] Y-sort all DOM sprites (objects + pawns + creatures) via z-index.
+- [ ] Wildfire flame/glow on burning tiles.
+- Commit: `Stage 12: y-sorted standing objects`.
 
-### Part D — Fauna, visitors, raiders, campfire (todo Step 7)
-- [x] Pixel sprites: deer, rabbit, wolf, bear (normal + named dark variant).
-  **Done:** 18×16 deer (antlers + eye), 18×14 wolf (ears + tail), 18×15 bear,
-  12×10 rabbit — side-view silhouettes drawn via `mk()` (auto-pads every row to
-  width W so hand-authored art can't misalign). `makeCreatureSprite(species, dark)`
-  renders each into a shared 72×68 canvas (feet at bottom); named legendary beasts
-  (`w.name` set) pick the `dark` palette automatically (also lands the Part G
-  "legendary beasts" item).
-- [x] Visitor sprites: merchant, wanderer, bard.
-  **Done:** 14×17 humanoids at 4× — Merchant (wide-brim hat + pack), Wanderer
-  (green hood), Bard (feathered cap + lute). `syncCreatures` maps `v.kind` →
-  species; old `VISITOR_EMOJI`/`.fig` removed.
-- [x] Raider sprite.
-  **Done:** 14×17 dark-hooded figure with a red bandana (🥷 emoji retired);
-  raiders render at the same 4× scale as visitors.
-- [x] 4-frame animated campfire.
-  **Done:** two extra flame frames (`flame2`, `flame3`); `FLAME_FRAMES` = 4 and
-  `drawFlame` cycles them at ~150 ms (wildfire flame picks this up too).
-- Commit: `Stage 7: pixel fauna, visitors, raiders, campfire`.
+### Part D — Pawns/creatures in top-down space (todo Step 12)
+- [ ] Reposition pawn/creature DOM to tile centers (`top()` coords).
+- [ ] Compact slot offsets for stacked pawns.
+- [ ] Keep walk interpolation, action bobs, emotes, badges, hover pills.
+- Commit: `Stage 12: top-down pawns + creatures`.
 
-### Part E — Un-stack the pawns (todo Step 8)
-- [x] Isometric slotting: multi-pawn tiles arrange in a small diamond formation
-  (top-left, bottom-right, top-right…) instead of one overlapping blob.
-  **Done:** per-tick, pawns on the same tile are sorted by id and assigned a stable
-  corner from `SLOT_OFFSETS` (11 diamond positions; beyond that it loops back).
-  Positions interpolate from the pawn's *previous* slot, so a neighbour leaving
-  reads as a little shuffle rather than a teleport. Bubbles/emotes/zzz inherit the
-  slotted position automatically (they all read `rec.x/rec.y`).
-- [x] Per-pawn bubbles + 💤/badges float above the *individual* slot offset.
-  **Done:** free because speech/thought bubbles and per-tick emotes are positioned
-  from the slotted `rec.x/rec.y` each frame; the 💤/🌀 marks live inside the pawn
-  element itself.
-- [x] Hover name pills (keep always-on option if simpler); crisp small labels.
-  **Done:** names are now hidden pills that fade in on `:hover` (and stay while a
-  pawn is selected) — kills the always-on overlap on multi-pawn tiles.
-- Commit: `Stage 8: pawn slotting + per-pawn bubbles`.
+### Part E — Ambient effects pass (todo Step 12)
+- [ ] Campfire smoke + night glow centered on camp; snow veil; night tint;
+  river shimmer — all adapted to the new geometry.
+- Commit: `Stage 12: ambient effects for top-down`.
 
-### Part F — HUD framing (todo Step 9)
-- [x] Top bar: wooden/slate banner, larger resource icons, tooltips, subtle winter
-  frost texture along edges when season=Winter.
-  **Done:** `#hud` is now a wooden banner (plank-grain stripes + amber trim); the
-  stock chips gained `title` tooltips and sit slightly larger; a `.frost` class on
-  `#hud`/`#stage` (toggled in `updateHud` from the snapshot season) draws an icy
-  strip along the banner trim and frost rims at the stage's top/bottom edges.
-- [x] Right-side roster drawer: mini card per colonist (portrait, name, health/
-  energy bars, current action).
-  **Done:** new `#roster` panel (👥 button in the HUD, ✕ to close, visible by
-  default). Each `.r-card` has a 26×39 pixel portrait rendered from
-  `Sprites.makePawnSprite` (downscaled 24×36, nearest-neighbour), name, two mini
-  bars (❤️ green / ⚡ amber) and the current action; cards are rebuilt only on
-  roster-identity change, vitals/action refresh in place; clicking a card
-  selects the pawn (`.sel` highlight) and opens the dossier.
-- [x] Bottom log: parchment/dark-glass card; highlight AI Director narrative lines
-  distinct from dry action lines.
-  **Done:** `#log` restyled as a parchment-dark-glass card (amber border, warm
-  radial sheen). `NARRATIVE_TYPES` (`world`, `chronicle`, `patch`,
-  `monument_complete`, `legend`, `tradition`, `season`, `feast`, `council`)
-  rows get an amber left rail + italic parchment text via `.log-row.narrative`.
-- Commit: `Stage 9: HUD framing + roster drawer`.
-
-### Part G — Ambient juice (todo Step 10)
-- [x] Drifting snow FX when Winter/Snow.
-  **Done:** dedicated `snow` particle array (capped ~130, ~3 spawned/frame) with a
-  gentle sway + per-flake twinkle; `snowing` derives from season/weather in
-  `applySnapshot` and clears the array when it stops; drawn in front of everything
-  after the night tint.
-- [x] Night campfire glow across tiles around camp while forest stays shadowed.
-  **Done:** the night tint stays, but the campfire glow is now two screen-blended
-  warm pools with a flicker term — a wide 210px falloff (keeps the outer forest in
-  shadow) plus a bright 98px pool that lights camp and its immediate neighbours.
-- [x] Named legendary beasts render as menacing dark wolf/bear.
-  **Done (early, with Part D):** named wildlife gets the `dark` palette variant
-  in `makeCreatureSprite`.
-- Commit: `Stage 10: ambient snow, glow, legendary beasts`.
-
-### Part H — Corner chat box (tester feedback: dialogue instead of floating bubbles)
-- [x] Add a chat box at a bottom corner that collects pawn speech (`quote`) and
-  thoughts (`inner_monologue`) as chat rows, replacing the floating comic bubbles.
-  **Done:** new `#chat` panel bottom-right (cool night-glass card, mirrors the
-  parchment `#log` on the left). `updateChat(s)` (called from `applySnapshot`,
-  replacing `addBubbles`) prepends one row per quote/thought each tick — name
-  chip tinted by `Sprites.hueFromName`, thoughts italic/dimmer — deduped by
-  `pawnId@tick:kind`, capped at `CHAT_MAX` 8, auto-hidden when empty, and cleared
-  on world reset (fresh world's dialogue still lands). Floating speech/thought
-  bubbles removed entirely (`#bubbles` layer, `bubbles` map, `addBubble`, the
-  per-frame bubble lift loop); per-tick status emotes and the 💤/🌀/🤰 badges stay.
-- Commit: `Stage 10: corner chat box replaces floating dialogue bubbles`.
+### Part F — Doc + test sync (todo Step 12 + cross-stage)
+- [ ] `plan.md` (this file) ticked; `todo.md` Step 12 checkboxes.
+- [ ] `README.md` — feature/run notes + Serene Village attribution (CC-BY 4.0).
+- [ ] `paper.txt` — client description §Implementation (top-down sprite renderer,
+  vendored tileset) + credits; run `python check_paper.py`.
+- [ ] `AGENTS.md` — Phase 6 client paragraph (emoji + procedural canvas → vendored
+  tileset top-down renderer; pawns/creatures stay procedural).
+- [ ] `tests/smoke_client.js` — update geometry/atlas assertions for the new
+  renderer (DOM object layer, y-sort, top-down coords); `tests/test_web_client.py`
+  stays green; full `ruff check . && python -m pytest tests -q`.
+- Commit: `Stage 12: docs + smoke tests for top-down renderer`.
 
 ## Verification per part (AGENTS.md workflow)
 
-- `node --check web/app.js` and `node --check web/sprites.js` on touched JS.
-- `ruff check . && python -m pytest tests -q` — Python untouched, suite stays green.
+- `node --check web/app.js`, `node --check web/sprites.js`, `node --check web/atlas.js`.
+- `ruff check . && python -m pytest tests -q` — Python untouched, suite green.
 - `python -m py_compile` on touched .py (unlikely — no Python changes expected).
-- Live sanity check: `https://budget-universe-manila.ngrok-free.dev/` (ngrok must
-  be running, feed enabled) — confirm zoom, sprites, slotting, HUD, snow/glow.
+- Live sanity check: `https://budget-universe-manila.ngrok-free.dev/` — confirm
+  top-down terrain, trees/cottage/rocks, y-sort (pawn behind tree), campfire,
+  HUD/log/chat/dossier/lore all still work; `atlas.html` for tile verification.
 
 ## Doc sync (same part/commit as the code)
 
-- `todo.md` — tick each checkbox as its part lands (canonical checklist).
-- `README.md` — client feature/run notes + note that the client now uses
-  procedurally-generated pixel art (no external assets / no attribution needed;
-  keep the "offline, zero runtime downloads" claim).
-- `paper.txt` — update client description in §Implementation (currently claims
-  "emoji and procedural drawing only"); change to procedural pixel-art sprites,
-  emoji kept only for UI glyphs. Keep LaTeX valid; run `python check_paper.py`.
-- `AGENTS.md` — update the Phase 6 client paragraph (the "emoji + procedural
-  canvas" phrasing) once the pass is done.
+- `todo.md` — add **Step 12: Top-Down Sprite World (vendored tileset)** section
+  under the Phase 6 visual-polish block; tick one checkbox per committed part.
+- `README.md` — new client look (top-down), Serene Village attribution, atlas
+  dev-tool note.
+- `paper.txt` — client description in §Implementation + credits. Keep LaTeX valid.
+- `AGENTS.md` — Phase 6 client paragraph + architecture notes (atlas.js, y-sort).
 - This `plan.md` — tick parts, record decisions/numbers as they land.
+
+## License / attribution (CC-BY 4.0 — required)
+
+- Pack: **"Serene Village — revamped" by LimeZu**, itch.io
+  (https://limezu.itch.io/serenevillagerevamped), free download, license **CC-BY 4.0**.
+- Credit line for README/paper/client footer:
+  *"World tiles: 'Serene Village — revamped' by LimeZu (limezu.itch.io), CC-BY 4.0."*
+- No license file ships inside the zip — the CC-BY 4.0 terms live on the itch page.
+  `web/assets/ATTRIBUTION.md` records the pack name, author, source, license,
+  download date, and which files were vendored.
 
 ## Gotchas / reminders
 
 - Python 3.10; `engine.py` unchanged — all numbers stay in Python, client is
   read-only display.
-- `feed.py` content-type map already handles `.js`/`.css`/`.png`; sprites.js needs
-  no server change.
-- `resize()` currently caps scale at 1 — revisit for the zoom goal.
-- Pawn DOM is positioned at iso coords and animated in `frame()`; sprite swap must
-  keep the same anchor (feet) so slotting offsets compose cleanly.
-- Keep zero-dependency: sprites.js is vanilla JS, no images fetched at runtime.
-- Don't commit `%TEMP%\opencode\kenney\` or anything outside the repo.
+- `feed.py` content-type map already handles `.png`/`.js`; no server change needed
+  for atlas.js / assets / atlas.html.
+- The sheet has a blank 19th column and transparent padding tiles — never slice a
+  tile the atlas doesn't explicitly list.
+- Tile art is 16×16 → upscale 8× nearest-neighbour; never smooth-scale (keeps
+  crisp pixel look; `imageSmoothingEnabled=false` everywhere).
+- Y-sort: objects taller than a tile (trees, cottage) need their z-index anchored
+  to their **footprint** (south edge), not the top of the sprite, or pawns will
+  float above them wrongly.
+- Keep zero-dependency: no runtime downloads, no fonts, no external CDN — all art
+  is vendored or procedural.
+- Don't commit `%TEMP%\opencode\` content or `D:\FDM\*.zip`; only the three PNGs
+  in `web/assets/`.

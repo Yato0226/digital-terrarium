@@ -179,6 +179,11 @@ Also enable **LXC → Options → Start at boot** so the bot returns when the ho
 | `terrarium_log.jsonl` | Append-only structured event log — the dataset (gitignored) |
 | `paper.txt` | The accompanying paper (pdflatex; rename to `main.tex` on Overleaf) |
 
+## Assets & attribution
+
+- **World tiles**: "Serene Village — revamped" by LimeZu ([limezu.itch.io](https://limezu.itch.io/serenevillagerevamped)), free **CC-BY 4.0** — vendored as `web/assets/` (see `web/assets/ATTRIBUTION.md`). Credit line: *World tiles: "Serene Village — revamped" by LimeZu (limezu.itch.io), CC-BY 4.0.*
+- All other client art (pawns, creatures, visitors, raiders, UI) is original procedural pixel art from `web/sprites.js` — no external assets, no runtime downloads.
+
 ## Development
 
 ```bash

@@ -640,4 +640,7 @@ if __name__ == "__main__":
         time.sleep(TICK_INTERVAL_SECONDS)
 \end{lstlisting}
 
+\subsection{Credits}
+The world tiles rendered by the live client are from the free \emph{Serene Village --- revamped} pack by LimeZu (\texttt{limezu.itch.io/serenevillagerevamped}), licensed under Creative Commons Attribution 4.0 (CC-BY 4.0). All other client art (pawns, creatures, visitors, raiders, UI) is original procedural pixel art.
+
 \end{document}

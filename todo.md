@@ -86,6 +86,18 @@
 ### Step 11: Corner Chat Box (tester feedback — dialogue instead of floating bubbles)
 - [x] **Bottom-right chat box**: pawn speech (`quote`) and thoughts (`inner_monologue`) land as colour-coded chat rows (name chip tinted by pawn hue, thoughts italic/dimmer) in a bottom-right panel — deduped per `pawnId@tick:kind`, capped at 8, auto-hidden when empty, cleared on world reset. Floating speech/thought bubbles removed (`#bubbles` layer, `addBubble`, per-frame bubble lift); per-tick status emotes and 💤/🌀/🤰 badges stay. (Also: hotfix for a roster-bar class mismatch that froze the live UI, plus `tests/smoke_client.js` + `tests/test_web_client.py` regression harness.)
 
+### Step 12: Top-Down Sprite World (vendored LimeZu Serene Village tileset)
+*Decision (plan.md, 2026-08-17): replaces the floating-island cube with a flat top-down game-board view. World art is vendored from the free CC-BY 4.0 pack "Serene Village — revamped" by LimeZu (3 PNGs, ~87 kB — no runtime downloads). Pawns/creatures/visitors/raiders stay procedural (`sprites.js`). Emoji stay in HUD/UI. Tile map user-verified in GIMP and locked (see `web/TILES.md`).*
+- [x] **Vendor assets + attribution**: copy `Serene_Village_16x16.png`, `campfire.png`, `water_waves.png` → `web/assets/`; `web/assets/ATTRIBUTION.md` (LimeZu, CC-BY 4.0, source link, date); credit line in `atlas.html` footer.
+- [x] **`web/atlas.js` tile atlas**: image loader + named slice table (`Atlas.slice`/`Atlas.scaled`/`Atlas.ground`/frame strips) with all user-verified pixel boxes — trees, bush, flowers, cottage, rocks, ruins, dirt, water+shore, fences, path, well (two-part).
+- [x] **`web/atlas.html` contact sheet**: labeled 19×45 master-sheet grid + campfire/water frames (dev tool + user reference).
+- [ ] **`README.md` + `paper.txt` attribution**: Serene Village credit line + client-description update (same part/commit as the code).
+- [ ] **Part B — top-down terrain renderer**: replace iso geometry with `TILE=128` top-down (`top(x,y)`), rewrite `drawIsland()` → `drawWorld()` (backdrop + board frame + vendored ground + shore transitions + farm/ash/scorch + seasonal tint), 14-frame water animation.
+- [ ] **Part C — standing objects + y-sort**: DOM object layer (trees/bush/rocks/ruins/cottage+campfire/well/fences), y-sorted z-index by footprint, wildfire flame/glow.
+- [ ] **Part D — pawns/creatures top-down**: tile-center anchors, compact slot offsets, walk interpolation/action bobs/emotes/badges/hover pills preserved.
+- [ ] **Part E — ambient effects pass**: campfire smoke + night glow, snow veil, night tint, river shimmer adapted to top-down.
+- [ ] **Part F — docs + smoke tests**: `plan.md`/`todo.md` ticks, README client-look update, paper §Implementation sync, `AGENTS.md` Phase 6 paragraph, `tests/smoke_client.js` geometry/atlas assertions, full verify suite green.
+
 ### Cross-stage verification (each part: implement → test → commit)
 - [x] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
 - [x] `node --check web/app.js` on touched client JS.
