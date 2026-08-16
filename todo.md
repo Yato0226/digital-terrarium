@@ -131,9 +131,11 @@ Move all the heavy information out of Discord and onto the web screen:
 - [x] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
 
 ### Step 5: Cloudflare Tunnel & Discord Activity Embedding
-- [ ] Expose the diorama with a **Cloudflare Quick Tunnel**: `cloudflared tunnel --url http://localhost:8900` — no dashboard or account setup, the ad-hoc `*.trycloudflare.com` URL is live instantly.
-- [ ] (Optional hardening) Run `cloudflared` under a supervisor on the container so it auto-starts on boot — note the Quick Tunnel URL **rotates on every restart**, so re-paste it in the Discord Developer Portal when it does (for plain browser viewing it doesn't matter).
-- [ ] Paste your HTTPS address into the Discord Developer Portal under **Activities / URL Mappings**.
+*Deployment step — everything below happens on the LXC (or in the Discord Developer Portal), not in the repo.*
+- [x] (Repo prep) Add `deploy/cloudflared.service` (systemd, mirrors `terrarium.service`) and a README LXC runbook so the tunnel is copy-paste on the box.
+- [ ] On the LXC: install `cloudflared` and run `cloudflared tunnel --url http://localhost:8900` — no dashboard or account setup, the ad-hoc `*.trycloudflare.com` URL is live instantly.
+- [ ] (Optional hardening) `cp deploy/cloudflared.service /etc/systemd/system/` + `systemctl enable --now cloudflared` so the tunnel auto-starts on boot — note the Quick Tunnel URL **rotates on every restart**, so re-paste it in the Discord Developer Portal when it does (for plain browser viewing it doesn't matter).
+- [ ] In the Discord Developer Portal: enable the app for Activities and paste your HTTPS address under **Activities / URL Mappings**.
 - [ ] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
 
 ---

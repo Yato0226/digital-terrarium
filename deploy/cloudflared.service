@@ -1,0 +1,17 @@
+[Unit]
+Description=Cloudflare Quick Tunnel for the terrarium web diorama
+# The tunnel fronts the feed server on 8900, so it must start after it.
+After=network-online.target terrarium.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=terrarium
+# Install the static binary to /usr/local/bin so User=terrarium can exec it.
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://localhost:8900 --no-autoupdate
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

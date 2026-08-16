@@ -87,6 +87,28 @@ python main.py
 | `LLM_TEMPERATURE` | — | Sampling temperature (default 0.7) |
 | `NOTIFY_USER_ID` | — | Discord user id pinged on total extinction (defaults to a configured id) |
 
+### Exposing the diorama (Cloudflare Quick Tunnel — on the LXC)
+
+The feed server binds `0.0.0.0:8900` on the LXC. To open it to the world (and later embed it as a Discord Activity):
+
+```bash
+# on the LXC (as root): install the static cloudflared binary
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+chmod +x /usr/local/bin/cloudflared
+
+# ad-hoc tunnel — grab the https://<random>.trycloudflare.com URL from the output
+cloudflared tunnel --url http://localhost:8900
+
+# or persist it across reboots (mirrors deploy/terrarium.service)
+cp deploy/cloudflared.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now cloudflared
+journalctl -u cloudflared -f   # the trycloudflare.com URL is logged on startup
+```
+
+⚠️ Quick Tunnel URLs **rotate on every restart** — re-paste the current URL in the Discord Developer Portal whenever the tunnel restarts (for plain browser viewing it doesn't matter).
+
+**Discord Activity embedding:** enable the app for Activities in the [Discord Developer Portal](https://discord.com/developers/applications), add the current `https://<random>.trycloudflare.com/` under **Activities / URL Mappings**, and members can launch the live terrarium from any voice channel via the rocket activity icon.
+
 ## God commands (prefix `!`)
 
 | Command | Effect |
