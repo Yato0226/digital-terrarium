@@ -58,6 +58,15 @@ def reset():
     _prev_positions.clear()
 
 
+def forget_positions():
+    """Clear the movement history so the next snapshot doesn't animate walks.
+
+    Used by the `!reset` god command: the fresh tick-1 world should appear in
+    place rather than having its founders walk from the old world's tiles.
+    """
+    _prev_positions.clear()
+
+
 # --------------------------------------------------------------------------
 # RFC 6455 frame helpers (pure, unit-testable).
 # --------------------------------------------------------------------------

@@ -170,6 +170,16 @@ def test_broadcast_no_clients():
     _run(feed.broadcast(feed.build_snapshot()))  # must not raise
 
 
+def test_forget_positions_disables_walks():
+    feed.build_snapshot()
+    pawn_1 = state.world_state["pawns"]["pawn_1"]
+    pawn_1["pos"] = [0, 0]
+    assert feed.build_snapshot()["pawns"][0]["prev_pos"] != [0, 0]
+    feed.forget_positions()
+    snap = feed.build_snapshot()
+    assert snap["pawns"][0]["prev_pos"] == snap["pawns"][0]["pos"]
+
+
 # ---- Live HTTP server ----
 
 

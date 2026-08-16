@@ -124,6 +124,7 @@ python main.py
 | `!quests` / `!prophecies` | View the world's active objectives and progress |
 | `!patchnotes` | Read the latest autonomous balance notes from the Architect |
 | `!status` / `!tick` / `!pause` / `!resume` | Inspect, force, or gate the simulation |
+| `!reset` | Wipe the world and restart from tick 1 (two fresh founders) — clears graveyard, chronicle, traditions, and all progression |
 | `!adopt <name\|pawn_id>` | Bond with a pawn — you'll be DM'd about its milestones (any channel) |
 | `!unadopt` | Release your adopted pawn (any channel) |
 | `!my` | Show your adopted pawn (any channel) |

@@ -769,6 +769,24 @@ async def resume(ctx):
     await ctx.send("▶️ Terrarium resumed.")
 
 
+@bot.command(name="reset")
+@is_god_channel()
+async def reset(ctx):
+    """!reset — wipe the world and restart from tick 1 (two fresh founders)."""
+    async with core.tick_lock:
+        state.reset_world()
+        state.god_orders.clear()
+        state.god_whispers.clear()
+        state.save_state()
+    core.pause_event.set()
+    feed.forget_positions()
+    await feed.broadcast(feed.build_snapshot())
+    await ctx.send(
+        "♻️ **World reset.** A fresh tick-1 terrarium rises from the void — "
+        "Lumberjack and Scout found the new camp. Scheduler resumed."
+    )
+
+
 async def _dm_adopter(user_id, message):
     """Gateway DM hook registered as core.notifier (webhooks can't DM)."""
     try:
