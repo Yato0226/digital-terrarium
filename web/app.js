@@ -131,7 +131,7 @@ const rosterCards = new Map();  // pawn id -> roster card element
 
 // ---- small helpers ----
 /** Tile-centre screen point for grid (x, y) — top-down 5×5 board. */
-function top(x, y) {
+function tileXY(x, y) {
   return {
     x: ORIGIN_X + (x - (BOARD - 1) / 2) * TILE,
     y: ORIGIN_Y + (y - (BOARD - 1) / 2) * TILE,
@@ -273,8 +273,8 @@ Atlas.onReady(() => { atlasReady = true; });
 
 /** Map pixel bounds (the 5×5 tile area). */
 function mapBounds() {
-  const min = top(0, 0);
-  const max = top(BOARD - 1, BOARD - 1);
+  const min = tileXY(0, 0);
+  const max = tileXY(BOARD - 1, BOARD - 1);
   return {
     x: min.x - TILE / 2,
     y: min.y - TILE / 2,
@@ -417,7 +417,7 @@ function drawWorld(now) {
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
       if (grid[y][x] === "🔥") {
-        const c = top(x, y);
+        const c = tileXY(x, y);
         const a = 0.14 + 0.09 * Math.sin(t / 140 + x * 2);
         // Top-down: wildfire glow centered on the tile.
         const g = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, 60);
@@ -433,7 +433,7 @@ function drawWorld(now) {
   // Campfire glow + smoke (flame is a DOM object in objects.js; camp = (2,2)).
   const campfire = (snap.biome && snap.biome.campfire) || 0;
   if (campfire > 0) {
-    const camp = top(2, 2);
+    const camp = tileXY(2, 2);
     const flick = 0.55 + 0.2 * Math.sin(t / 90) + 0.1 * Math.sin(t / 47 + 2);
     // Top-down: glow centered on the camp tile itself.
     const g = ctx.createRadialGradient(camp.x, camp.y, 2, camp.x, camp.y, 54);
@@ -473,7 +473,7 @@ function drawWorld(now) {
     ctx.fillStyle = "rgba(10, 14, 40, 0.22)";
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     if (campfire > 0) {
-      const camp = top(2, 2);
+      const camp = tileXY(2, 2);
       const flick = 0.75 + 0.25 * Math.sin(t / 150) * Math.sin(t / 61);
       // Screen-blend warm pools over the dark tint: a wide falloff keeps the
       // outer forest in shadow while a bright ring lights camp + neighbours.
@@ -514,7 +514,7 @@ function drawWorld(now) {
 
 // ---- ground tile pass ----
 function drawGroundTile(tile, x, y, grid, t) {
-  const c = top(x, y);
+  const c = tileXY(x, y);
   const px = c.x - TILE / 2;
   const py = c.y - TILE / 2;
   if (isWaterTile(tile)) {
@@ -621,8 +621,8 @@ function syncPawns(s) {
     rec.el.classList.remove("leaving");
 
     const slot = slots.get(p.id) || [0, 0];
-    const from = top(p.prev_pos[0], p.prev_pos[1]);
-    const to = top(p.pos[0], p.pos[1]);
+    const from = tileXY(p.prev_pos[0], p.prev_pos[1]);
+    const to = tileXY(p.pos[0], p.pos[1]);
     // Start the walk from the pawn's previous *slot* so re-slotting (a neighbour
     // leaving the tile) reads as a little shuffle instead of a teleport.
     rec.px = from.x + (rec.lastSlot ? rec.lastSlot[0] : slot[0]);
@@ -740,7 +740,7 @@ function syncCreatures(s) {
     rec.name.textContent = e.label;
     rec.name.style.display = e.label ? "block" : "none";
     const slot = slots.get(e.dom) || [0, 0];
-    const c = top(e.pos[0], e.pos[1]);
+    const c = tileXY(e.pos[0], e.pos[1]);
     const nx = c.x + slot[0];
     const ny = c.y + slot[1];
     if (!rec.created) {
@@ -1128,7 +1128,7 @@ function applySnapshot(s) {
   snapTime = performance.now();
   snowing = isSnowing(s);
   if (!snowing) snow.length = 0;
-  Objects.sync(s.grid, top, (s.biome && s.biome.campfire) || 0);
+  Objects.sync(s.grid, tileXY, (s.biome && s.biome.campfire) || 0);
   syncPawns(s);
   syncCreatures(s);
   updateChat(s);
