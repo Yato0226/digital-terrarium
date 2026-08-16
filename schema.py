@@ -57,6 +57,10 @@ def build_models():
             Optional[str],
             Field(default=None, description="A personal goal wish, only when the pawn has no goal (e.g. 'gather 10 wood', 'befriend Chief')."),
         ),
+        new_title=(
+            Optional[str],
+            Field(default=None, description="An earned custom role/title for this pawn, only when a recent deed truly earns it (e.g. 'Fang-Breaker', 'Keeper of the Hearth', 'Seer of Whispers'). Keywords decide the subtle perk: martial (fang/claw/blade/slayer/breaker/warrior/warden/guard/hunter/bane) → takes less damage; nurturing (keeper/hearth/mother/caretaker/herder/tender/provider/cook/farmer) → shares +1 food; spiritual (seer/shaman/spirit/oracle/rite/mourner/priest/sage/mystic) → grief passes faster."),
+        ),
     )
     fields = {
         "world_event": (

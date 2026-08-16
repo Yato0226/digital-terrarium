@@ -164,6 +164,17 @@ BRAWL_DAMAGE = 3
 BRAWL_RELATIONSHIP_DROP = 10
 BRAWL_MORALE_DROP = 5
 
+# Stage 13 (Phase 3) free-form dynamic roles — LLM-invented titles, keyword-bucketed perks.
+TITLE_WORDS = {
+    "martial": ("fang", "claw", "blade", "slayer", "breaker", "warrior", "warden", "guard", "hunter", "bane", "tooth", "iron"),
+    "nurture": ("keeper", "hearth", "mother", "nurturer", "caretaker", "herder", "tender", "provider", "cook", "farmer", "gatherer"),
+    "spirit": ("seer", "shaman", "spirit", "oracle", "rite", "mourner", "priest", "sage", "mystic", "waker", "whisper"),
+}
+TITLE_MAX_LEN = 28
+TITLE_MARTIAL_DEFENSE = 2   # martial titles shave damage taken
+TITLE_NURTURE_SHARE = 1     # nurturing titles share +1 food
+TITLE_SPIRIT_GRIEF_DIV = 2  # spiritual titles halve Grief duration
+
 # Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
 FARM_TILE = "🌾"
 FARM_GROW_TICKS = 20
@@ -326,6 +337,8 @@ def _tick_moodlets(pawn):
 
 def _add_moodlet(pawn, name, delta, ticks_left):
     moodlets = pawn.setdefault("moodlets", [])
+    if name == "Grief" and _title_role(pawn) == "spirit":
+        ticks_left = max(1, ticks_left // TITLE_SPIRIT_GRIEF_DIV)
     for m in moodlets:
         if m["name"] == name:
             m["delta"] = delta
@@ -582,6 +595,34 @@ def _adopt_goal(pawn, text):
     if any(w in t for w in ("befriend", "friend", "bond", "comfort", "help")):
         return make_goal("social", target_id=_name_to_id(t))
     return None
+
+
+def _title_role(pawn):
+    return pawn.get("title_role")
+
+
+def _adopt_title(pawn, text):
+    """Bucket an LLM-invented title by keyword and attach subtle passive perks."""
+    t = (text or "").strip().rstrip(".,!?")
+    if not t or len(t) > TITLE_MAX_LEN or not re.match(r"^[A-Za-z0-9\- ]+$", t):
+        return None
+    lower = t.lower()
+    role = None
+    for kind, words in TITLE_WORDS.items():
+        if any(w in lower for w in words):
+            role = kind
+            break
+    pawn["custom_title"] = t
+    pawn["title_role"] = role
+    return {"title": t, "role": role}
+
+
+def _title_defense(pawn):
+    return TITLE_MARTIAL_DEFENSE if _title_role(pawn) == "martial" else 0
+
+
+def _title_share_bonus(pawn):
+    return TITLE_NURTURE_SHARE if _title_role(pawn) == "nurture" else 0
 
 
 def _name_to_id(text):
@@ -2222,6 +2263,7 @@ def _do_attack(pawn, pawn_id, target):
         + _custom_tool_bonus(pawn, "combat")
         + (3 if "Brawler" in pawn.get("traits", []) and pawn["gear"]["main_hand"] is None else 0),
     )
+    damage = max(1, damage - _title_defense(tpawn))
     tpawn["vitals"]["hp"] = _clamp(tpawn["vitals"]["hp"] - damage)
     pawn["counters"]["attacks_won"] += 1
     pawn["counters"]["damage_dealt"] += damage
@@ -2441,7 +2483,8 @@ def _do_share(pawn, pawn_id, target):
             data={"reason": "too_far"},
             description=f"{pawn['name']} is too far from {tpawn['name']} to share.",
         )
-    if pawn["inventory"]["food"] < SHARE_FOOD:
+    given = SHARE_FOOD + _title_share_bonus(pawn)
+    if pawn["inventory"]["food"] < given:
         return events.add_event(
             "failed",
             actor=pawn_id,
@@ -2457,8 +2500,8 @@ def _do_share(pawn, pawn_id, target):
             data={"reason": "low_energy"},
             description=f"{pawn['name']} is too exhausted to share.",
         )
-    pawn["inventory"]["food"] -= SHARE_FOOD
-    tpawn["inventory"]["food"] += SHARE_FOOD
+    pawn["inventory"]["food"] -= given
+    tpawn["inventory"]["food"] += given
     pawn["counters"]["rations_shared"] += 1
     _traditions_inc("rations_shared", 1)
     _goal_nudge(pawn, 1, kind="social", target_id=target)
@@ -2473,7 +2516,7 @@ def _do_share(pawn, pawn_id, target):
         "share",
         actor=pawn_id,
         target=target,
-        data={"food": SHARE_FOOD},
+        data={"food": given},
         description=f"{pawn['name']} shares food with {tpawn['name']}.",
     )
 
@@ -3924,6 +3967,21 @@ def resolve_actions(intents):
                 adopted = _adopt_goal(pawn, intent[3])
                 if adopted:
                     pawn["goal"] = adopted
+        if len(intent) > 4 and intent[4]:
+            pawn = state.world_state["pawns"].get(pawn_id)
+            if pawn and pawn["status"] == "active":
+                adopted = _adopt_title(pawn, intent[4])
+                if adopted:
+                    resulting.append(
+                        events.add_event(
+                            "role",
+                            actor=pawn_id,
+                            data={"title": adopted["title"], "role": adopted["role"]},
+                            description=(
+                                f"{pawn['name']} earns a new role: {adopted['title']}!"
+                            ),
+                        )
+                    )
     for pawn_id, pawn in state.world_state["pawns"].items():
         goal = pawn.get("goal")
         if goal and goal.get("progress", 0) >= goal.get("needed", 1):

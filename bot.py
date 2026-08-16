@@ -509,6 +509,30 @@ async def badges_cmd(ctx):
     await ctx.send("\n".join(out))
 
 
+@bot.command(name="roles")
+@is_god_channel()
+async def roles_cmd(ctx):
+    """!roles — list the LLM-invented custom roles and their keyword-bucketed perks."""
+    out = ["🎭 **Dynamic roles** (invented by the Director, bucketed into passive perks)"]
+    for pid, p in state.world_state["pawns"].items():
+        if p["status"] != "active":
+            continue
+        title = p.get("custom_title")
+        if not title:
+            continue
+        role = p.get("title_role")
+        perk = {
+            "martial": f"−{engine.TITLE_MARTIAL_DEFENSE} damage taken",
+            "nurture": f"+{engine.TITLE_NURTURE_SHARE} food per share",
+            "spirit": f"grief heals {engine.TITLE_SPIRIT_GRIEF_DIV}× faster",
+            None: "no keyword perk",
+        }[role]
+        out.append(f"- **{p['name']}** — {title} ({perk})")
+    if len(out) == 1:
+        out.append("No roles invented yet — the Director may bestow one for earned deeds.")
+    await ctx.send("\n".join(out))
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

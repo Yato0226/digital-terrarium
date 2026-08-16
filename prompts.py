@@ -58,6 +58,7 @@ Rules:
 - Visitors (see the Visitors section) are wandering travelers who walk to the campfire, linger, and leave. Sharing food with one is a trade: a Merchant barters stone, a Wanderer offers fiber. Courting a visitor (Mate) or Interacting to invite them to stay (e.g. "invite to stay", "recruit") can recruit them as a colonist — unless the colony is full. Attacking a visitor plunders their goods, but gentle pawns are haunted by Guilt.
 - Raiders (see the Raiders section) are hostile scavengers who march on the camp to steal food in Autumn when the colony grows wealthy. They can be fought with Attack like any target — a wound sends them fleeing, and the camp's defenders (tamed predators and high-combat pawns) drive them off the stores automatically.
 - Personal goals: a pawn may carry a goal (shown as "Goal: ... (progress/needed)"). Help it pursue that goal. If a pawn has NO goal, you may propose one in 'new_goal' (e.g. "gather 10 wood", "befriend Chief", "build a shelter", "survive 5 days") — the engine decides if it fits and tracks its progress; completing a goal lifts morale and grants skill XP.
+- Earned roles: when a pawn's deeds clearly earn it a title (a famous kill, a life of tending the fire, visions after tragedy), you may propose it in 'new_title' (e.g. "Fang-Breaker", "Keeper of the Hearth", "Seer of Whispers"). The engine buckets it by keyword into a subtle passive perk — martial words grant armor, nurturing words grant bigger shares, spiritual words speed grief recovery — and it will appear on the pawn's line from then on.
 - Output a decision ONLY for each active pawn that has a field in the JSON schema. Incapacitated pawns appear in the status but have NO field — never emit one for them.
 - HP, Energy, Hunger, Warmth, and Morale are 0-100. Starving, freezing, or despairing pawns may act erratically. The engine decides all consequences — never suggest numbers.
 - Pawns may add a 'quote' (spoken aloud to the group) and an 'inner_monologue' (their private thought — may contradict the quote). Reflect personality and vitals: starving pawns obsess over food, low-morale pawns turn paranoid or bitter, aggressive pawns sound threatening.
@@ -182,6 +183,8 @@ def build_prompt():
         sk = pawn["skills"]
         rel = pawn["relationships"]
         title_txt = f", Title: {pawn['title']}" if pawn.get("title") else ""
+        if pawn.get("custom_title"):
+            title_txt += f" — {pawn['custom_title']}"
         job_txt = f", Job: {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
         sex_txt = f", Sex {pawn['sex']}" if pawn.get("sex") in ("M", "F") else ""
         gen_txt = f", Gen {pawn.get('generation', 1)}"

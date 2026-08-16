@@ -849,6 +849,7 @@ async def run_tick():
             action, target = decision.action, decision.target
             flavor = getattr(decision, "flavor", None) if action == "Interact" else None
             new_goal = getattr(decision, "new_goal", None)
+            new_title = getattr(decision, "new_title", None)
             if action == "Move":
                 target = decision.direction
             order = state.god_orders.get(pid)
@@ -856,7 +857,7 @@ async def run_tick():
                 action, target = order["action"], order.get("target")
                 if action == "Interact":
                     flavor = order.get("flavor") or flavor
-            intents[pid] = (action, target, flavor, new_goal)
+            intents[pid] = (action, target, flavor, new_goal, new_title)
 
         tick_events = engine.resolve_actions(intents)
         tick_events += engine.tick_environment()

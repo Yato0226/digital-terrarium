@@ -47,8 +47,8 @@
 - [x] New generations must choose between making peace through courtship and sharing food, or escalating the feud into camp brawls during elections.
 
 ### Step 13: Free-Form Dynamic Roles with Keyword Bucketing
-- [ ] Allow the LLM to organically invent custom job titles based on pawn deeds (*"Fang-Breaker"*, *"Keeper of the Hearth"*).
-- [ ] The engine uses keyword matching to safely grant subtle passive perks (martial words boost defense, nurturing words boost food sharing, spiritual words speed up grief recovery).
+- [x] Allow the LLM to organically invent custom job titles based on pawn deeds (*"Fang-Breaker"*, *"Keeper of the Hearth"*).
+- [x] The engine uses keyword matching to safely grant subtle passive perks (martial words boost defense, nurturing words boost food sharing, spiritual words speed up grief recovery).
 
 ### Step 14: Annual Camp Council & Colony Mandates
 - [ ] Every year cycle, the LLM reviews colony history, names a recognized leader, and issues a 1-sentence **Colony Mandate** (e.g. *"Tame the beasts of the wood"* or *"Fortify before raiders return"*), giving all colonists a unified narrative focus.

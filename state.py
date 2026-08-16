@@ -259,6 +259,8 @@ def make_pawn(
         "relationships": {},
         "badges": [],
         "rel_badges": {},
+        "custom_title": None,
+        "title_role": None,
         "mental_break": None,
         "break_ticks": 0,
         "pregnant_ticks": 0,
@@ -378,6 +380,10 @@ def _migrate_pawn(pawn_id, pawn):
             k: [b for b in v if isinstance(b, str)] if isinstance(v, list) else []
             for k, v in pawn["rel_badges"].items()
         }
+    if isinstance(pawn.get("custom_title"), str):
+        base["custom_title"] = pawn["custom_title"]
+    if isinstance(pawn.get("title_role"), str):
+        base["title_role"] = pawn["title_role"]
     for key in ("mother_id", "father_id", "partner_id"):
         if pawn.get(key) in (None,) or isinstance(pawn.get(key), str):
             base[key] = pawn.get(key)
