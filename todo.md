@@ -83,6 +83,9 @@
 - [x] **Night campfire glow**: warm soft orange radial glow on the tiles immediately around the camp while the outer forest stays in shadow.
 - [x] **Named legendary beasts**: named predators (e.g. *The Grey Terror* from the log) render as a menacing dark sprite (dark palette variant of their species) distinct from normal wildlife — landed with Part D.
 
+### Step 11: Corner Chat Box (tester feedback — dialogue instead of floating bubbles)
+- [x] **Bottom-right chat box**: pawn speech (`quote`) and thoughts (`inner_monologue`) land as colour-coded chat rows (name chip tinted by pawn hue, thoughts italic/dimmer) in a bottom-right panel — deduped per `pawnId@tick:kind`, capped at 8, auto-hidden when empty, cleared on world reset. Floating speech/thought bubbles removed (`#bubbles` layer, `addBubble`, per-frame bubble lift); per-tick status emotes and 💤/🌀/🤰 badges stay. (Also: hotfix for a roster-bar class mismatch that froze the live UI, plus `tests/smoke_client.js` + `tests/test_web_client.py` regression harness.)
+
 ### Cross-stage verification (each part: implement → test → commit)
 - [x] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
 - [x] `node --check web/app.js` on touched client JS.

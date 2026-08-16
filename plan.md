@@ -7,7 +7,7 @@
 
 ---
 
-## Current status (updated: start of pass)
+## Current status (updated: chat box part H landed)
 
 - **Decision — pixel art source: PROCEDURAL.** User chose *Procedural pixel art*
   (hand-authored pixel maps in JS, drawn with nearest-neighbor scaling) over
@@ -18,8 +18,19 @@
 - **Decision — emoji are NOT banned.** User: "i did say hate emoji but i did not
   say do not use it." So: pixel art replaces the **world rendering** (tiles, pawns,
   creatures, visitors, raiders, decorations). **Emoji stay** in HUD chips, gauges,
-  emotes, log markers, dossier/lore icons, bubbles, badges — anything that is UI,
-  not the diorama itself.
+  emotes, log markers, dossier/lore icons, badges — anything that is UI, not the
+  diorama itself. (Part H removed the floating speech/thought bubbles — dialogue
+  now lives in the corner chat box, so the "bubbles" slot in that list is gone.)
+- **Hotfix (shipped before Part H):** the deployed UI was frozen — the roster
+  update queried `.r-hp`/`.r-en` while `makeRosterCard` built bars with
+  `innerHTML '<i class="hp">'`, so `querySelector` returned null and threw a
+  TypeError on every snapshot, killing `applySnapshot` before `updateLog`.
+  Fixed by building the bar fills with `createElement` + matching classes and
+  aligning the CSS selectors. Shipped `tests/smoke_client.js` (DOM-stubbed boot
+  of the real client across stacked/walking pawns, night+snow, wildlife,
+  visitors, raiders, deaths and world resets, asserting HUD/roster/log/chat
+  output and bar widths) + `tests/test_web_client.py` pytest wrapper, so this
+  class of selector/creation drift fails the suite instead of the live diorama.
 - **Decision — map size: VISUAL ZOOM ONLY** (user chose "Visual zoom only", no
   engine/grid changes). 5×5 grid stays; we scale the client so the island fills
   ~55–65% of screen height.
@@ -30,14 +41,14 @@
 
 ## Client file map (current)
 
-- `web/index.html` — HUD bar, gauges, stock chips, stage (canvas+sprites+bubbles+
-  emotes+log), dossier panel, lore panel. Loads `app.js` only.
+- `web/index.html` — HUD bar, gauges, stock chips, stage (canvas+sprites+emotes+
+  chat+log), dossier panel, lore panel. Loads `app.js` only.
 - `web/style.css` — dark void bg with star specks, 1000×640 stage, circular pawn
-  rings, bubbles, emotes, HUD, log, panels.
+  rings, emotes, HUD, log, chat, panels.
 - `web/app.js` (827 lines) — geometry `STAGE_W=1000 STAGE_H=640 TILE_W=120
   TILE_H=60 ORIGIN=(500,250)`; `drawIsland()` draws flat cutaway diamonds + colored
   tile diamonds + emoji glyphs + campfire/smoke/night tint; pawns/creatures as DOM
-  with circular rings + emoji figures; bubbles; emotes; HUD; dossier; lore;
+  with circular rings + emoji figures; emotes; HUD; dossier; lore;
   WebSocket `connect()` → `applySnapshot()` → `frame()` rAF loop.
 - `feed.py` serves any file under `web/` with proper content type (`.js` maps to
   `text/javascript`), so **adding `web/sprites.js` needs NO Python change**.
@@ -222,6 +233,19 @@
   **Done (early, with Part D):** named wildlife gets the `dark` palette variant
   in `makeCreatureSprite`.
 - Commit: `Stage 10: ambient snow, glow, legendary beasts`.
+
+### Part H — Corner chat box (tester feedback: dialogue instead of floating bubbles)
+- [x] Add a chat box at a bottom corner that collects pawn speech (`quote`) and
+  thoughts (`inner_monologue`) as chat rows, replacing the floating comic bubbles.
+  **Done:** new `#chat` panel bottom-right (cool night-glass card, mirrors the
+  parchment `#log` on the left). `updateChat(s)` (called from `applySnapshot`,
+  replacing `addBubbles`) prepends one row per quote/thought each tick — name
+  chip tinted by `Sprites.hueFromName`, thoughts italic/dimmer — deduped by
+  `pawnId@tick:kind`, capped at `CHAT_MAX` 8, auto-hidden when empty, and cleared
+  on world reset (fresh world's dialogue still lands). Floating speech/thought
+  bubbles removed entirely (`#bubbles` layer, `bubbles` map, `addBubble`, the
+  per-frame bubble lift loop); per-tick status emotes and the 💤/🌀/🤰 badges stay.
+- Commit: `Stage 10: corner chat box replaces floating dialogue bubbles`.
 
 ## Verification per part (AGENTS.md workflow)
 

@@ -462,6 +462,55 @@ body::before {
 }
 #log:empty { display: none; }
 
+/* ---------------- corner chat box (pawn dialogue) ---------------- */
+
+#chat {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  width: 330px;
+  max-width: calc(100% - 32px);
+  /* cool night-glass card to contrast the parchment log */
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(150,200,255,.07), transparent 60%),
+    linear-gradient(180deg, rgba(24, 28, 42, .92), rgba(13, 16, 26, .9));
+  border: 1px solid rgba(165,195,255,.22);
+  border-radius: 14px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.55), inset 0 1px 0 rgba(185,215,255,.08);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#chat.hidden { display: none; }
+
+.chat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #e6ecf8;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.07);
+  animation: log-in .4s ease-out both;
+}
+/* private thoughts read quieter than spoken lines */
+.chat-row.thought { opacity: .85; }
+.chat-row.thought .chat-text { font-style: italic; color: #a9b6d6; }
+
+.chat-name {
+  flex: none;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .3px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.7);
+}
+.chat-text { min-width: 0; }
+
 .log-row {
   display: flex;
   gap: 8px;

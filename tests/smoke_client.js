@@ -141,6 +141,7 @@ seeded("emotes");
 seeded("title");
 seeded("conn");
 const logEl = seeded("log");
+const chatEl = seeded("chat");
 for (const id of ["gCampfire", "gShelter"]) {
   const g = seeded(id);
   const track = makeEl("span");
@@ -257,6 +258,13 @@ try {
   if (hpW !== "80%") throw new Error(`roster hp bar width expected 80%, got ${hpW}`);
   if (enW !== "60%") throw new Error(`roster energy bar width expected 60%, got ${enW}`);
 
+  // Corner chat box: Fern's quote + thought become rows (newest on top), and
+  // the panel is visible.
+  if (chatEl.children.length !== 2) throw new Error(`chat rows expected 2, got ${chatEl.children.length}`);
+  const chatQuote = chatEl.children[1] && chatEl.children[1].children[1] && chatEl.children[1].children[1]._text;
+  if (chatQuote !== "Nice beams today") throw new Error(`chat quote row missing, got "${chatQuote}"`);
+  if (chatEl.classList.contains("hidden")) throw new Error("chat should be visible while it has rows");
+
   // Second snapshot: night + winter + snow, pawns walking, three stacked on a
   // tile, a new child pawn, a death, farm/weather events.
   const snap2 = JSON.parse(JSON.stringify(snap1));
@@ -280,6 +288,7 @@ try {
   send(snap2);
   if (byId.rosterBody.children.length !== 5) throw new Error(`roster cards expected 5 after birth, got ${byId.rosterBody.children.length}`);
   if (logEl.children.length !== 5) throw new Error(`log rows expected 5, got ${logEl.children.length}`);
+  if (chatEl.children.length !== 4) throw new Error(`chat rows expected 4 after second tick, got ${chatEl.children.length}`);
   now = frames(60, now);
 
   // Third snapshot: world reset (tick drops) — log and roster must reset.
@@ -293,6 +302,9 @@ try {
   send(snap3);
   if (byId.rosterBody.children.length !== 2) throw new Error(`roster cards expected 2 after reset, got ${byId.rosterBody.children.length}`);
   if (logEl.children.length !== 0) throw new Error(`log rows expected 0 after reset, got ${logEl.children.length}`);
+  // Reset clears the chat history but the fresh world's dialogue still lands.
+  if (chatEl.children.length !== 2) throw new Error(`chat rows expected 2 after reset, got ${chatEl.children.length}`);
+  if (chatEl.classList.contains("hidden")) throw new Error("chat should be visible after reset with fresh dialogue");
   now = frames(10, now);
 
   console.log("OK: client booted; 3 snapshots + 90 frames; HUD/roster/log/slots all correct");

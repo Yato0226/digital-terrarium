@@ -2,13 +2,15 @@
  *
  * Timeline for each 60s tick (matches TICK_INTERVAL_SECONDS):
  *   0–4s   pawns whose tile changed walk diagonally across the island
- *   4–12s  comic speech (quote) and thought (inner_monologue) bubbles
+ *   4–12s  speech (quote) and thoughts (inner_monologue) hit the corner chat box
  *   12–60s looping idle animation + periodic action emotes
  *   always floating smoke, river shimmer, swaying trees, night tint
  *
  * Step 4 HUD: top resource/stockpile bar + campfire/shelter gauges, a
- * scrolling bottom narrative log, click-to-inspect pawn dossiers, and a
- * lore-archives panel (graveyard, monolith runes, chronicle, patch notes).
+ * scrolling bottom narrative log, click-to-inspect pawn dossiers, a
+ * lore-archives panel (graveyard, monolith runes, chronicle, patch notes),
+ * and a bottom-right chat box showing pawn dialogue instead of floating
+ * comic bubbles.
  *
  * Zero dependencies: vanilla JS + Canvas2D + DOM overlays.
  */
@@ -78,7 +80,7 @@ const hud = document.getElementById("hud");
 const canvas = document.getElementById("island");
 const ctx = canvas.getContext("2d");
 const spritesEl = document.getElementById("sprites");
-const bubbleLayer = document.getElementById("bubbles");
+const chatEl = document.getElementById("chat");
 const emoteLayer = document.getElementById("emotes");
 const titleEl = document.getElementById("title");
 const connEl = document.getElementById("conn");
@@ -108,7 +110,6 @@ let snap = null;
 let snapTime = 0;
 const pawns = new Map();       // id -> pawn record
 const creatures = new Map();   // "type:id" -> creature record
-const bubbles = new Map();     // key -> {el, rec, kind}
 const particles = [];
 const snow = [];          // drifting snowflakes (Winter / snow weather)
 let snowing = false;
@@ -116,6 +117,7 @@ let reconnectTimer = null;
 let selectedId = null;
 let lastSnapTick = -1;
 let lastLogTick = -1;
+let lastChatTick = -1;
 let lastGridSig = null;
 let loreTab = "graveyard";
 let rosterSig = null;
@@ -727,25 +729,44 @@ function syncCreatures(s) {
   }
 }
 
-// ---- bubbles (comic speech + thought) ----
-function addBubbles(s) {
-  for (const [, b] of bubbles) b.el.remove();
-  bubbles.clear();
-  for (const p of s.pawns) {
-    const rec = pawns.get(p.id);
-    if (!rec) continue;
-    if (p.quote) addBubble(p.id + ".speech", "speech", p.quote, rec);
-    if (p.inner_monologue) addBubble(p.id + ".thought", "thought", p.inner_monologue, rec);
-  }
-}
+// ---- corner chat box (speech + thoughts instead of floating bubbles) ----
+const CHAT_MAX = 8;
+const chatLines = new Set();   // `${pawnId}@${tick}:${kind}` keys already shown
 
-function addBubble(key, kind, text, rec) {
-  const el = document.createElement("div");
-  el.className = "bubble " + kind;
-  el.textContent = text;
-  bubbleLayer.appendChild(el);
-  bubbles.set(key, { el, rec, kind });
-  el.addEventListener("animationend", () => el.remove());
+function updateChat(s) {
+  if (s.tick === lastChatTick) return;
+  if (s.tick < lastChatTick) {
+    chatEl.textContent = "";
+    chatLines.clear();
+    lastChatTick = s.tick;     // fresh world: fall through and show its lines
+  } else {
+    lastChatTick = s.tick;
+  }
+  const names = new Map(s.pawns.map((p) => [p.id, p.name]));
+  const rows = [];
+  for (const p of s.pawns) {
+    if (p.quote) rows.push({ id: p.id, kind: "speech", text: p.quote });
+    if (p.inner_monologue) rows.push({ id: p.id, kind: "thought", text: p.inner_monologue });
+  }
+  for (const row of rows) {
+    const key = `${row.id}@${s.tick}:${row.kind}`;
+    if (chatLines.has(key)) continue;
+    chatLines.add(key);
+    const el = document.createElement("div");
+    el.className = "chat-row " + row.kind;
+    const name = names.get(row.id) || row.id;
+    const chip = document.createElement("b");
+    chip.className = "chat-name";
+    chip.textContent = name;
+    chip.style.color = `hsl(${Sprites.hueFromName(name)} 62% 68%)`;
+    const text = document.createElement("span");
+    text.className = "chat-text";
+    text.textContent = row.text;
+    el.append(chip, text);
+    chatEl.prepend(el);
+  }
+  while (chatEl.children.length > CHAT_MAX) chatEl.lastChild.remove();
+  chatEl.classList.toggle("hidden", chatEl.children.length === 0);
 }
 
 // ---- per-tick emotes ----
@@ -1075,7 +1096,7 @@ function applySnapshot(s) {
   if (!snowing) snow.length = 0;
   syncPawns(s);
   syncCreatures(s);
-  addBubbles(s);
+  updateChat(s);
   addEmotes(s);
   updateHud(s);
   updateRoster(s);
@@ -1136,11 +1157,6 @@ function frame(now) {
       const bob = Math.abs(Math.sin(now / 700 + rec.phase)) * 3;
       rec.el.style.left = rec.x + "px";
       rec.el.style.top = rec.y - bob + "px";
-    }
-    for (const [, b] of bubbles) {
-      const lift = b.kind === "thought" ? 124 : 96;
-      b.el.style.left = b.rec.x + "px";
-      b.el.style.top = b.rec.y - lift + "px";
     }
     drawIsland(now);
   } else {
