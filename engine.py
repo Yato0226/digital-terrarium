@@ -1287,6 +1287,27 @@ def _pawn_by_id(pid):
     return None
 
 
+def find_pawn_ref(s):
+    """Match a living pawn or graveyard tombstone by `pawn_N` id or display name.
+
+    Returns (pawn_or_tombstone, None) on success or (None, error_message).
+    """
+    p = _pawn_by_id(s)
+    if p:
+        return p, None
+    hits = [
+        e
+        for e in list(state.world_state["pawns"].values())
+        + list(state.world_state["graveyard"])
+        if e["name"].lower() == s.lower()
+    ]
+    if len(hits) == 1:
+        return hits[0], None
+    if len(hits) > 1:
+        return None, f"several pawns share the name **{s}**; target one by id instead"
+    return None, f"no pawn or fallen ancestor named `{s}`"
+
+
 def lineage_label(pawn):
     """'child of Mother & Father' for pawns with known parents, else ''."""
     parents = []

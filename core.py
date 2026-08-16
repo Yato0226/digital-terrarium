@@ -341,6 +341,143 @@ async def _eulogize_fallen(dead_tick):
         post_eulogy(entry)
 
 
+BIO_EVENT_LIMIT = 40  # most recent life events fed to the biography LLM
+
+
+def _read_log(max_lines=500):
+    """Read the tail of the append-only event log as a list of event dicts."""
+    try:
+        with open(state.LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return []
+    out = []
+    for line in lines[-max_lines:]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+def _pawn_events(pawn_id, name, limit=BIO_EVENT_LIMIT):
+    """Life events mentioning a pawn (as actor, target, or by name)."""
+    name_low = name.lower()
+    matched = [
+        ev
+        for ev in _read_log()
+        if ev.get("actor") == pawn_id
+        or ev.get("target") == pawn_id
+        or name_low in (ev.get("description") or "").lower()
+    ]
+    return matched[-limit:]
+
+
+def _bio_context(pawn):
+    """Raw life story for the biography LLM: identity, family, and life events."""
+    pid = pawn["id"]
+    name = pawn["name"]
+    lines = []
+    living = pid in state.world_state["pawns"]
+    if living:
+        p = state.world_state["pawns"][pid]
+        role = f" the {p['job']}" if p.get("job") not in (None, "", "Wanderer") else ""
+        title = f", title \"{p['title']}\"" if p.get("title") else ""
+        lines.append(
+            f"Name: {name} ({pid}) — {p['sex']}{role}{title}, "
+            f"Day {engine.age_of(p) // engine.TICKS_PER_DAY} of life"
+        )
+        sk = p["skills"]
+        lines.append(
+            f"Skills: woodcutting {sk['woodcutting']}, scouting {sk['scouting']}, combat {sk['combat']}"
+        )
+        if p.get("traits"):
+            lines.append(f"Traits: {', '.join(p['traits'])}")
+        partners = [
+            q["name"] for qid in p.get("partners", []) if (q := engine._pawn_by_id(qid))
+        ]
+        if partners:
+            lines.append(f"Partners: {', '.join(partners)}")
+        kin = engine.lineage_label(p)
+        if kin:
+            lines.append(kin.capitalize())
+        owned = [h["name"] for h in state.world_state["heirlooms"] if h.get("owner") == pid]
+        if owned:
+            lines.append(f"Carries the heirlooms: {', '.join(owned)}")
+        goal = p.get("goal")
+        if goal:
+            lines.append(f"Current goal: {goal.get('text')} ({goal.get('progress')}/{goal.get('needed')})")
+    else:
+        title = f", title \"{pawn.get('title')}\"" if pawn.get("title") else ""
+        lines.append(
+            f"Name: {name} ({pid}) — the fallen{title}, died of {pawn.get('cause')} "
+            f"on Day {pawn.get('died_tick', 0) // engine.TICKS_PER_DAY} "
+            f"(born Day {pawn.get('born_tick', 0) // engine.TICKS_PER_DAY})"
+        )
+        if pawn.get("beloved"):
+            lines.append("The colony held them dear.")
+        if pawn.get("epitaph"):
+            lines.append(f"Tombstone: \"{pawn['epitaph']}\"")
+        legacy = [
+            h["name"]
+            for h in state.world_state["heirlooms"]
+            if h.get("name", "").startswith(name + "'s")
+        ]
+        if legacy:
+            lines.append(f"Left behind the heirloom: {', '.join(legacy)}")
+        children = [
+            q["name"]
+            for q in state.world_state["pawns"].values()
+            if pid in (q.get("mother_id"), q.get("father_id"))
+        ]
+        if children:
+            lines.append(f"Surviving children: {', '.join(children)}")
+
+    events_txt = _pawn_events(pid, name)
+    if events_txt:
+        lines.append("Life events:")
+        for ev in events_txt:
+            lines.append(f"- Tick {ev['tick']} ({ev['type']}): {ev.get('description') or ev['type']}")
+    else:
+        lines.append("Life events: none recorded.")
+    return "\n".join(lines)
+
+
+def _fallback_bio(pawn):
+    """Deterministic obituary when the LLM is unavailable."""
+    name = pawn["name"]
+    if pawn.get("died_tick"):
+        return (
+            f"{name} lived from Day {pawn.get('born_tick', 0) // engine.TICKS_PER_DAY} "
+            f"to Day {pawn.get('died_tick', 0) // engine.TICKS_PER_DAY} and was taken by "
+            f"{pawn.get('cause', 'the wild')}. They rest in the graveyard, remembered."
+        )
+    return f"{name} walks among the living, still writing their story."
+
+
+async def compose_bio(pawn_id):
+    """Best-effort on-demand LLM biography/obituary for a living pawn or tombstone."""
+    pawn = engine._pawn_by_id(pawn_id)
+    if pawn is None:
+        return None
+    try:
+        text, _model_used = await asyncio.to_thread(
+            _llm_call,
+            prompts.BIO_PROMPT,
+            _bio_context(pawn),
+            None,
+            0.9,
+        )
+        text = (text or "").strip()
+    except Exception as e:
+        print(f"❌ Bio failed for {pawn_id}: {e}")
+        text = ""
+    return text or _fallback_bio(pawn)
+
+
 def _chronicle_context(season):
     """Compact context for the seasonal-chronicle LLM call."""
     biome = state.world_state["biome"]

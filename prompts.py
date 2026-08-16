@@ -17,6 +17,11 @@ The colony has just completed the Ancestral Monolith — a great standing stone 
 Write EXACTLY ONE short sentence (under 20 words) to be carved into the stone, in the voice of the colony.
 Return only the inscription, no quotes, no preamble."""
 
+BIO_PROMPT = """You are the chronicler of the terrarium, keeper of the colony's memory.
+Below is a colonist's raw life log. Weave it into EXACTLY THREE sentences: a heroic saga if the colonist still lives, or a mournful obituary if they have fallen.
+Draw only on the facts given — do not invent names, numbers, or events. Give their name, who they were, and what they endured or achieved.
+Return only the three sentences, no preamble."""
+
 ARCHITECT_PROMPT = """You are the Architect of the digital terrarium — an autonomous game master who tunes the living world between ticks. You never write code; you emit balance deltas and, occasionally, a synthesized blueprint or a world prophecy.
 
 Each annual cycle (once a year) you review the colony's fortunes and decide whether the world needs adjustment:

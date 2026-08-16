@@ -18,8 +18,8 @@
 *Goal: Turn the event log into deep historical memory that persists across generations.*
 
 ### Step 7: The Pawn Biography Engine (`!bio <name>`)
-- [ ] Create a biography command where Gemma parses a colonist's raw event history from the log file and synthesizes it on demand into a 3-sentence heroic saga or obituary.
-- [ ] Viewers can inspect living elders or read the full life stories of ancestors buried in the graveyard.
+- [x] Create a biography command where Gemma parses a colonist's raw event history from the log file and synthesizes it on demand into a 3-sentence heroic saga or obituary.
+- [x] Viewers can inspect living elders or read the full life stories of ancestors buried in the graveyard.
 
 ### Step 8: Generational Handoffs & Dynasties
 - [ ] When Generation 1 dies out, Generation 2 and 3 take over the colony.

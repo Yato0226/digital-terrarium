@@ -367,6 +367,23 @@ async def family_tree(ctx):
     await ctx.send(engine.render_family_tree())
 
 
+@bot.command(name="bio")
+@is_god_channel()
+async def bio(ctx, name: str):
+    """!bio <name|pawn_id> — compose a 3-sentence biography or obituary from a pawn's life log."""
+    pawn, err = engine.find_pawn_ref(name)
+    if err:
+        await ctx.send(f"❌ {err}")
+        return
+    await ctx.send(f"📜 Writing the life of **{pawn['name']}**...")
+    text = await core.compose_bio(pawn["id"])
+    if not text:
+        await ctx.send("❌ No record of that pawn.")
+        return
+    header = "🪦 **Obituary**" if pawn["id"] not in state.world_state["pawns"] else "📜 **Biography**"
+    await ctx.send(f"{header} — {pawn['name']}:\n{text}")
+
+
 @bot.command(name="wildlife")
 @is_god_channel()
 async def wildlife_cmd(ctx):

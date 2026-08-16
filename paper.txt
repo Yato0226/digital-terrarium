@@ -235,6 +235,7 @@ Beyond the colonists, the world itself is alive. \texttt{world\_state} hosts the
 7 & traditions, solstice feast, funerary rites & \texttt{!tradition} \\
 8 & scavenger raids & \texttt{!raiders} \\
 9 & architect patches, recipes, prophecies & \texttt{!recipes} / \texttt{!quests} / \texttt{!patchnotes} \\
+10 & milestone embeds, pawn biographies & \texttt{!bio} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -257,6 +258,7 @@ Beyond the one-way webhook embeds, a two-way Discord bot (prefix \texttt{!}) exp
 \texttt{!order \textless id\textgreater \textless action\textgreater [tgt]} & Enforce an action next tick (Move takes N/S/E/W) \\
 \texttt{!say \textless id\textgreater \textless text\textgreater}           & Inject a whisper into the prompt; also +15 morale \\
 \texttt{!graveyard} & List the fallen with epithets and epitaphs (a heart marks the beloved) \\
+\texttt{!bio \textless name\textgreater} & 3-sentence biography (living) or obituary (fallen) woven from a pawn's life log \\
 \texttt{!tree} / \texttt{!wildlife} / \texttt{!visitors} / \texttt{!raiders} & Family tree / roaming fauna / travelers / hostile scavengers \\
 \texttt{!heirlooms} / \texttt{!monument} / \texttt{!tradition} / \texttt{!chronicle} & Relics of the fallen / the monolith / emergent tradition / seasonal lore \\
 \texttt{!adopt} / \texttt{!my} / \texttt{!unadopt} & Any-channel pawn adoption + DM milestones \\
