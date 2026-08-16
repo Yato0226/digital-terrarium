@@ -94,6 +94,28 @@ body::before {
   to { opacity: 0; transform: translateY(8px) scale(.4); }
 }
 
+/* ---------------- standing objects (Stage 12 Part C) ---------------- */
+/* DOM y-sorted sprites in the shared #sprites layer. z-index comes from
+   Objects.depthZ(anchorY) inline (bounded 4..35, under #log/#chat at 40). */
+
+.obj {
+  position: absolute;
+  pointer-events: none;
+}
+.obj .obj-cv {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.obj.sway {
+  transform-origin: 50% 100%;   /* rotate around the sprite's base */
+  animation: obj-sway 5.2s ease-in-out infinite alternate;
+}
+@keyframes obj-sway {
+  from { transform: rotate(-1.6deg); }
+  to   { transform: rotate(1.6deg); }
+}
+
 /* standing pixel-art sprite (canvas, anchored at the feet) */
 .pawn .psprite {
   position: absolute;

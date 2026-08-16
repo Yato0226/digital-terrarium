@@ -181,12 +181,47 @@ Notes landed with Part B:
   still drawn on the canvas from `Sprites.SPRITES` (Part B); Part C replaces
   them with DOM y-sorted vendored sprites.
 
-### Part C — Standing objects + y-sort (todo Step 12)
-- [ ] DOM object layer: trees (forest), berry bushes (meadow), rocks (quarry),
+### Part C — Standing objects + y-sort ✅ (todo Step 12)
+- [x] DOM object layer: trees (forest), berry bushes (meadow), rocks (quarry),
   ruins, cottage + animated campfire (camp), well/fences decor.
-- [ ] Y-sort all DOM sprites (objects + pawns + creatures) via z-index.
-- [ ] Wildfire flame/glow on burning tiles.
-- Commit: `Stage 12: y-sorted standing objects`.
+- [x] Y-sort all DOM sprites (objects + pawns + creatures) via z-index.
+- [x] Wildfire flame/glow on burning tiles (canvas, unchanged).
+- Commit: `Stage 12: y-sorted standing objects`. ✅
+
+Notes landed with Part C:
+- **New module `web/objects.js`** (loaded between `atlas.js` and `app.js`).
+  `Objects.attach(spritesEl)` at init; `Objects.sync(grid, top, campfireGauge)`
+  in `applySnapshot` rebuilds only on a grid-signature change (deferred until
+  `Atlas.ready` to mirror app.js's `atlasReady` guard — a pre-decode snapshot
+  parks the latest grid and builds it from the `onReady` callback);
+  `Objects.tick(now)` animates the campfire; `Objects.depthZ(y)` is exported
+  for app.js's per-frame pawn/creature z.
+- **Depth-z is a bounded band**, not a raw z-index: `4 + round((anchorY-150)/20)`
+  puts objects/pawns/creatures in z 4..32. A naive `round(anchorY*10)` would
+  push sprites to z≈6800 and paint them **over the #log/#chat panels (z-40)**
+  and HUD. The band keeps them between the canvas and the UI panels.
+- **Per-tile determinism**: jitter/variants use the same noise family as
+  atlas.js (`(x*salt1 + y*salt2) >>> 0`), so the object layout is stable across
+  rebuilds and doesn't flicker.
+- **Sway is CSS**: `.obj.sway` (trees, sprouts) uses `animation: obj-sway`
+  rotating about the sprite base (`transform-origin: 50% 100%`) with a
+  per-tile `animation-delay`; the campfire flame is the only JS-animated
+  object (4 vendored frames via `Atlas.fireFrame`), swapping to a procedural
+  stone pit when `campfire` is 0.
+- **Well = composed 8×11 slice** (wellTop + wellBot, the user's two-part lock),
+  upscaled 6×; the fence rail runs along the camp tile's north edge with two
+  vertical corner posts (no rotation needed — fenceV is already vertical).
+- Farm sprouts + ash mounds also live in the DOM layer (procedural stand-ins,
+  y-sorted) so they occlude/can be occluded like everything else.
+- The Part B canvas stand-ins (`drawStandin`, tent/logs/berry/rock/ruin
+  draws) and the canvas campfire flame were **removed** — the DOM campfire
+  flame + the existing radial glow/smoke on canvas now compose.
+- Smoke test: the `#sprites` children now include objects, so the test counts
+  `.pawn`/`.creature`/`.obj` classes instead of a raw total; it asserts the
+  tree count, the bounded z band, a genuine top-row-vs-bottom-row y-sort, and
+  exercises a 🏕️ tile (cottage/well/campfire/fences + flame↔cold toggling).
+  The test grid construction was also fixed to use explicit full-emoji cells
+  (`"🌲🌲…".split("")` had been producing lone UTF-16 surrogates).
 
 ### Part D — Pawns/creatures in top-down space (todo Step 12)
 - [ ] Reposition pawn/creature DOM to tile centers (`top()` coords).

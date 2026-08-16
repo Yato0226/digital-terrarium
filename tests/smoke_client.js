@@ -75,6 +75,11 @@ function makeEl(tag) {
     appendChild(c) { el.children.push(c); return c; },
     append(...cs) { for (const c of cs) el.appendChild(c); },
     prepend(c) { el.children.unshift(c); },
+    removeChild(c) {
+      el.children = el.children.filter((x) => x !== c);
+      if (c._parent === el) c._parent = null;
+      return c;
+    },
     remove() {
       const parent = el._parent;
       if (parent) parent.children = parent.children.filter((c) => c !== el);
@@ -106,6 +111,7 @@ function makeEl(tag) {
   el._parent = null;
   const origAppend = el.appendChild;
   el.appendChild = (c) => { c._parent = el; return origAppend(c); };
+  Object.defineProperty(el, "parentNode", { get: () => el._parent });
   attachClassList(el);
   return el;
 }
@@ -187,18 +193,22 @@ const clientSrc =
   "\n;\n" +
   fs.readFileSync(path.join(root, "web", "atlas.js"), "utf8") +
   "\n;\n" +
+  fs.readFileSync(path.join(root, "web", "objects.js"), "utf8") +
+  "\n;\n" +
   fs.readFileSync(path.join(root, "web", "app.js"), "utf8");
 eval(clientSrc);
 
 if (!rafCb) { console.log("FAIL: requestAnimationFrame never registered"); process.exit(1); }
 
 // ---------- realistic snapshots ----------
+// Explicit full-emoji cells (mirrors the feed): emoji like 🌲 are surrogate
+// pairs and 🏕️ is a 2-codepoint sequence, so .split("") would corrupt them.
 const grid = [
-  "🌲🌲🌊🌲🌲".split(""),
-  "🌲🌲🌊🌲🌲".split(""),
-  "🌊🌊🫐🌲🌲".split(""),
-  "🌲🌲🌲💀🌲".split(""),
-  "🌲🪨🌲🌲🌲".split(""),
+  ["🌲", "🌲", "🌊", "🌲", "🌲"],
+  ["🌲", "🌲", "🌊", "🌲", "🌲"],
+  ["🌊", "🌊", "🫐", "🌲", "🌲"],
+  ["🌲", "🌲", "🌲", "💀", "🌲"],
+  ["🌲", "🪨", "🌲", "🌲", "🌲"],
 ];
 function pawn(id, name, sex, pos, opts) {
   return {
@@ -251,8 +261,13 @@ function frames(n, now) {
 }
 
 // ---------- run the scenario ----------
+// Async so we can flush the atlas decode microtasks (Image stub queues them
+// via queueMicrotask; the vendored tiles must be ready before the object
+// layer builds). An IIFE keeps the run/exit flow identical.
+(async () => {
 let err = null;
 try {
+  await new Promise((r) => setTimeout(r, 0)); // drain image-load microtasks
   let now = 100;
 
   send(snap1);
@@ -260,20 +275,49 @@ try {
   if (!title1.includes("Fernhold")) throw new Error(`HUD title not set: "${title1}"`);
   if (byId.rosterBody.children.length !== 4) throw new Error(`roster cards expected 4, got ${byId.rosterBody.children.length}`);
   if (logEl.children.length !== 2) throw new Error(`log rows expected 2, got ${logEl.children.length}`);
-  if (byId.sprites.children.length !== 9) throw new Error(`pawn+creature els expected 9, got ${byId.sprites.children.length}`);
+  const spriteEls = [...byId.sprites.children];
+  const countCls = (cls) => spriteEls.filter((el) => el.classList.contains(cls)).length;
+  if (countCls("pawn") !== 4) throw new Error(`pawn els expected 4, got ${countCls("pawn")}`);
+  if (countCls("creature") !== 5) throw new Error(`creature els expected 5, got ${countCls("creature")}`);
+  if (countCls("obj") < 21) throw new Error(`object els expected >= 21 (18 trees + bush + ruins + rocks), got ${countCls("obj")}`);
   now = frames(20, now);
 
   // Top-down board: Atlas is wired in and pawns anchor to tile centres.
   if (typeof Atlas === "undefined") throw new Error("Atlas not loaded (atlas.js eval failed)");
+  if (typeof Objects === "undefined") throw new Error("Objects not loaded (objects.js eval failed)");
   for (const key of ["tree1", "cottage", "water", "wellTop", "grass"]) {
     if (!Atlas._slices || !Atlas._slices[key]) throw new Error(`Atlas slice "${key}" missing`);
   }
   // Fern (pawn[0]) sits at camp (2,2): tile-centre x = ORIGIN_X (550px);
   // y = 430 minus the resting bob (±3).
-  const fernEl = byId.sprites.children[0];
+  const fernEl = spriteEls.find((el) => el.classList.contains("pawn"));
   if (!fernEl || fernEl.style.left !== "550px") throw new Error(`camp pawn x expected 550px, got ${fernEl && fernEl.style.left}`);
   const fernTop = parseFloat(fernEl.style.top);
   if (!(fernTop >= 420 && fernTop <= 432)) throw new Error(`camp pawn y expected ~430 (rest bob), got ${fernTop}`);
+  const fernZ = parseInt(fernEl.style.zIndex, 10);
+  if (!(fernZ >= 4 && fernZ < 40)) throw new Error(`pawn z-index outside [4,40), got ${fernZ}`);
+
+  // Standing-object layer: all z in the bounded band and genuinely y-sorted
+  // (a bottom-row tree sits in front of a top-row tree).
+  const objEls = spriteEls.filter((el) => el.classList.contains("obj"));
+  const treeEls = objEls.filter((el) => el.classList.contains("sway"));
+  if (treeEls.length !== 18) throw new Error(`tree (sway) els expected 18, got ${treeEls.length}`);
+  for (const el of objEls) {
+    const z = parseInt(el.style.zIndex, 10);
+    if (z < 4 || z >= 40) throw new Error(`obj z-index outside [4,40): ${z}`);
+  }
+  const treeAt = (x0, y0) => treeEls.filter((el) => {
+    const l = parseFloat(el.style.left);
+    const tp = parseFloat(el.style.top);
+    // Tree anchors sit at tileCentre + (jx±13, 26+jy±9).
+    return Math.abs(l - x0) <= 16 && Math.abs(tp - y0) <= 12;
+  }).map((el) => parseInt(el.style.zIndex, 10));
+  const topLeftZ = treeAt(294, 200);    // tree at (0,0), anchor y ≈ 200
+  const bottomRightZ = treeAt(806, 712); // tree at (4,4), anchor y ≈ 712
+  if (!topLeftZ.length || !bottomRightZ.length) throw new Error("tree y-sort lookup failed");
+  if (Math.max(...bottomRightZ) <= Math.max(...topLeftZ)) {
+    throw new Error(`y-sort wrong: bottom-right tree z ${bottomRightZ} vs top-left tree z ${topLeftZ}`);
+  }
 
   // The roster bars must actually get widths (regression for the .r-hp/.r-en
   // class mismatch that nuked applySnapshot on every tick).
@@ -331,11 +375,47 @@ try {
   if (chatEl.classList.contains("hidden")) throw new Error("chat should be visible after reset with fresh dialogue");
   now = frames(10, now);
 
-  console.log("OK: client booted; 3 snapshots + 90 frames; HUD/roster/log/slots all correct");
+  // Fourth snapshot: a camp tile exercises the DOM campfire/well/cottage/fence
+  // layer, and the animated campfire object (flame frames, cold pit when out).
+  const snap4 = JSON.parse(JSON.stringify(snap1));
+  snap4.tick = 55;
+  snap4.season = "Summer";
+  snap4.weather = "Clear";
+  snap4.grid = [
+    ["🌲", "🌲", "🌲", "🌲", "🌲"],
+    ["🌲", "🌲", "🌲", "🌲", "🌲"],
+    ["🌲", "🌲", "🏕️", "🌲", "🌲"],
+    ["🌲", "🌲", "🌲", "🌲", "🌲"],
+    ["🌲", "🌲", "🌲", "🌲", "🌲"],
+  ];
+  snap4.biome.campfire = 70;
+  snap4.pawns = snap4.pawns.slice(0, 1);
+  snap4.wildlife = [];
+  snap4.visitors = [];
+  snap4.raiders = [];
+  send(snap4);
+  now = frames(5, now);
+  const campObjs = [...byId.sprites.children].filter((el) => el.classList.contains("obj"));
+  if (campObjs.length < 26) throw new Error(`camp-tile object layer expected >= 26 els, got ${campObjs.length}`);
+  const campfireEl = campObjs.find((el) => el.style.left === "568px" && el.style.top === "460px");
+  if (!campfireEl) throw new Error("campfire DOM object missing at (568,460)");
+  const fcv = campfireEl.querySelector(".obj-cv");
+  if (!fcv || fcv.width !== 80 || fcv.height !== 80) throw new Error(`campfire canvas expected 80x80, got ${fcv && fcv.width}x${fcv && fcv.height}`);
+  // Toggle the fire out and back on — the pit must survive both transitions.
+  snap4.biome.campfire = 0;
+  send(snap4);
+  now = frames(10, now);
+  snap4.biome.campfire = 70;
+  send(snap4);
+  now = frames(20, now);
+
+  console.log("OK: client booted; 4 snapshots + 110 frames; HUD/roster/log/slots all correct");
   console.log(`OK: roster bar widths hp=${hpW} en=${enW}; roster cards=${byId.rosterBody.children.length}; log rows=${logEl.children.length}`);
+  console.log(`OK: objects: ${[...byId.sprites.children].filter((el) => el.classList.contains("obj")).length} sprites y-sorted, campfire canvas ${fcv.width}x${fcv.height}`);
   process.exit(0);
 } catch (e) {
   err = e;
   console.log("FAIL:", e && e.stack ? e.stack.split("\n").slice(0, 6).join("\n") : e);
   process.exit(1);
 }
+})();

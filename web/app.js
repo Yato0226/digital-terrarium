@@ -85,6 +85,7 @@ const hud = document.getElementById("hud");
 const canvas = document.getElementById("island");
 const ctx = canvas.getContext("2d");
 const spritesEl = document.getElementById("sprites");
+Objects.attach(spritesEl);
 const chatEl = document.getElementById("chat");
 const emoteLayer = document.getElementById("emotes");
 const titleEl = document.getElementById("title");
@@ -409,12 +410,7 @@ function drawWorld(now) {
     }
   }
 
-  // --- standing objects (procedural stand-ins; DOM y-sorted in Part C) ---
-  for (let y = 0; y < grid.length; y++) {
-    for (let x = 0; x < grid[y].length; x++) {
-      drawStandin(grid[y][x], x, y);
-    }
-  }
+  // --- standing objects: DOM y-sorted layer (objects.js), appended above ---
 
   // Living effects over the tiles: wildfire glow + flame.
   for (let y = 0; y < grid.length; y++) {
@@ -432,7 +428,7 @@ function drawWorld(now) {
     }
   }
 
-  // Campfire flame + smoke (camp is always the (2,2) tile).
+  // Campfire glow + smoke (flame is a DOM object in objects.js; camp = (2,2)).
   const campfire = (snap.biome && snap.biome.campfire) || 0;
   if (campfire > 0) {
     const camp = top(2, 2);
@@ -442,7 +438,6 @@ function drawWorld(now) {
     g.addColorStop(1, "rgba(255,120,30,0)");
     ctx.fillStyle = g;
     ctx.fillRect(camp.x - 54, camp.y - 64, 108, 108);
-    Sprites.drawFlame(ctx, camp.x, camp.y + 34, t);
     spawnSmoke(camp.x + 14, camp.y - 26);
   }
 
@@ -550,28 +545,6 @@ function drawBankLips(tile, x, y, px, py, grid) {
       ctx.fillStyle = "rgba(42,58,34,0.55)";
       ctx.fillRect(bx, by, bw, bh);
     }
-  }
-}
-
-/** Transitional Part B stand-ins: procedural objects on the canvas.
- *  Part C replaces these with DOM y-sorted sprites from the vendored atlas. */
-function drawStandin(tile, x, y) {
-  const c = top(x, y);
-  if (tile === "🌲") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.pine, c.x, c.y + 30, 5);
-  } else if (tile === "🏕️") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.tent, c.x - 24, c.y + 34, 4);
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.logs, c.x + 24, c.y + 38, 3);
-  } else if (tile === "🫐") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.berry, c.x, c.y + 34, 4);
-  } else if (tile === "🪨") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.rock, c.x, c.y + 36, 5);
-  } else if (tile === "💀") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.ruin, c.x, c.y + 36, 5);
-  } else if (tile === "🌾") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.sprout, c.x, c.y + 38, 4);
-  } else if (tile === "🌫️") {
-    Sprites.drawSpriteAt(ctx, Sprites.SPRITES.ashmound, c.x, c.y + 38, 4);
   }
 }
 
@@ -1128,6 +1101,7 @@ function applySnapshot(s) {
   snapTime = performance.now();
   snowing = isSnowing(s);
   if (!snowing) snow.length = 0;
+  Objects.sync(s.grid, top, (s.biome && s.biome.campfire) || 0);
   syncPawns(s);
   syncCreatures(s);
   updateChat(s);
@@ -1186,12 +1160,16 @@ function frame(now) {
       }
       rec.el.style.left = x + "px";
       rec.el.style.top = y + "px";
+      // Y-sort against the standing-object layer (bounded depth band).
+      rec.el.style.zIndex = String(Objects.depthZ(y));
     }
     for (const rec of creatures.values()) {
       const bob = Math.abs(Math.sin(now / 700 + rec.phase)) * 3;
       rec.el.style.left = rec.x + "px";
       rec.el.style.top = rec.y - bob + "px";
+      rec.el.style.zIndex = String(Objects.depthZ(rec.y));
     }
+    Objects.tick(now);
     drawWorld(now);
   } else {
     ctx.clearRect(0, 0, STAGE_W, STAGE_H);
