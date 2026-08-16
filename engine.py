@@ -157,6 +157,13 @@ RUIN_BLUEPRINTS = {
 BADGES = ("Lifesaver", "Betrayer", "Indebted", "Mentor", "Widow")
 BETRAY_RELATIONSHIP = 25  # attacking someone bonded to you earns "Betrayer"
 
+# Stage 12 (Phase 3) multigenerational blood feuds.
+FEUD_INHERIT = -40     # children are seeded hostile to their parents' rivals
+BRAWL_CHANCE = 0.2     # per tick, mutual rivals sharing the camp tile may brawl
+BRAWL_DAMAGE = 3
+BRAWL_RELATIONSHIP_DROP = 10
+BRAWL_MORALE_DROP = 5
+
 # Stage 6 agriculture (Farm Plots on tilled Meadow tiles).
 FARM_TILE = "🌾"
 FARM_GROW_TICKS = 20
@@ -345,6 +352,64 @@ def _inherit_traits(mother, father):
     if not child_traits:
         child_traits.append(random.choice(state.TRAITS))
     return child_traits[:2]
+
+
+def _inherit_feuds(child, mother, father):
+    """Children are born carrying their parents' rivalries (multigenerational feuds)."""
+    rivals = set()
+    for parent in (mother, father):
+        if parent is None:
+            continue
+        for oid, rel in parent["relationships"].items():
+            other = state.world_state["pawns"].get(oid)
+            if other is None:
+                continue
+            if (
+                rel <= RIVAL_THRESHOLD
+                and other["relationships"].get(parent["id"], 0) <= RIVAL_THRESHOLD
+            ):
+                rivals.add(oid)
+    for oid in rivals:
+        child["relationships"][oid] = FEUD_INHERIT
+
+
+def _camp_brawls(result):
+    """Mutual rivals sharing the camp tile may come to blows — feud escalation."""
+    at_camp = [
+        (pid, p)
+        for pid, p in state.world_state["pawns"].items()
+        if p["status"] == "active" and _tile_at(*p["pos"]) == BUILD_TILE
+    ]
+    involved = set()
+    for i, (aid, a) in enumerate(at_camp):
+        for bid, b in at_camp[i + 1 :]:
+            if aid in involved and bid in involved:
+                continue
+            if (
+                a["relationships"].get(bid, 0) <= RIVAL_THRESHOLD
+                and b["relationships"].get(aid, 0) <= RIVAL_THRESHOLD
+            ):
+                if random.random() >= BRAWL_CHANCE:
+                    continue
+                involved.add(aid)
+                involved.add(bid)
+                for p in (a, b):
+                    p["vitals"]["hp"] = _clamp(p["vitals"]["hp"] - BRAWL_DAMAGE)
+                    p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] - BRAWL_MORALE_DROP)
+                _adjust_relationship(a, bid, -BRAWL_RELATIONSHIP_DROP)
+                _adjust_relationship(b, aid, -BRAWL_RELATIONSHIP_DROP)
+                result.append(
+                    events.add_event(
+                        "brawl",
+                        actor=aid,
+                        target=bid,
+                        data={"damage": BRAWL_DAMAGE},
+                        description=(
+                            f"{a['name']} and {b['name']} come to blows at the camp — "
+                            f"the old feud flares up ({BRAWL_DAMAGE} damage each)."
+                        ),
+                    )
+                )
 
 
 def _adjust_relationship(pawn, other_id, delta):
@@ -2942,6 +3007,7 @@ def _give_birth(mother, mother_id, result):
     )
     mother["partner_id"] = None
     state.world_state["pawns"][child_id] = child
+    _inherit_feuds(child, mother, father)
     if first_second_gen:
         _carve_rune(
             "The Second Generation Rises",
@@ -3645,6 +3711,7 @@ def tick_environment():
         result += _spawn_raid()
     result += _step_raiders()
     result += _check_quests()
+    _camp_brawls(result)
 
     if day != prev_day:
         result.append(

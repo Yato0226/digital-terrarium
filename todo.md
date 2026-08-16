@@ -43,8 +43,8 @@
 - [x] The AI Director uses these badges to weave deep, specific social drama and dialogue into tick narratives.
 
 ### Step 12: Multigenerational Blood Feuds
-- [ ] If two colonists become bitter rivals, their children inherit the feud at birth.
-- [ ] New generations must choose between making peace through courtship and sharing food, or escalating the feud into camp brawls during elections.
+- [x] If two colonists become bitter rivals, their children inherit the feud at birth.
+- [x] New generations must choose between making peace through courtship and sharing food, or escalating the feud into camp brawls during elections.
 
 ### Step 13: Free-Form Dynamic Roles with Keyword Bucketing
 - [ ] Allow the LLM to organically invent custom job titles based on pawn deeds (*"Fang-Breaker"*, *"Keeper of the Hearth"*).
