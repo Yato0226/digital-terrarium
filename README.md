@@ -92,15 +92,12 @@ python main.py
 The feed server binds `0.0.0.0:8900` on the LXC. The diorama is published at a **static ngrok domain** — `budget-universe-manila.ngrok-free.dev` — so the URL never rotates and the Discord Activity mapping is set once.
 
 ```bash
-# on the LXC (as root): install ngrok
+# on the LXC (as root): install ngrok to /usr/bin/ngrok
 curl -L https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz -o /tmp/ngrok.tgz
-tar xzf /tmp/ngrok.tgz -C /usr/local/bin ngrok
+tar xzf /tmp/ngrok.tgz -C /usr/bin ngrok
 
-# one-time authtoken, run AS the terrarium user so the unit can read ~/.config/ngrok
-sudo -u terrarium ngrok config add-authtoken YOUR_NGROK_AUTHTOKEN
-sudo -u terrarium ngrok config check   # "Valid configuration file" before continuing
-
-# persist across reboots (mirrors deploy/terrarium.service)
+# paste your dashboard authtoken into deploy/ngrok.service (the
+# --authtoken=... argument in ExecStart), then install the unit:
 cp deploy/ngrok.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now ngrok
 journalctl -u ngrok -f                      # confirms the public URL

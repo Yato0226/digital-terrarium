@@ -1,20 +1,15 @@
 [Unit]
 Description=ngrok tunnel for the terrarium web diorama
-# The tunnel fronts the feed server on 8900, so it must start after it.
-After=network-online.target terrarium.service
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
-User=terrarium
-# Static domain: budget-universe-manila.ngrok-free.dev (never rotates on restart).
-# One-time authtoken must be configured for User=terrarium so this can read it:
-#   sudo -u terrarium ngrok config add-authtoken <token>
-#   sudo -u terrarium ngrok config check   # verify before starting the unit
-ExecStart=/usr/local/bin/ngrok http --url=https://budget-universe-manila.ngrok-free.dev 8900
+# Replace YOUR_ACTUAL_AUTHTOKEN_HERE with the dashboard authtoken.
+# Never commit a real token — this placeholder stays in the repo; the actual
+# value lives in the copy at /etc/systemd/system/ngrok.service on the LXC.
+ExecStart=/usr/bin/ngrok http 8900 --url=budget-universe-manila.ngrok-free.dev --authtoken=YOUR_ACTUAL_AUTHTOKEN_HERE
 Restart=always
-RestartSec=5
-TimeoutStopSec=10
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target
