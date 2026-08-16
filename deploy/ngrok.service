@@ -10,7 +10,8 @@ User=terrarium
 # Static domain: budget-universe-manila.ngrok-free.dev (never rotates on restart).
 # One-time authtoken must be configured for User=terrarium so this can read it:
 #   sudo -u terrarium ngrok config add-authtoken <token>
-ExecStart=/usr/local/bin/ngrok http --domain=budget-universe-manila.ngrok-free.dev 8900
+#   sudo -u terrarium ngrok config check   # verify before starting the unit
+ExecStart=/usr/local/bin/ngrok http --url=https://budget-universe-manila.ngrok-free.dev 8900
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

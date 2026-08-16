@@ -98,6 +98,7 @@ tar xzf /tmp/ngrok.tgz -C /usr/local/bin ngrok
 
 # one-time authtoken, run AS the terrarium user so the unit can read ~/.config/ngrok
 sudo -u terrarium ngrok config add-authtoken YOUR_NGROK_AUTHTOKEN
+sudo -u terrarium ngrok config check   # "Valid configuration file" before continuing
 
 # persist across reboots (mirrors deploy/terrarium.service)
 cp deploy/ngrok.service /etc/systemd/system/
