@@ -80,6 +80,7 @@ Rules:
 - Two colonists at the map's edge can use Expedition to pack rations and leave the grid together for 15-20 ticks, returning with rare loot, exotic seeds (new farm plots), a tamed companion, or battle scars — but never send your only workers off the map together.
 - Seasonal cataclysms may descend (see the ⚠️ line): The Long Winter (150 ticks) doubles the campfire's wood appetite and drives the cold harsher than any blizzard; The Great Drought (150 ticks) dries the rivers so river foraging fails and wildfire danger spikes. Survive by stockpiling, crafting Warm Coats, and keeping the fire fed.
 - The colony has an evolving identity (see the 🏘️ line) — surviving wildfire, famine, floods, cataclysms, or founding a way of life renames the colony (The Ashen Kin, The Hearthfolk, The Kindred...). Traumas can also seed taboos (see the Taboo line): low-bravery colonists refuse to set foot on a place where kin have died, so don't order cowards into the ruins.
+- The Voice in the Sky speaks through god whispers (`!say`). A colonist who is whispered to three times becomes a Prophet (🕊️): a spiritual leader who hears the Voice, gains steady morale, and can preach at camp (Interact "preach"/"sermon") to steady everyone on the tile. The colony can build a shrine (Build at camp, 3 wood + 2 stone) and leave food offerings at it (Interact "offer"/"sacrifice") to appease the Creator — a Prophet's tithe counts double, and once 5 offerings are banked the Creator blesses the whole colony and halves the chance of the next cataclysm.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
 - Farming: on a Meadow (🫐) tile, Interact with "till soil" / "plant seeds" / "farm" to convert it into a Farm Plot (🌾). It grows over 20 ticks in Spring/Summer (dormant in Winter); when ripe, Interact with "harvest" / "farm" to reap 15 food + 5 fiber — a guaranteed yield that does not deplete the wild food stock.
@@ -221,6 +222,7 @@ def build_prompt():
         title_txt = f", Title: {pawn['title']}" if pawn.get("title") else ""
         if pawn.get("custom_title"):
             title_txt += f" — {pawn['custom_title']}"
+        prophet_txt = ", 🕊️ Prophet of the Voice" if pawn.get("prophet") else ""
         job_txt = f", Job: {pawn['job']}" if pawn.get("job") not in (None, "", "Wanderer") else ""
         sex_txt = f", Sex {pawn['sex']}" if pawn.get("sex") in ("M", "F") else ""
         gen_txt = f", Gen {pawn.get('generation', 1)}"
@@ -268,7 +270,7 @@ def build_prompt():
             f"Pos ({x},{y}) on {tile}, "
             f"Skills W{sk['woodcutting']} S{sk['scouting']} C{sk['combat']}, "
             f"Personality {pawn['personality']}{sex_txt}{gen_txt}{age_txt}{stage_txt}{job_txt}"
-            f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{break_txt}{traits_txt}{mood_txt}"
+            f"{preg_txt}{child_txt}{kin_txt}{partners_txt}{title_txt}{prophet_txt}{break_txt}{traits_txt}{mood_txt}"
             f"{goal_txt}{rel_txt}{heir_txt}{badges_txt}"
         )
     pawn_status = "\n".join(pawn_lines)
@@ -389,6 +391,25 @@ def build_prompt():
             f"refuse to set foot there.\n"
         )
 
+    shrine_txt = ""
+    shrine = engine._shrine()
+    if shrine.get("built"):
+        prophet = next(
+            (
+                p["name"]
+                for p in state.world_state["pawns"].values()
+                if p.get("prophet")
+            ),
+            None,
+        )
+        prophet_suffix = f" The Prophet is {prophet}." if prophet else ""
+        shrine_txt = (
+            f"Shrine: a small shrine stands at camp "
+            f"({shrine['offered']}/{engine.SHRINE_BLESSING_OFFERINGS} offerings "
+            f"to the next blessing, {shrine['blessings']} granted)."
+            f"{prophet_suffix}\n"
+        )
+
     return f"""
 {identity_line}{council_txt}{legend_txt}{cataclysm_txt}Recent terrarium history: {history}
 
@@ -396,8 +417,7 @@ Biome: {biome_line}{fallen_line}
 {memory_txt}
 
 Tradition: {tradition_txt}
-{taboo_txt}
-Lore (recovered from {engine.SUNKEN_TRIBE}'s ruins):
+{taboo_txt}{shrine_txt}Lore (recovered from {engine.SUNKEN_TRIBE}'s ruins):
 {lore_txt}
 
 Map:

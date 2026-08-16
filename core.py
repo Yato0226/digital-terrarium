@@ -873,6 +873,30 @@ def taboo_txt():
     return "\n".join(lines)
 
 
+def shrine_txt():
+    """The camp shrine, its offerings, and the Voice's Prophet, for `!shrine`."""
+    shrine = state.world_state.get("shrine", {})
+    lines = ["🙏 **The Camp Shrine**"]
+    if not shrine.get("built"):
+        lines.append(
+            "No shrine yet — Build at camp (3 wood + 2 stone) to raise one, "
+            "then Interact \"offer\" to leave food for the Creator."
+        )
+        return "\n".join(lines)
+    lines.append(f"Offerings: {shrine['offered']}/{engine.SHRINE_BLESSING_OFFERINGS} to the next blessing")
+    lines.append(f"Blessings granted: {shrine['blessings']}")
+    if shrine.get("blessed"):
+        lines.append("The shrine is consecrated — the Creator's temper is eased (cataclysm chance halved).")
+    else:
+        lines.append("The Creator still watches, waiting for appeasement.")
+    prophets = [p["name"] for p in state.world_state["pawns"].values() if p.get("prophet")]
+    if prophets:
+        lines.append("🕊️ Prophet of the Voice: " + ", ".join(prophets))
+    else:
+        lines.append("No Prophet has heard the Voice yet (3 god whispers `!say` choose one).")
+    return "\n".join(lines)
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()

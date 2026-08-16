@@ -297,9 +297,18 @@ async def say(ctx, pawn_id: str, *, instruction: str):
         state.god_whispers[pawn_id] = instruction
         pawn = state.world_state["pawns"][pawn_id]
         pawn["vitals"]["morale"] = max(0, min(100, pawn["vitals"]["morale"] + 15))
+        pawn["counters"]["god_whispers"] = pawn["counters"].get("god_whispers", 0) + 1
+        promoted = False
+        if pawn["counters"]["god_whispers"] >= engine.PROPHET_WHISPERS:
+            promoted = engine._grant_prophet(pawn, pawn_id) is not None
         state.save_state()
         name = pawn["name"]
-        await ctx.send(f"🗣️ Whisper sent to **{name}** (+15 morale).")
+        suffix = (
+            f" **{name} has become a Prophet — the Voice speaks through them!**"
+            if promoted
+            else ""
+        )
+        await ctx.send(f"🗣️ Whisper sent to **{name}** (+15 morale).{suffix}")
 
 
 @bot.command(name="graveyard")
@@ -573,6 +582,13 @@ async def colony_cmd(ctx):
 async def taboo_cmd(ctx):
     """!taboo — cultural taboos born from the colony's traumas."""
     await ctx.send(core.taboo_txt())
+
+
+@bot.command(name="shrine")
+@is_god_channel()
+async def shrine_cmd(ctx):
+    """!shrine — the camp shrine, its offerings, and the Voice's Prophet."""
+    await ctx.send(core.shrine_txt())
 
 
 @bot.command(name="monument")

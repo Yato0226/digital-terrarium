@@ -229,6 +229,7 @@ world_state = {
     "perimeter_mapped": False,
     "colony": {"name": "The Settlers", "earned": {}, "history": []},
     "taboos": [],
+    "shrine": {"built": False, "offered": 0, "blessed": False, "blessings": 0},
 }
 
 
@@ -286,8 +287,10 @@ def make_pawn(
             "blizzards_survived": 0,
             "damage_dealt": 0,
             "legends_slain": 0,
+            "god_whispers": 0,
         },
         "title": None,
+        "prophet": False,
         "born_tick": world_state["tick"],
         "starving_ticks": 0,
         "goal": None,
@@ -327,6 +330,7 @@ def reset_world():
     world_state["perimeter_mapped"] = False
     world_state["colony"] = {"name": "The Settlers", "earned": {}, "history": []}
     world_state["taboos"] = []
+    world_state["shrine"] = {"built": False, "offered": 0, "blessed": False, "blessings": 0}
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -380,6 +384,8 @@ def _migrate_pawn(pawn_id, pawn):
         base["starving_ticks"] = pawn["starving_ticks"]
     if pawn.get("title"):
         base["title"] = pawn["title"]
+    if pawn.get("prophet"):
+        base["prophet"] = True
     if pawn.get("job"):
         base["job"] = pawn["job"]
     if pawn.get("sex") in ("M", "F"):
@@ -518,6 +524,10 @@ def load_state():
             "colony", {"name": "The Settlers", "earned": {}, "history": []}
         )
         world_state.setdefault("taboos", [])
+        world_state.setdefault(
+            "shrine",
+            {"built": False, "offered": 0, "blessed": False, "blessings": 0},
+        )
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

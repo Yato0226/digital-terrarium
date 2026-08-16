@@ -82,8 +82,8 @@
 - [x] Emergent cultural taboos develop naturally (e.g. fearing the Ruins after casualties, causing low-bravery pawns to avoid those tiles).
 
 ### Step 20: The Voice in the Sky & Camp Shrines
-- [ ] Colonists who receive frequent God whispers (`!say`) become spiritual leaders or "Prophets."
-- [ ] The colony builds small shrines and leaves food offerings at camp to appease the Creator.
+- [x] Colonists who receive frequent God whispers (`!say`) become spiritual leaders or "Prophets."
+- [x] The colony builds small shrines and leaves food offerings at camp to appease the Creator.
 
 ### Step 21: Physical Folklore & Herbal Medicine
 - [ ] Artisans paint cave murals or carve wooden totems celebrating major historical events, giving future generations positive moodlets.

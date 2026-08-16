@@ -532,6 +532,10 @@ INTERACT_WORDS = {
     "heirloom": ("claim", "inherit", "bequeath", "receive"),
     "rite": ("bury", "mourn", "eulogiz", "grieve", "lament", "funeral", "wake", "honor", "remember"),
     "extinguish": ("extinguish", "quench", "douse"),
+    "offer": ("offer", "offering", "shrine", "appease", "sacrifice", "tribute",
+              "devote", "consecrate", "give thanks", "thanksgiving"),
+    "sermon": ("sermon", "preach", "bless", "testify", "exhort", "proselytiz",
+               "lead prayer", "inspire the flock"),
 }
 
 GOAL_MORALE = 15
@@ -1714,6 +1718,22 @@ COLONY_NAME_PRIORITY = [  # first earned flag wins; tag strings double as flags
 TABOO_RUINS = "ruins"            # the colony learns to fear the Ruins after a death there
 RUINS_FEAR_BRAVERY = 3           # low-bravery pawns refuse to set foot on taboo tiles
 
+# Stage 20 (Phase 5) the Voice in the Sky & camp shrines.
+PROPHET_WHISPERS = 3              # god whispers (!say) to earn the Prophet mantle
+PROPHET_MORALE = 8                # steady morale while a Prophet hears the Voice
+PROPHET_SERMON_MORALE = 4         # morale each same-tile colonist gains from a sermon
+PROPHET_SERMON_RELATIONSHIP = 10  # relationship a sermon builds toward the Prophet
+SHRINE_WOOD = 3
+SHRINE_STONE = 2
+SHRINE_OFFER_FOOD = 2             # rations an offering costs
+SHRINE_OFFER_MORALE = 5
+SHRINE_BLESSING_OFFERINGS = 5     # offerings banked for the Creator's blessing
+SHRINE_BLESSING_MORALE = 10
+SHRINE_BLESSED_DELTA = 5
+SHRINE_BLESSED_TICKS = 15
+SHRINE_CATACLYSM_MULT = 0.5       # a consecrated shrine halves the cataclysm roll
+SHRINE_WARMTH = 1
+
 
 def apply_council(leader_pid, mandate):
     """The annual council names a leader and issues a one-sentence Colony Mandate.
@@ -2626,22 +2646,53 @@ def _do_build(pawn, pawn_id):
                 f"{monument['stone']}/{MONUMENT_STONE_NEEDED} stone)."
             ),
         )
-    if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
+    if biome["campfire"] < 100:
+        if pawn["inventory"]["wood"] < BUILD_WOOD_COST:
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_wood"},
+                description=f"{pawn['name']} doesn't have enough wood to build.",
+            )
+        pawn["inventory"]["wood"] -= BUILD_WOOD_COST
+        biome["campfire"] = _clamp(biome["campfire"] + BUILD_GAIN)
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
         return events.add_event(
-            "failed",
+            "build",
             actor=pawn_id,
-            data={"reason": "need_wood"},
-            description=f"{pawn['name']} doesn't have enough wood to build.",
+            data={"structure": "campfire", "level": biome["campfire"]},
+            description=f"{pawn['name']} rebuilds the campfire.",
         )
-    pawn["inventory"]["wood"] -= BUILD_WOOD_COST
-    biome["campfire"] = _clamp(biome["campfire"] + BUILD_GAIN)
-    _gain_skill(pawn, "woodcutting")
-    _goal_nudge(pawn, 1, kind="build")
+    # A fully settled colony finally raises a small shrine to the Creator (Stage 20).
+    shrine = _shrine()
+    if not shrine.get("built"):
+        if (
+            pawn["inventory"]["wood"] < SHRINE_WOOD
+            or pawn["inventory"]["stone"] < SHRINE_STONE
+        ):
+            return events.add_event(
+                "failed",
+                actor=pawn_id,
+                data={"reason": "need_materials"},
+                description=f"{pawn['name']} lacks the wood and stone to raise a shrine.",
+            )
+        pawn["inventory"]["wood"] -= SHRINE_WOOD
+        pawn["inventory"]["stone"] -= SHRINE_STONE
+        shrine["built"] = True
+        _gain_skill(pawn, "woodcutting")
+        _goal_nudge(pawn, 1, kind="build")
+        return events.add_event(
+            "shrine_built",
+            actor=pawn_id,
+            data={"structure": "shrine"},
+            description=f"{pawn['name']} raises a small shrine at camp to appease the Creator.",
+        )
     return events.add_event(
         "build",
         actor=pawn_id,
-        data={"structure": "campfire", "level": biome["campfire"]},
-        description=f"{pawn['name']} rebuilds the campfire.",
+        data={"structure": "maintenance"},
+        description=f"{pawn['name']} tends the camp — nothing left to raise.",
     )
 
 
@@ -3187,6 +3238,109 @@ def _share_with_visitor(pawn, pawn_id, visitor):
     )
 
 
+def _shrine():
+    return state.world_state.setdefault(
+        "shrine",
+        {"built": False, "offered": 0, "blessed": False, "blessings": 0},
+    )
+
+
+def _grant_prophet(pawn, pawn_id):
+    """A colonist the god keeps whispering to becomes the colony's Prophet.
+
+    The mantle needs PROPHET_WHISPERS accumulated `!say` whispers (bot.say bumps
+    the counter and calls this).
+    """
+    if pawn.get("prophet"):
+        return None
+    if pawn["counters"].get("god_whispers", 0) < PROPHET_WHISPERS:
+        return None
+    pawn["prophet"] = True
+    _add_moodlet(pawn, "The Voice", PROPHET_MORALE, SHRINE_BLESSED_TICKS)
+    return events.add_event(
+        "prophet",
+        actor=pawn_id,
+        description=f"The Voice in the Sky has chosen {pawn['name']} — a Prophet walks among the colony.",
+    )
+
+
+def _do_shrine_offering(pawn, pawn_id):
+    """Leave food at the camp shrine to appease the Creator; a Prophet's tithe counts double.
+
+    Returns None when there is no built shrine or the pawn is not at Camp, so
+    _do_interact falls through to prayer/meditation.
+    """
+    shrine = _shrine()
+    if not shrine.get("built"):
+        return None
+    if _tile_at(*pawn["pos"]) != BUILD_TILE:
+        return None
+    if pawn["inventory"]["food"] < SHRINE_OFFER_FOOD:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "need_food"},
+            description=f"{pawn['name']} has no food to offer at the shrine.",
+        )
+    pawn["inventory"]["food"] -= SHRINE_OFFER_FOOD
+    value = 2 if pawn.get("prophet") else 1
+    shrine["offered"] += value
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + SHRINE_OFFER_MORALE)
+    ev = events.add_event(
+        "shrine_offering",
+        actor=pawn_id,
+        data={"offered": value},
+        description=f"{pawn['name']} leaves food at the shrine — the Creator is pleased.",
+    )
+    if shrine["offered"] >= SHRINE_BLESSING_OFFERINGS:
+        ev["description"] += " The Creator sends a blessing!"
+        _shrine_blessing()
+    return ev
+
+
+def _shrine_blessing():
+    """A full shrine earns a colony-wide blessing and calms the coming seasons."""
+    shrine = _shrine()
+    shrine["offered"] = 0
+    shrine["blessings"] += 1
+    shrine["blessed"] = True
+    for p in state.world_state["pawns"].values():
+        if p["status"] in ("active", "incapacitated"):
+            p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + SHRINE_BLESSING_MORALE)
+            _add_moodlet(p, "Blessed", SHRINE_BLESSED_DELTA, SHRINE_BLESSED_TICKS)
+    events.add_event(
+        "shrine_blessing",
+        data={"blessings": shrine["blessings"]},
+        description="The colony is blessed — the Creator's temper eases.",
+    )
+
+
+def _do_sermon(pawn, pawn_id):
+    """A Prophet preaches at camp; every colonist on the tile is lifted by the Voice."""
+    if not pawn.get("prophet"):
+        return None
+    if _tile_at(*pawn["pos"]) != BUILD_TILE:
+        return None
+    for other_id, other in state.world_state["pawns"].items():
+        if other["status"] not in ("active", "incapacitated"):
+            continue
+        if other["pos"] != pawn["pos"]:
+            continue
+        other["vitals"]["morale"] = _clamp(
+            other["vitals"]["morale"] + PROPHET_SERMON_MORALE
+        )
+        if other_id != pawn_id:
+            _adjust_relationship(other, pawn_id, PROPHET_SERMON_RELATIONSHIP)
+    return events.add_event(
+        "sermon",
+        actor=pawn_id,
+        description=(
+            f"{pawn['name']} preaches to the colony — the Voice carries across camp, "
+            "and hearts are steadied."
+        ),
+    )
+
+
 def _do_pray(pawn, pawn_id):
     """Pray at the completed monolith: divine inspiration and, in the cold, a weather blessing.
 
@@ -3325,6 +3479,17 @@ def _do_interact(pawn, pawn_id, flavor):
     elif _in_words(verb, INTERACT_WORDS["train"]):
         _gain_skill(pawn, "combat")
         effects.append("+1 combat XP")
+    elif _in_words(verb, INTERACT_WORDS["offer"]):
+        offered = _do_shrine_offering(pawn, pawn_id)
+        if offered is not None:
+            return offered
+        pawn["vitals"]["energy"] = _clamp(pawn["vitals"]["energy"] + 10)
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + 3)
+        effects.append("+10 energy, +3 morale (a quiet contemplation)")
+    elif _in_words(verb, INTERACT_WORDS["sermon"]):
+        if pawn.get("prophet"):
+            return _do_sermon(pawn, pawn_id)
+        effects.append("the colony doesn't heed an unanointed voice")
     elif _in_words(verb, INTERACT_WORDS["pray"]):
         prayed = _do_pray(pawn, pawn_id)
         if prayed is not None:
@@ -3800,6 +3965,7 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
         + (CAMPFIRE_WARMTH if near_fire else 0)
         + (SHELTER_WARMTH if biome["shelter"] > 50 else 0)
         + (MONUMENT_INSULATION if monument.get("done") and near_camp else 0)
+        + (SHRINE_WARMTH if _shrine().get("built") and near_camp else 0)
     )
     delta = recovery - cold
     if delta < 0 and v["warmth"] > 0:
@@ -3854,6 +4020,8 @@ def _metabolize(pawn, pawn_id, biome, lit, day, result):
             v["morale"] = _clamp(v["morale"] - 5)
     if "Pyromaniac" in traits and near_fire:
         v["morale"] = _clamp(v["morale"] + 5)
+    if pawn.get("prophet"):
+        v["morale"] = _clamp(v["morale"] + PROPHET_MORALE)
 
     has_pet = any(w["state"] == "tamed" for w in state.world_state["wildlife"])
     if has_pet:
@@ -4006,6 +4174,9 @@ def _resolve_break(pawn, pawn_id):
 def _update_titles():
     """Recompute each living pawn's epithet from its lifetime counters."""
     for pawn in state.world_state["pawns"].values():
+        if pawn.get("prophet"):
+            pawn["title"] = "the Prophet"
+            continue
         if is_elder(pawn):
             pawn["title"] = "the Ancient"
             continue
@@ -4276,7 +4447,9 @@ def tick_environment():
                 description=f"{cataclysm['name']} finally lifts.",
             )
         )
-    elif cataclysm is None and new_season != prev_season and random.random() < CATACLYSM_CHANCE:
+    elif cataclysm is None and new_season != prev_season and random.random() < CATACLYSM_CHANCE * (
+        SHRINE_CATACLYSM_MULT if _shrine().get("blessed") else 1.0
+    ):
         candidates = [
             kind for kind, info in CATACLYMS.items() if new_season in info["seasons"]
         ]
