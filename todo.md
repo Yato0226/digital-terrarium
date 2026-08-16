@@ -53,10 +53,10 @@
 *Goal: Take the working diorama from "small flat sticker in a black void" to a cozy, close, polished indie-game look — scale/depth, real sprites, un-stacked pawns, a framed RPG HUD, and ambient juice.*
 
 ### Step 6: Scale, Depth & the Floating-Island Look
-- [ ] **Zoom the camera in**: scale the board so the 5×5 island fills ~55–65% of the screen height — cozy, close, and detailed instead of tiny and far away.
-- [ ] **3D thickness**: below the grass edge add a 20–30 px dirt drop, dark rock strata, and dangling roots → a real floating diorama cube (upgrade the current flat cutaway diamonds).
-- [ ] **Soft ground shadow**: blurred dark oval beneath the floating island for elevation + lighting.
-- [ ] **Atmospheric background**: replace the pitch-black void with a deep gradient (e.g. midnight navy on a Winter Night), faint twinkling stars, and a distant mountain silhouette.
+- [x] **Zoom the camera in**: scale the board so the 5×5 island fills ~55–65% of the screen height — cozy, close, and detailed instead of tiny and far away.
+- [x] **3D thickness**: below the grass edge add a 20–30 px dirt drop, dark rock strata, and dangling roots → a real floating diorama cube (upgrade the current flat cutaway diamonds).
+- [x] **Soft ground shadow**: blurred dark oval beneath the floating island for elevation + lighting.
+- [x] **Atmospheric background**: replace the pitch-black void with a deep gradient (e.g. midnight navy on a Winter Night), faint twinkling stars, and a distant mountain silhouette.
 
 ### Step 7: Free Isometric RPG Asset Packs (CC0 / Public Domain)
 *No drawing from scratch — vendor proven packs locally so the client stays offline with zero runtime downloads.*

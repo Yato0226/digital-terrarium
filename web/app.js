@@ -14,12 +14,13 @@
  */
 "use strict";
 
-const STAGE_W = 1000;
-const STAGE_H = 640;
-const TILE_W = 120;
-const TILE_H = 60;
-const ORIGIN_X = 500;
-const ORIGIN_Y = 250;
+const STAGE_W = 1100;
+const STAGE_H = 900;
+const TILE_W = 168;
+const TILE_H = 84;
+const ORIGIN_X = 550;
+const ORIGIN_Y = 212;
+const MAX_ZOOM = 1.6;
 
 const WALK_SECONDS = 4;
 const BUBBLE_DELAY = 4;
@@ -167,11 +168,135 @@ function resize() {
   const scale = Math.min(
     (window.innerWidth - 10) / STAGE_W,
     (window.innerHeight - 10) / STAGE_H,
-    1
+    MAX_ZOOM
   );
   stage.style.transform = `scale(${scale})`;
 }
 window.addEventListener("resize", resize);
+
+// ---- atmospheric background helpers ----
+function skyColors(season, day) {
+  const s = String(season || "").toLowerCase();
+  const winter = s.includes("winter");
+  if (day === 0) {
+    return winter ? ["#060a1a", "#152140"] : ["#0a1026", "#1e2c58"];
+  }
+  if (winter) return ["#7fa6cc", "#e2eef7"];
+  if (s.includes("autumn")) return ["#4670b4", "#e9cba4"];
+  if (s.includes("summer")) return ["#3d7cc6", "#c2e4f3"];
+  return ["#5a8cc2", "#d6ebf5"];
+}
+
+function drawStars(now, day) {
+  if (day !== 0) return;
+  for (let i = 0; i < 56; i++) {
+    const x = (Math.sin(i * 127.1 + 311.7) * 0.5 + 0.5) * STAGE_W;
+    const y = (Math.sin(i * 269.5 + 183.3) * 0.5 + 0.5) * 0.4 * STAGE_H;
+    const tw = 0.25 + 0.75 * Math.abs(Math.sin(now / 700 + i * 1.73));
+    ctx.globalAlpha = tw;
+    ctx.fillStyle = i % 4 === 0 ? "#cfe0ff" : "#ffffff";
+    ctx.fillRect(x, y, i % 6 === 0 ? 2.5 : 2, i % 6 === 0 ? 2.5 : 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRidge(baseY, amp, color, seed, snow) {
+  const n = 16;
+  ctx.beginPath();
+  ctx.moveTo(-12, STAGE_H);
+  const peaks = [];
+  for (let i = 0; i <= n; i++) {
+    const x = (i / n) * (STAGE_W + 24) - 12;
+    const y =
+      baseY - amp * (0.55 + 0.45 * Math.sin(seed + i * 2.1) * Math.sin(seed * 1.3 + i * 0.9));
+    ctx.lineTo(x, y);
+    peaks.push([x, y]);
+  }
+  ctx.lineTo(STAGE_W + 12, STAGE_H);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  if (snow) {
+    ctx.fillStyle = "rgba(240,248,255,0.85)";
+    for (let i = 1; i < n; i++) {
+      const [x, y] = peaks[i];
+      if (y < peaks[i - 1][1] - 6 && y < peaks[i + 1][1] - 6) {
+        ctx.beginPath();
+        ctx.moveTo(x - 17, y + 6);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x + 17, y + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawMountains(season, day) {
+  const night = day === 0;
+  const winter = String(season || "").toLowerCase().includes("winter");
+  drawRidge(470, 88, night ? "rgba(15,24,50,0.8)" : "rgba(100,128,168,0.45)", 12.9, false);
+  drawRidge(545, 120, night ? "rgba(6,14,32,0.95)" : "rgba(56,82,118,0.85)", 3.7, winter && !night);
+}
+
+function drawGroundShadow() {
+  const cx = ORIGIN_X;
+  const cy = ORIGIN_Y + 4 * TILE_H + 1.2 * TILE_H + 28; // just below the rock tip
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, 0.4);
+  const g = ctx.createRadialGradient(0, 0, 14, 0, 0, 3.05 * TILE_W);
+  g.addColorStop(0, "rgba(0,0,0,0.5)");
+  g.addColorStop(0.55, "rgba(0,0,0,0.26)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.05 * TILE_W, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRoots(now) {
+  const tfc = ORIGIN_Y + 2 * TILE_H;
+  const midY = tfc + 18; // dirt-lip center
+  const tipY = midY + (5 * TILE_H) / 2;
+  const spread = (5 * TILE_W) / 2;
+  const ts = [0.14, 0.3, 0.46, 0.62, 0.8];
+  ctx.strokeStyle = "#3b2a1c";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  for (const tt of ts) {
+    const px = spread * tt;
+    const py = tipY - (tipY - midY) * tt;
+    for (const side of [-1, 1]) {
+      const seed = tt * 41.7 + (side > 0 ? 13.3 : 7.7);
+      const sway = Math.sin(now / 800 + seed) * 6;
+      const len = 20 + 16 * Math.abs(Math.sin(seed * 2.9));
+      ctx.beginPath();
+      ctx.moveTo(ORIGIN_X + side * px, py);
+      ctx.quadraticCurveTo(
+        ORIGIN_X + side * px + sway * 0.4,
+        py + len * 0.45,
+        ORIGIN_X + side * px + sway,
+        py + len
+      );
+      ctx.stroke();
+    }
+  }
+  for (const seed of [1.1, 2.6]) {
+    const sway = Math.sin(now / 850 + seed * 5) * 5;
+    const len = 16 + 14 * Math.abs(Math.sin(seed * 4.1));
+    ctx.beginPath();
+    ctx.moveTo(ORIGIN_X + (seed - 2) * 14, tipY);
+    ctx.quadraticCurveTo(
+      ORIGIN_X + (seed - 2) * 14 + sway * 0.4,
+      tipY + len * 0.45,
+      ORIGIN_X + (seed - 2) * 14 + sway,
+      tipY + len
+    );
+    ctx.stroke();
+  }
+}
 
 // ---- canvas: the floating island ----
 function drawIsland(now) {
@@ -179,27 +304,97 @@ function drawIsland(now) {
   if (!snap) return;
   const grid = snap.grid;
   const t = now;
+  const season = snap.season;
+  const day = snap.day;
 
-  // Cutaway layers underneath (bottom -> top: stone to dirt).
+  // --- atmospheric sky ---
+  const [skyTop, skyBot] = skyColors(season, day);
+  const sky = ctx.createLinearGradient(0, 0, 0, STAGE_H);
+  sky.addColorStop(0, skyTop);
+  sky.addColorStop(1, skyBot);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+
+  drawStars(t, day);
+  drawMountains(season, day);
+
+  // Soft haze above the horizon.
+  const haze = ctx.createLinearGradient(0, STAGE_H * 0.55, 0, STAGE_H);
+  haze.addColorStop(0, "rgba(200,220,245,0)");
+  haze.addColorStop(0.4, day ? "rgba(212,228,246,0.18)" : "rgba(64,84,140,0.14)");
+  haze.addColorStop(1, day ? "rgba(212,228,246,0.3)" : "rgba(56,76,132,0.22)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+
+  // Sun / moon glow in the upper sky.
+  if (day === 0) {
+    const mx = STAGE_W * 0.76, my = STAGE_H * 0.16;
+    const mg = ctx.createRadialGradient(mx, my, 4, mx, my, 90);
+    mg.addColorStop(0, "rgba(220,230,255,0.5)");
+    mg.addColorStop(1, "rgba(220,230,255,0)");
+    ctx.fillStyle = mg;
+    ctx.fillRect(mx - 90, my - 90, 180, 180);
+    ctx.fillStyle = "#e8edff";
+    ctx.beginPath();
+    ctx.arc(mx, my, 14, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    const sx = STAGE_W * 0.8, sy = STAGE_H * 0.14;
+    const sg = ctx.createRadialGradient(sx, sy, 6, sx, sy, 110);
+    sg.addColorStop(0, "rgba(255,236,180,0.55)");
+    sg.addColorStop(1, "rgba(255,236,180,0)");
+    ctx.fillStyle = sg;
+    ctx.fillRect(sx - 110, sy - 110, 220, 220);
+    ctx.fillStyle = "#fff3c4";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // --- soft ground shadow beneath the floating chunk ---
+  drawGroundShadow();
+
+  // --- floating island chunk: rock strata + dirt drop ---
+  const tfc = ORIGIN_Y + 2 * TILE_H; // top-face diamond center y
+  const tfw = 5 * TILE_W;
+  const tfh = 5 * TILE_H;
   const layers = [
-    { cy: 370 + 54, scale: 1.18, fill: "#263238", edge: "#1b232a" },
-    { cy: 370 + 40, scale: 1.12, fill: "#37474f", edge: "#263238" },
-    { cy: 370 + 26, scale: 1.06, fill: "#4e342e", edge: "#3e2723" },
-    { cy: 370 + 12, scale: 1.00, fill: "#5d4037", edge: "#4e342e" },
+    { cy: tfc + 165, scale: 0.68, fill: "#131a26", edge: "#0c1119" },
+    { cy: tfc + 124, scale: 0.78, fill: "#1e2c3c", edge: "#15202c" },
+    { cy: tfc + 84, scale: 0.89, fill: "#33465c", edge: "#263548" },
+    { cy: tfc + 46, scale: 1.0, fill: "#5a4035", edge: "#46301f" },
   ];
   for (const L of layers) {
     ctx.beginPath();
-    diamond(ORIGIN_X, L.cy, 240 * L.scale, 120 * L.scale);
+    diamond(ORIGIN_X, L.cy, tfw * L.scale, tfh * L.scale);
     ctx.fillStyle = L.fill;
     ctx.fill();
     ctx.strokeStyle = L.edge;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
-  // Grass rim around the top face.
+
+  // Dirt lip directly under the grass rim.
   ctx.beginPath();
-  diamond(ORIGIN_X, 370, 240, 120);
-  ctx.strokeStyle = "#33691e";
+  diamond(ORIGIN_X, tfc + 18, tfw, tfh);
+  ctx.fillStyle = "#6b4a35";
+  ctx.fill();
+  ctx.strokeStyle = "#4e342e";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dangling roots off the dirt band.
+  drawRoots(t);
+
+  // Two-tone grass rim around the top face.
+  ctx.beginPath();
+  diamond(ORIGIN_X, tfc, tfw, tfh);
+  ctx.strokeStyle = "#1d4d20";
+  ctx.lineWidth = 12;
+  ctx.stroke();
+  ctx.beginPath();
+  diamond(ORIGIN_X, tfc, tfw - 8, tfh - 4);
+  ctx.strokeStyle = "#2e7d32";
   ctx.lineWidth = 4;
   ctx.stroke();
 
@@ -214,7 +409,7 @@ function drawIsland(now) {
       ctx.fillStyle = style.fill;
       ctx.fill();
       ctx.strokeStyle = style.edge;
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
   }
@@ -227,25 +422,25 @@ function drawIsland(now) {
       const tile = grid[y][x];
       const c = iso(x, y);
       if (tile === "🌊") {
-        ctx.font = "26px serif";
+        ctx.font = "32px serif";
         ctx.fillText("🌊", c.x, c.y);
         ctx.fillStyle = "rgba(255,255,255,0.5)";
         for (let i = 0; i < 3; i++) {
           const phase = ((t / 900) * (0.6 + (x + y) * 0.06) + i * 0.33) % 1;
           ctx.beginPath();
-          ctx.arc(c.x + (phase - 0.5) * 64, c.y + (i - 1) * 9, 2.4, 0, Math.PI * 2);
+          ctx.arc(c.x + (phase - 0.5) * 80, c.y + (i - 1) * 12, 3, 0, Math.PI * 2);
           ctx.fill();
         }
         continue;
       }
       if (tile === "🔥") {
         const a = 0.12 + 0.08 * Math.sin(t / 140 + x * 2);
-        const g = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, 44);
+        const g = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, 56);
         g.addColorStop(0, `rgba(255,120,40,${a})`);
         g.addColorStop(1, "rgba(255,120,40,0)");
         ctx.fillStyle = g;
-        ctx.fillRect(c.x - 44, c.y - 44, 88, 88);
-        ctx.font = "26px serif";
+        ctx.fillRect(c.x - 56, c.y - 56, 112, 112);
+        ctx.font = "32px serif";
         ctx.fillText("🔥", c.x, c.y);
         continue;
       }
@@ -253,12 +448,12 @@ function drawIsland(now) {
         ctx.save();
         ctx.translate(c.x, c.y);
         ctx.rotate(Math.sin(t / 1100 + x * 0.8 + y * 1.3) * 0.045);
-        ctx.font = "30px serif";
+        ctx.font = "38px serif";
         ctx.fillText("🌲", 0, 0);
         ctx.restore();
         continue;
       }
-      ctx.font = "26px serif";
+      ctx.font = "32px serif";
       ctx.fillText(tile, c.x, c.y);
     }
   }
@@ -268,14 +463,14 @@ function drawIsland(now) {
   if (campfire > 0) {
     const camp = iso(2, 2);
     const flick = 0.55 + 0.2 * Math.sin(t / 90) + 0.1 * Math.sin(t / 47 + 2);
-    const g = ctx.createRadialGradient(camp.x + 14, camp.y - 10, 2, camp.x + 14, camp.y - 10, 34);
+    const g = ctx.createRadialGradient(camp.x + 20, camp.y - 14, 2, camp.x + 20, camp.y - 14, 48);
     g.addColorStop(0, `rgba(255,170,60,${0.5 * flick})`);
     g.addColorStop(1, "rgba(255,120,30,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(camp.x + 14 - 34, camp.y - 10 - 34, 68, 68);
-    ctx.font = "20px serif";
-    ctx.fillText("🔥", camp.x + 14, camp.y - 10);
-    spawnSmoke(camp.x + 10, camp.y - 14);
+    ctx.fillRect(camp.x + 20 - 48, camp.y - 14 - 48, 96, 96);
+    ctx.font = "28px serif";
+    ctx.fillText("🔥", camp.x + 20, camp.y - 14);
+    spawnSmoke(camp.x + 14, camp.y - 18);
   }
 
   // Rising smoke.
@@ -295,14 +490,14 @@ function drawIsland(now) {
     ctx.fill();
   }
 
-  // Night tint.
+  // Night tint (lighter — the sky itself is already dark).
   if (snap.day === 0) {
-    ctx.fillStyle = "rgba(10, 14, 40, 0.3)";
+    ctx.fillStyle = "rgba(10, 14, 40, 0.22)";
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     if (campfire > 0) {
       const camp = iso(2, 2);
-      const ng = ctx.createRadialGradient(camp.x, camp.y, 10, camp.x, camp.y, 130);
-      ng.addColorStop(0, "rgba(255,150,50,0.16)");
+      const ng = ctx.createRadialGradient(camp.x, camp.y, 10, camp.x, camp.y, 170);
+      ng.addColorStop(0, "rgba(255,150,50,0.18)");
       ng.addColorStop(1, "rgba(255,150,50,0)");
       ctx.fillStyle = ng;
       ctx.fillRect(0, 0, STAGE_W, STAGE_H);
