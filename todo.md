@@ -117,6 +117,14 @@
 
 ### Step 4: Full Interactive On-Screen Dashboard (HUD)
 Move all the heavy information out of Discord and onto the web screen:
+
+#### Part 4a: Backend snapshot extension (`feed.py` + tests)
+- [ ] Extend the world snapshot with a **colony resource aggregate** (biome wood/food + summed stone/fiber from rucksacks) for the Top Bar.
+- [ ] Extend per-pawn snapshot entries with the **full dossier**: `gear` (main_hand/body), active `goal`, `skills`, `relationships`, lineage (`partners`, `mother_id`, `father_id`, `partner_id`), `counters`, and `status`.
+- [ ] Add **lore payloads** to the snapshot: `graveyard` epitaphs, `monument` runes/inscription, Architect `patches`, and the seasonal `chronicle`.
+- [ ] Tests: assert the extended snapshot shape (dossier fields, aggregate, lore payloads) in `tests/test_stage26.py`.
+
+#### Part 4b: Client HUD (`web/app.js` + `style.css` + `index.html`)
 - [ ] **Top Bar**: Live Season, Weather, Day/Night clock, Campfire %, Shelter %, and Wood/Food/Stone/Fiber resource stockpiles.
 - [ ] **Bottom Narrative Ticker**: Real-time scrolling feed of the AI Director's 2-sentence world summary and recent event logs.
 - [ ] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
