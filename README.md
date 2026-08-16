@@ -87,27 +87,32 @@ python main.py
 | `LLM_TEMPERATURE` | — | Sampling temperature (default 0.7) |
 | `NOTIFY_USER_ID` | — | Discord user id pinged on total extinction (defaults to a configured id) |
 
-### Exposing the diorama (Cloudflare Quick Tunnel — on the LXC)
+### Exposing the diorama (ngrok static domain — on the LXC)
 
-The feed server binds `0.0.0.0:8900` on the LXC. To open it to the world (and later embed it as a Discord Activity):
+The feed server binds `0.0.0.0:8900` on the LXC. The diorama is published at a **static ngrok domain** — `budget-universe-manila.ngrok-free.dev` — so the URL never rotates and the Discord Activity mapping is set once.
 
 ```bash
-# on the LXC (as root): install the static cloudflared binary
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-chmod +x /usr/local/bin/cloudflared
+# on the LXC (as root): install ngrok
+curl -L https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz -o /tmp/ngrok.tgz
+tar xzf /tmp/ngrok.tgz -C /usr/local/bin ngrok
 
-# ad-hoc tunnel — grab the https://<random>.trycloudflare.com URL from the output
-cloudflared tunnel --url http://localhost:8900
+# one-time authtoken, run AS the terrarium user so the unit can read ~/.config/ngrok
+sudo -u terrarium ngrok config add-authtoken YOUR_NGROK_AUTHTOKEN
 
-# or persist it across reboots (mirrors deploy/terrarium.service)
-cp deploy/cloudflared.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now cloudflared
-journalctl -u cloudflared -f   # the trycloudflare.com URL is logged on startup
+# persist across reboots (mirrors deploy/terrarium.service)
+cp deploy/ngrok.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now ngrok
+journalctl -u ngrok -f                      # confirms the public URL
+curl -s https://budget-universe-manila.ngrok-free.dev/ | head   # sanity check
 ```
 
-⚠️ Quick Tunnel URLs **rotate on every restart** — re-paste the current URL in the Discord Developer Portal whenever the tunnel restarts (for plain browser viewing it doesn't matter).
+Because the domain is static, the URL survives restarts — map it once in the Discord Developer Portal under **Activities / URL Mappings**, and the Rocket activity icon launches the diorama from any voice channel.
 
-**Discord Activity embedding:** enable the app for Activities in the [Discord Developer Portal](https://discord.com/developers/applications), add the current `https://<random>.trycloudflare.com/` under **Activities / URL Mappings**, and members can launch the live terrarium from any voice channel via the rocket activity icon.
+**Convenience alias** (run as root — restarts both services after pulling; the static ngrok domain means no URL re-mapping after restarts):
+
+```bash
+alias update='cd /opt/terrarium && git pull origin main && chown -R terrarium:terrarium /opt/terrarium && systemctl restart terrarium && systemctl restart ngrok && journalctl -u terrarium -f'
+```
 
 ## God commands (prefix `!`)
 

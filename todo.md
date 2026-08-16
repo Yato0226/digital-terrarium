@@ -130,12 +130,11 @@ Move all the heavy information out of Discord and onto the web screen:
 - [x] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
 - [x] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
 
-### Step 5: Cloudflare Tunnel & Discord Activity Embedding
+### Step 5: ngrok Tunnel & Discord Activity Embedding
 *Deployment step — everything below happens on the LXC (or in the Discord Developer Portal), not in the repo.*
-- [x] (Repo prep) Add `deploy/cloudflared.service` (systemd, mirrors `terrarium.service`) and a README LXC runbook so the tunnel is copy-paste on the box.
-- [ ] On the LXC: install `cloudflared` and run `cloudflared tunnel --url http://localhost:8900` — no dashboard or account setup, the ad-hoc `*.trycloudflare.com` URL is live instantly.
-- [ ] (Optional hardening) `cp deploy/cloudflared.service /etc/systemd/system/` + `systemctl enable --now cloudflared` so the tunnel auto-starts on boot — note the Quick Tunnel URL **rotates on every restart**, so re-paste it in the Discord Developer Portal when it does (for plain browser viewing it doesn't matter).
-- [ ] In the Discord Developer Portal: enable the app for Activities and paste your HTTPS address under **Activities / URL Mappings**.
+- [x] (Repo prep) Add `deploy/ngrok.service` (systemd, mirrors `terrarium.service`, static domain `budget-universe-manila.ngrok-free.dev`) and a README LXC runbook so the tunnel is copy-paste on the box.
+- [ ] On the LXC: install ngrok, run `sudo -u terrarium ngrok config add-authtoken <token>` once, and `systemctl enable --now ngrok` (the static domain never rotates, so no re-mapping after restarts).
+- [ ] In the Discord Developer Portal: enable the app for Activities and paste `https://budget-universe-manila.ngrok-free.dev/` under **Activities / URL Mappings** (set once — the domain is stable).
 - [ ] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
 
 ---
