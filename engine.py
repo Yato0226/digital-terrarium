@@ -15,6 +15,7 @@ ACTION_COSTS = {
     "Move": 5,
     "Mate": 10,
     "Interact": 5,
+    "Expedition": 15,
 }
 ACTIONS = tuple(ACTION_COSTS)
 SKILL_MAX = 20
@@ -34,6 +35,7 @@ PET_MORALE_BONUS = 2
 PREY_DESPAWN_CHANCE = 0.1
 FEASIBILITY_REASONS = {
     "low_energy",
+    "low_food",
     "need_wood",
     "wrong_tile",
     "forest_depleted",
@@ -854,6 +856,243 @@ def _slay_legend(animal, pawn, pawn_id):
     )
 
 
+def _rim_tiles():
+    """The 16 outer-edge tiles of the 5x5 grid, as 'x,y' keys."""
+    return [
+        f"{x},{y}"
+        for x in range(GRID_SIZE)
+        for y in range(GRID_SIZE)
+        if x in (0, GRID_SIZE - 1) or y in (0, GRID_SIZE - 1)
+    ]
+
+
+def _misted(key):
+    """A rim tile is shrouded in mist until a Scout has mapped it."""
+    if key not in _rim_tiles():
+        return False
+    return not state.world_state.get("tiles", {}).get(key, {}).get("scouted", False)
+
+
+def _reveal_fog(pos):
+    """Scouting reveals the rim tiles within reach of a position."""
+    for key in _rim_tiles():
+        tx, ty = (int(p) for p in key.split(","))
+        if _manhattan([tx, ty], pos) <= 2:
+            state.world_state["tiles"].setdefault(key, {})["scouted"] = True
+
+
+def _mapped():
+    """True once every perimeter tile has been mapped by a Scout."""
+    return all(
+        state.world_state.get("tiles", {}).get(key, {}).get("scouted", False)
+        for key in _rim_tiles()
+    )
+
+
+def _misted_count():
+    return sum(1 for key in _rim_tiles() if _misted(key))
+
+
+def _grant_perimeter():
+    """One-time colony-wide reward for fully mapping the perimeter."""
+    if state.world_state.get("perimeter_mapped"):
+        return None
+    state.world_state["perimeter_mapped"] = True
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active":
+            p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + MAPPED_MORALE)
+    _carve_rune(
+        "The Perimeter Is Mapped",
+        "The Scouts have mapped every edge of the world; the mist lifts.",
+    )
+    return events.add_event(
+        "mapped",
+        description=(
+            "The last of the mist lifts: the colony has mapped the entire perimeter "
+            "of their world, and the unknown shrinks a little more."
+        ),
+    )
+
+
+def _can_expedition(pawn):
+    return pawn["inventory"]["food"] >= EXPEDITION_RATIONS and (
+        pawn["vitals"]["energy"] >= ACTION_COSTS["Expedition"]
+    )
+
+
+def _expedition_partner(pawn, pawn_id, expedition_intents):
+    for pid, p in state.world_state["pawns"].items():
+        if pid == pawn_id or pid not in expedition_intents:
+            continue
+        if p["status"] == "active" and p["pos"] == pawn["pos"]:
+            return pid, p
+    return None
+
+
+def _start_expedition(pawn, pawn_id, partner, partner_id):
+    for pid, p in ((pawn_id, pawn), (partner_id, partner)):
+        p["inventory"]["food"] -= EXPEDITION_RATIONS
+        p["vitals"]["energy"] = max(0, p["vitals"]["energy"] - ACTION_COSTS["Expedition"])
+        p["status"] = "expedition"
+    state.world_state["expeditions"].append(
+        {
+            "id": f"expedition_{len(state.world_state['expeditions']) + 1}",
+            "pawn_ids": [pawn_id, partner_id],
+            "depart_tick": state.world_state["tick"],
+            "return_tick": state.world_state["tick"]
+            + random.randint(EXPEDITION_TICKS_MIN, EXPEDITION_TICKS_MAX),
+        }
+    )
+
+
+def _try_expedition(pawn, pawn_id, expedition_intents):
+    """Two colonists at the map's edge pack rations and leave the grid."""
+    x, y = pawn["pos"]
+    on_rim = x in (0, GRID_SIZE - 1) or y in (0, GRID_SIZE - 1)
+    if not on_rim:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "wrong_tile"},
+            description=f"{pawn['name']} can only depart an expedition from the map's edge.",
+        )
+    if pawn["inventory"]["food"] < EXPEDITION_RATIONS:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "low_food"},
+            description=f"{pawn['name']} lacks the rations for a journey off the map.",
+        )
+    if pawn["vitals"]["energy"] < ACTION_COSTS["Expedition"]:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "low_energy"},
+            description=f"{pawn['name']} is too exhausted to travel beyond the edge.",
+        )
+    partner_info = _expedition_partner(pawn, pawn_id, expedition_intents)
+    if partner_info is None:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "need_partner"},
+            description=f"{pawn['name']} waits at the edge of the world for a companion before departing.",
+        )
+    partner_id, partner = partner_info
+    if not _can_expedition(partner):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "need_partner"},
+            description=f"{pawn['name']}'s companion cannot muster the rations or energy for the journey.",
+        )
+    _start_expedition(pawn, pawn_id, partner, partner_id)
+    return events.add_event(
+        "expedition",
+        actor=pawn_id,
+        data={"state": "depart", "partner": partner["name"]},
+        description=(
+            f"{pawn['name']} and {partner['name']} pack rations and leave the map "
+            "on a joint expedition into the unknown."
+        ),
+    )
+
+
+def _expedition_outcome(pawn, pid, result):
+    roll = random.random()
+    if roll < EXPEDITION_SCAR_CHANCE:
+        pawn["vitals"]["hp"] = _clamp(pawn["vitals"]["hp"] - EXPEDITION_SCAR_HP)
+        pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + EXPEDITION_SCAR_MORALE)
+        pawn["counters"]["scars"] = pawn["counters"].get("scars", 0) + 1
+        result.append(
+            events.add_event(
+                "expedition_return",
+                actor=pid,
+                data={"outcome": "scars"},
+                description=(
+                    f"{pawn['name']} returns from the wilds bearing fresh battle scars "
+                    f"(-{EXPEDITION_SCAR_HP} HP)."
+                ),
+            )
+        )
+        return
+    resource, (lo, hi) = random.choice(list(EXPEDITION_LOOT.items()))
+    amount = random.randint(lo, hi)
+    pawn["inventory"][resource] += amount
+    if resource == "food":
+        _goal_nudge(pawn, amount, resource="food")
+    result.append(
+        events.add_event(
+            "expedition_return",
+            actor=pid,
+            data={"outcome": "loot", "resource": resource, "amount": amount},
+            description=(
+                f"{pawn['name']} returns from the expedition with {amount} {resource} "
+                "carried from beyond the edge."
+            ),
+        )
+    )
+
+
+def _plant_exotic_seed(pid, result):
+    """A rare seed tills a new farm plot on the first unclaimed Meadow tile."""
+    grid = state.world_state["grid"]
+    tiles = state.world_state.setdefault("tiles", {})
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            key = f"{x},{y}"
+            if grid[y][x] in FORAGE_TILES and key not in tiles:
+                tiles[key] = {"farm": 0}
+                result.append(
+                    events.add_event(
+                        "expedition_seed",
+                        actor=pid,
+                        data={"tile": key},
+                        description=(
+                            f"An exotic seed gathered on the expedition sprouts a new "
+                            f"farm plot at ({key})."
+                        ),
+                    )
+                )
+                return True
+    return False
+
+
+def _step_expeditions(result):
+    """Resolve any expeditions whose return tick has arrived."""
+    resolved = []
+    for expo in list(state.world_state.get("expeditions", [])):
+        if state.world_state["tick"] < expo["return_tick"]:
+            continue
+        resolved.append(expo)
+        for pid in expo["pawn_ids"]:
+            pawn = state.world_state["pawns"].get(pid)
+            if pawn is None:
+                continue
+            pawn["status"] = "active"
+            pawn["pos"] = list(CAMP_POS)
+            _expedition_outcome(pawn, pid, result)
+        if random.random() < EXPEDITION_SEED_CHANCE:
+            _plant_exotic_seed(expo["pawn_ids"][0], result)
+        if random.random() < EXPEDITION_PET_CHANCE:
+            species = random.choice(tuple(PREY_SPECIES) + tuple(PREDATOR_SPECIES))
+            pet = state.make_animal(species, pos=list(CAMP_POS))
+            pet["state"] = "tamed"
+            pet["tamed_by"] = expo["pawn_ids"][0]
+            state.world_state["wildlife"].append(pet)
+            result.append(
+                events.add_event(
+                    "expedition_pet",
+                    data={"species": species},
+                    description=(
+                        f"The expedition brings back a tamed {species} as a companion!"
+                    ),
+                )
+            )
+    for expo in resolved:
+        state.world_state["expeditions"].remove(expo)
+
+
 def _name_to_id(text):
     """Find a living active pawn whose name appears in the goal text."""
     for pid, pawn in state.world_state["pawns"].items():
@@ -1430,6 +1669,19 @@ LEGEND_HUNT_MORALE = 3       # colony-wide "Legend Hunt" moodlet while one lives
 LEGEND_SLAY_MORALE = 15      # slaying a legend lifts the whole colony
 LEGEND_MAX_LEGENDS = 4       # cap on the legend archive
 
+# Stage 17 (Phase 4) fog of war & off-grid expeditions.
+EXPEDITION_TICKS_MIN = 15    # away ticks (inclusive bounds)
+EXPEDITION_TICKS_MAX = 20
+EXPEDITION_RATIONS = 5       # food each traveller packs before leaving
+EXPEDITION_SCAR_HP = 25      # "battle scars" outcome hurts
+EXPEDITION_SCAR_MORALE = -10
+EXPEDITION_SCAR_CHANCE = 0.25
+EXPEDITION_SEED_CHANCE = 0.3  # exotic seeds: a new farm plot on a Meadow tile
+EXPEDITION_PET_CHANCE = 0.2   # a tamed companion joins the camp
+EXPEDITION_LOOT = {"wood": (5, 12), "stone": (5, 12), "fiber": (3, 8), "food": (8, 15)}
+MAPPED_MORALE = 5            # colony-wide cheer when the whole perimeter is mapped
+EXPEDITION_SCARS_TITLE = "the Scarred"
+
 
 def apply_council(leader_pid, mandate):
     """The annual council names a leader and issues a one-sentence Colony Mandate.
@@ -1729,7 +1981,9 @@ def render_grid():
         for x in range(len(grid[y])):
             occ = occupants.get((x, y))
             if not occ:
-                cells.append(f"[{grid[y][x]}]")
+                key = f"{x},{y}"
+                glyph = "🌫" if _misted(key) else grid[y][x]
+                cells.append(f"[{glyph}]")
             else:
                 p_count = occ["pawns"]
                 animals = occ["animals"]
@@ -2029,6 +2283,7 @@ def _do_scout(pawn, pawn_id):
             data={"reason": "low_energy"},
             description=f"{pawn['name']} is too exhausted to scout.",
         )
+    _reveal_fog(pawn["pos"])
     skill = pawn["skills"]["scouting"]
     if _tile_at(*pawn["pos"]) == QUARRY_TILE:
         _gain_skill(pawn, "scouting")
@@ -4080,6 +4335,8 @@ def tick_environment():
         )
     result += _step_visitors()
 
+    _step_expeditions(result)
+
     # Raiders (Stage 8): prosperous colonies attract Autumn scavenger raids.
     if (
         new_season == RAID_SEASON
@@ -4152,6 +4409,8 @@ def tick_environment():
                 _give_birth(pawn, pawn_id, result)
 
     for pawn_id, pawn in list(state.world_state["pawns"].items()):
+        if pawn["status"] == "expedition":
+            continue
         cause = _death_cause(pawn, biome)
         if cause:
             result.append(_kill(pawn_id, pawn, cause))
@@ -4189,6 +4448,10 @@ def resolve_actions(intents):
                         description=f"{pawn['name']} lies incapacitated.",
                     )
                 )
+
+    expedition_intents = {
+        pid for pid, intent in intents.items() if intent[0] == "Expedition"
+    }
 
     for pawn_id, intent in intents.items():
         pawn = state.world_state["pawns"].get(pawn_id)
@@ -4286,6 +4549,15 @@ def resolve_actions(intents):
                     _record_feasibility(pawn_id, action, reason)
                 else:
                     state.failed_intents.pop(pawn_id, None)
+        elif action == "Expedition":
+            ev = _try_expedition(pawn, pawn_id, expedition_intents)
+            resulting.append(ev)
+            if not is_god_order:
+                reason = ev.get("data", {}).get("reason")
+                if reason in FEASIBILITY_REASONS:
+                    _record_feasibility(pawn_id, action, reason)
+                else:
+                    state.failed_intents.pop(pawn_id, None)
         else:
             resulting.append(
                 events.add_event(
@@ -4326,6 +4598,12 @@ def resolve_actions(intents):
         # Survive goals tick here too (not just in tick_environment).
         if goal and goal.get("kind") == "survive":
             _goal_nudge(pawn, 1, kind="survive")
+
+    mapped_ev = None
+    if not state.world_state.get("perimeter_mapped", False) and _mapped():
+        mapped_ev = _grant_perimeter()
+    if mapped_ev is not None:
+        resulting.append(mapped_ev)
 
     resulting += _drain_runes()
     return resulting

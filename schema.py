@@ -4,7 +4,7 @@ from pydantic import Field, create_model
 
 import state
 
-ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact")
+ACTIONS = ("Chop", "Rest", "Scout", "Attack", "Forage", "Build", "Share", "Move", "Mate", "Interact", "Expedition")
 
 
 def build_models():

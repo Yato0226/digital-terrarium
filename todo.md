@@ -66,8 +66,8 @@
 - [x] If a predator injures multiple colonists and escapes, it gains a permanent name and reputation (*The Grey Terror*, *Old Scar-Face*), triggering colony-wide revenge hunts.
 
 ### Step 17: Fog of War & Off-Grid Expeditions
-- [ ] Shroud the outer rim of the 5×5 map in mist, requiring Scouts to actively explore and map the perimeter.
-- [ ] Allow pairs of colonists to pack rations and leave the map for 15–20 ticks on background expeditions, returning with rare loot, exotic seeds, unique pets, or battle scars.
+- [x] Shroud the outer rim of the 5×5 map in mist, requiring Scouts to actively explore and map the perimeter.
+- [x] Allow pairs of colonists to pack rations and leave the map for 15–20 ticks on background expeditions, returning with rare loot, exotic seeds, unique pets, or battle scars.
 
 ### Step 18: Multi-Tick Seasonal Cataclysms
 - [ ] Introduce multi-tick environmental trials such as *The Long Winter* (150 ticks of intense freeze and double fuel drain) or *The Great Drought* (halting river forage and dramatically spiking wildfire danger).

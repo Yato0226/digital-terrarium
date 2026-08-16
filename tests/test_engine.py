@@ -515,7 +515,7 @@ def test_render_grid_shows_pawns():
     lines = view.split("\n")
     assert len(lines) == 5
     assert lines[0].startswith("[🧙]")
-    assert lines[1].startswith("[🌲][🧙]")
+    assert lines[1].startswith("[🌫][🧙]")
 
 
 def test_family_tree_renders_couples_kin_and_rivals():

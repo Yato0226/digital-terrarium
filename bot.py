@@ -547,6 +547,13 @@ async def legends_cmd(ctx):
     await ctx.send(core.legends_txt())
 
 
+@bot.command(name="fog")
+@is_god_channel()
+async def fog_cmd(ctx):
+    """!fog — fog of war: how much of the perimeter is mapped, and who's off-grid."""
+    await ctx.send(core.fog_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

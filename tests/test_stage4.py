@@ -230,6 +230,8 @@ def test_chop_creates_firebreak():
 def test_render_grid_shows_burning_and_ash():
     grid()[0][0] = "🔥"
     grid()[4][4] = "🌫️"
+    engine._reveal_fog([0, 0])
+    engine._reveal_fog([4, 4])
     lines = engine.render_grid().split("\n")
     assert lines[0].startswith("[🔥]")
     assert lines[4].endswith("[🌫️]")

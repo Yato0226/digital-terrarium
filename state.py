@@ -218,6 +218,8 @@ world_state = {
     "patches": [],
     "council": None,
     "legends": [],
+    "expeditions": [],
+    "perimeter_mapped": False,
 }
 
 
@@ -311,6 +313,8 @@ def reset_world():
     world_state["patches"] = []
     world_state["council"] = None
     world_state["legends"] = []
+    world_state["expeditions"] = []
+    world_state["perimeter_mapped"] = False
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -491,6 +495,8 @@ def load_state():
         world_state.setdefault("patches", [])
         world_state.setdefault("council", None)
         world_state.setdefault("legends", [])
+        world_state.setdefault("expeditions", [])
+        world_state.setdefault("perimeter_mapped", False)
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

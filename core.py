@@ -783,6 +783,33 @@ def legends_txt():
     return "\n".join(lines)
 
 
+def fog_txt():
+    """Fog-of-war status and any active off-grid expeditions, for `!fog`."""
+    lines = ["🌫 **Map & expeditions:**"]
+    scanned = sum(
+        1
+        for key in engine._rim_tiles()
+        if state.world_state.get("tiles", {}).get(key, {}).get("scouted", False)
+    )
+    if state.world_state.get("perimeter_mapped"):
+        lines.append("- Perimeter: fully mapped — the mist has lifted.")
+    else:
+        lines.append(f"- Perimeter: {scanned} of 16 edge tiles mapped; mist on the rest (🌫).")
+    if not state.world_state.get("expeditions"):
+        lines.append("- No colonists are currently off the map.")
+        return "\n".join(lines)
+    for expo in state.world_state["expeditions"]:
+        remaining = max(0, expo["return_tick"] - state.world_state["tick"])
+        names = []
+        for pid in expo["pawn_ids"]:
+            p = state.world_state["pawns"].get(pid)
+            names.append(p["name"] if p else pid)
+        lines.append(
+            f"- Expedition: {', '.join(names)} — away, returns in ~{remaining} ticks"
+        )
+    return "\n".join(lines)
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()
