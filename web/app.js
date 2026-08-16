@@ -1,10 +1,14 @@
-/* Phase 6 Steps 2–3: the floating isometric diorama client.
+/* Phase 6 Steps 2–4: the floating isometric diorama client + interactive HUD.
  *
  * Timeline for each 60s tick (matches TICK_INTERVAL_SECONDS):
  *   0–4s   pawns whose tile changed walk diagonally across the island
  *   4–12s  comic speech (quote) and thought (inner_monologue) bubbles
  *   12–60s looping idle animation + periodic action emotes
  *   always floating smoke, river shimmer, swaying trees, night tint
+ *
+ * Step 4 HUD: top resource/stockpile bar + campfire/shelter gauges, a
+ * scrolling bottom narrative log, click-to-inspect pawn dossiers, and a
+ * lore-archives panel (graveyard, monolith runes, chronicle, patch notes).
  *
  * Zero dependencies: vanilla JS + Canvas2D + DOM overlays.
  */
@@ -48,7 +52,13 @@ const EMOTE_MAP = {
   sermon: "🙏", pray: "🙏", feast: "🎉", tradition: "🏷️", rune: "🗿",
   raid: "🥷", visitor: "🎒", recruit: "🤝", share: "🍞", starve: "🥀",
   legend_slain: "🏆", rest: "💤", sleep: "💤", interact: "✨",
-  frenzy: "💥", starve_break: "🥀", worship: "🕯️",
+  frenzy: "💥", starve_break: "🥀", worship: "🕯️", world: "🌍",
+};
+
+const RES_EMOJI = { wood: "🪵", food: "🍎", stone: "🪨", fiber: "🧶" };
+const VITAL_LABEL = {
+  hp: "❤️ Health", energy: "⚡ Energy", hunger: "🍖 Hunger",
+  warmth: "🔥 Warmth", morale: "😊 Morale",
 };
 
 // ---- DOM refs ----
@@ -60,7 +70,22 @@ const bubbleLayer = document.getElementById("bubbles");
 const emoteLayer = document.getElementById("emotes");
 const titleEl = document.getElementById("title");
 const connEl = document.getElementById("conn");
-const tickerEl = document.getElementById("ticker");
+const logEl = document.getElementById("log");
+const gCampfire = document.getElementById("gCampfire");
+const gShelter = document.getElementById("gShelter");
+const stockChips = {
+  wood: document.getElementById("sWood"),
+  food: document.getElementById("sFood"),
+  stone: document.getElementById("sStone"),
+  fiber: document.getElementById("sFiber"),
+};
+const loreBtn = document.getElementById("loreBtn");
+const dossierEl = document.getElementById("dossier");
+const dossierBody = document.getElementById("dossierBody");
+const dossierClose = document.getElementById("dossierClose");
+const loreEl = document.getElementById("lore");
+const loreBody = document.getElementById("loreBody");
+const loreClose = document.getElementById("loreClose");
 
 // ---- live state ----
 let snap = null;
@@ -70,6 +95,10 @@ const creatures = new Map();   // "type:id" -> creature record
 const bubbles = new Map();     // key -> {el, rec, kind}
 const particles = [];
 let reconnectTimer = null;
+let selectedId = null;
+let lastSnapTick = -1;
+let lastLogTick = -1;
+let loreTab = "graveyard";
 
 // ---- small helpers ----
 function iso(x, y) {
@@ -87,6 +116,12 @@ function hashHue(name) {
 
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[c]);
 }
 
 function pawnFigure(p) {
@@ -311,6 +346,10 @@ function syncPawns(s) {
         px: 0, py: 0, x: 0, y: 0, moving: false,
       };
       pawns.set(p.id, rec);
+      rec.el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        selectPawn(p.id);
+      });
     }
     const hue = hashHue(p.name);
     rec.ring.style.background =
@@ -436,7 +475,7 @@ function addBubble(key, kind, text, rec) {
   el.addEventListener("animationend", () => el.remove());
 }
 
-// ---- per-tick emotes + world ticker ----
+// ---- per-tick emotes ----
 function findActorSpot(id) {
   const p = pawns.get(id);
   if (p) return { x: p.x, y: p.y - 34 };
@@ -448,29 +487,230 @@ function findActorSpot(id) {
 
 function addEmotes(s) {
   const tickEvents = (s.events || []).filter((e) => e.tick === s.tick - 1);
-  let worldDesc = null;
   for (const ev of tickEvents) {
-    if (ev.type === "world" && ev.description) worldDesc = ev.description;
     const emoji = EMOTE_MAP[ev.type];
     if (!emoji) continue;
     const spot = findActorSpot(ev.actor || ev.target);
     if (spot) spawnEmote(emoji, spot.x, spot.y);
   }
-  if (worldDesc) {
-    tickerEl.textContent = worldDesc;
-    tickerEl.classList.remove("hidden");
-    tickerEl.style.animation = "none";
-    void tickerEl.offsetWidth; // restart the animation
-    tickerEl.style.animation = "";
-  } else {
-    tickerEl.classList.add("hidden");
-  }
 }
 
-function updateCaption(s) {
+// ---- HUD: top bar, narrative log, dossier, lore ----
+function updateHud(s) {
   const phase = s.day ? "Day" : "Night";
   titleEl.textContent =
     `${s.colony} — ${s.season} · ${s.weather} · ${phase} · tick ${s.tick}`;
+  const r = s.resources || {};
+  for (const k of ["wood", "food", "stone", "fiber"]) {
+    stockChips[k].innerHTML = `${RES_EMOJI[k]} ${r[k] ?? 0}`;
+  }
+  const b = s.biome || {};
+  setGauge(gCampfire, "Campfire", b.campfire);
+  setGauge(gShelter, "Shelter", b.shelter);
+}
+
+function setGauge(el, name, val) {
+  const pct = Math.max(0, Math.min(100, Math.round(val ?? 0)));
+  el.querySelector(".fill").style.width = pct + "%";
+  el.title = `${name} ${pct}%`;
+}
+
+function updateLog(s) {
+  // Events carry the pre-increment tick, so a snapshot at tick N contains
+  // events with tick <= N-1 (matches the emote filter below).
+  if (s.tick === lastSnapTick) return;          // same-tick re-broadcast
+  if (s.tick < lastSnapTick) {                  // fresh world (e.g. !reset)
+    logEl.textContent = "";
+    lastLogTick = s.tick - 1;
+  }
+  lastSnapTick = s.tick;
+  const fresh = (s.events || []).filter((e) => e.tick > lastLogTick && e.description);
+  lastLogTick = s.tick - 1;
+  for (const ev of fresh) {
+    const row = document.createElement("div");
+    row.className = "log-row";
+    const em = document.createElement("span");
+    em.className = "log-emoji";
+    em.textContent = EMOTE_MAP[ev.type] || "•";
+    const tx = document.createElement("span");
+    tx.className = "log-text";
+    tx.textContent = ev.description;
+    row.appendChild(em);
+    row.appendChild(tx);
+    logEl.prepend(row);
+  }
+  while (logEl.children.length > 8) logEl.lastChild.remove();
+}
+
+function selectPawn(id) {
+  selectedId = id;
+  for (const [pid, rec] of pawns) rec.el.classList.toggle("selected", pid === id);
+  const p = snap && (snap.pawns || []).find((x) => x.id === id);
+  if (p) {
+    renderDossier(p);
+    dossierEl.classList.remove("hidden");
+  }
+}
+
+function deselectPawn() {
+  selectedId = null;
+  for (const rec of pawns.values()) rec.el.classList.remove("selected");
+  dossierEl.classList.add("hidden");
+}
+
+function vitClass(v) {
+  if (v >= 60) return "ok";
+  if (v >= 25) return "warn";
+  return "bad";
+}
+
+function renderDossier(p) {
+  const byId = new Map((snap.pawns || []).map((x) => [x.id, x]));
+  const nm = (id) => (byId.has(id) ? byId.get(id).name : id);
+  const v = p.vitals || {};
+  const inv = p.inventory || {};
+  const gear = p.gear || {};
+  const sk = p.skills || {};
+  const rel = p.relationships || {};
+  const goal = p.goal || null;
+
+  const bars = ["hp", "energy", "hunger", "warmth", "morale"].map((k) => {
+    const val = Math.max(0, Math.min(100, v[k] ?? 0));
+    return `<div class="vital"><div class="vlabel"><span>${VITAL_LABEL[k]}</span><span>${val}</span></div>` +
+      `<div class="track"><span class="fill ${vitClass(val)}" style="width:${val}%"></span></div></div>`;
+  }).join("");
+
+  const ruck = ["wood", "food", "stone", "fiber"].map(
+    (k) => `<span>${RES_EMOJI[k]} ${inv[k] ?? 0}</span>`
+  ).join("");
+  const gearChips = [];
+  if (gear.main_hand) gearChips.push(`<span>🪓 ${esc(gear.main_hand)}</span>`);
+  if (gear.body) gearChips.push(`<span>🧥 ${esc(gear.body)}</span>`);
+
+  const skillRows = Object.entries(sk)
+    .sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([k, val]) => `<span>${esc(k)} ${val}</span>`).join("");
+
+  const partners = p.partners || [];
+  const relRows = Object.entries(rel)
+    .sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([id, val]) =>
+      `<div class="rel-row"><span>${esc(nm(id))}${partners.includes(id) ? " 💞" : ""}</span>` +
+      `<b class="${val < 0 ? "neg" : ""}">${val >= 0 ? "+" : ""}${val}</b></div>`
+    ).join("");
+
+  const fam = [];
+  if (p.mother_id) fam.push(`<span>mother: ${esc(nm(p.mother_id))}</span>`);
+  if (p.father_id) fam.push(`<span>father: ${esc(nm(p.father_id))}</span>`);
+  if (p.partner_id) fam.push(`<span>partner: ${esc(nm(p.partner_id))}</span>`);
+
+  const tags = [];
+  if (p.elder) tags.push("👵 elder");
+  if (p.pregnant) tags.push("🤰 pregnant");
+  if (p.child) tags.push("👶 child");
+  if (p.mental_break) tags.push(`💢 ${esc(p.mental_break)}`);
+  if (p.traits && p.traits.length) tags.push(p.traits.map(esc).join(", "));
+
+  const head =
+    `<div class="dossier-head">` +
+    `<div class="big">${esc(p.title ? `${p.name} ${p.title}` : p.name)}</div>` +
+    `<div class="sub">${esc(p.job || "colonist")} · ${p.sex === "F" ? "♀" : "♂"}` +
+    (tags.length ? ` · ${tags.join(" · ")}` : "") + `</div>` +
+    `<span class="status${p.status !== "active" ? " bad" : ""}">${esc(p.status || "active")}</span>` +
+    `</div>`;
+
+  const goalBlock = goal
+    ? `<div class="goal">🎯 ${esc(goal.text || goal.kind)}` +
+      `<div class="gbar"><i style="width:${goal.needed ? Math.min(100, Math.round(100 * (goal.progress || 0) / goal.needed)) : 0}%"></i></div></div>`
+    : `<div class="kv"><span>none yet</span></div>`;
+
+  dossierBody.innerHTML =
+    head +
+    `<div class="dossier-block">${bars}</div>` +
+    `<div class="dossier-block"><div class="h">Gear</div><div class="kv">${gearChips.length ? gearChips.join("") : "<span>bare hands</span>"}</div></div>` +
+    `<div class="dossier-block"><div class="h">Rucksack</div><div class="kv">${ruck}</div></div>` +
+    (skillRows ? `<div class="dossier-block"><div class="h">Skills</div><div class="kv">${skillRows}</div></div>` : "") +
+    `<div class="dossier-block"><div class="h">Goal</div>${goalBlock}</div>` +
+    (relRows ? `<div class="dossier-block"><div class="h">Relationships</div>${relRows}</div>` : "") +
+    (fam.length ? `<div class="dossier-block"><div class="h">Family</div><div class="kv">${fam.join("")}</div></div>` : "");
+}
+
+function toggleLore() {
+  if (loreEl.classList.contains("hidden")) {
+    loreEl.classList.remove("hidden");
+    renderLore(loreTab);
+  } else {
+    loreEl.classList.add("hidden");
+  }
+}
+
+function setLoreTab(tab) {
+  loreTab = tab;
+  for (const t of loreEl.querySelectorAll(".tab")) {
+    t.classList.toggle("active", t.dataset.tab === tab);
+  }
+  renderLore(tab);
+}
+
+function renderLore(tab) {
+  const l = (snap && snap.lore) || {};
+  const body = [];
+  if (tab === "graveyard") {
+    const g = l.graveyard || [];
+    if (!g.length) body.push('<div class="lore-empty">🪦 The graveyard is empty.</div>');
+    for (const e of g) {
+      const bel = e.beloved ? " 💖" : "";
+      body.push(
+        `<div class="lore-item">` +
+        `<div class="lore-title">🪦 ${esc(e.name)}${e.title ? " " + esc(e.title) : ""}${bel} <span class="tick">· died tick ${e.died_tick}</span></div>` +
+        `<div class="lore-sub">${esc(e.cause || "unknown cause")} · born tick ${e.born_tick ?? "?"}</div>` +
+        (e.epitaph ? `<div class="lore-text">“${esc(e.epitaph)}”</div>` : "") +
+        `</div>`
+      );
+    }
+  } else if (tab === "monument") {
+    const m = l.monument || {};
+    body.push('<div class="lore-headline">🗿 The Monolith</div>');
+    body.push(
+      `<div class="lore-meta">wood ${m.wood}/20 · stone ${m.stone}/15 · ` +
+      `${m.done ? "✅ finished" : "🏗️ under construction"}</div>`
+    );
+    if (m.inscription) {
+      body.push(`<div class="lore-item"><div class="lore-text">“${esc(m.inscription)}”</div></div>`);
+    } else if (m.done) {
+      body.push('<div class="lore-empty">No inscription has been carved yet.</div>');
+    }
+    for (const r of m.runes || []) {
+      body.push(
+        `<div class="lore-item"><div class="lore-title">✍️ ${esc(r.title)} <span class="tick">· tick ${r.tick}</span></div>` +
+        `<div class="lore-text">${esc(r.text)}</div></div>`
+      );
+    }
+  } else if (tab === "chronicle") {
+    const c = l.chronicle || [];
+    if (!c.length) body.push('<div class="lore-empty">📜 No seasons have been chronicled yet.</div>');
+    for (const e of c) {
+      body.push(
+        `<div class="lore-item"><div class="lore-title">${esc(e.season)} — ${esc(e.title)} <span class="tick">· tick ${e.tick}</span></div>` +
+        `<div class="lore-text">${esc(e.text)}</div></div>`
+      );
+    }
+  } else if (tab === "patches") {
+    const p = l.patches || [];
+    if (!p.length) body.push('<div class="lore-empty">⚙️ The Architect has not patched the world yet.</div>');
+    for (const e of p) {
+      const notes = Array.isArray(e.notes) ? e.notes : [];
+      const n = notes.length
+        ? `<div class="lore-sub">${notes.map(esc).join(" · ")}</div>`
+        : "";
+      body.push(
+        `<div class="lore-item"><div class="lore-title">⚙️ ${esc(e.version)} — ${esc(e.title || "balance pass")} <span class="tick">· tick ${e.tick}</span></div>${n}` +
+        (e.text ? `<div class="lore-text">${esc(e.text)}</div>` : "") +
+        `</div>`
+      );
+    }
+  }
+  loreBody.innerHTML = body.join("");
 }
 
 // ---- snapshot apply ----
@@ -481,7 +721,13 @@ function applySnapshot(s) {
   syncCreatures(s);
   addBubbles(s);
   addEmotes(s);
-  updateCaption(s);
+  updateHud(s);
+  updateLog(s);
+  if (selectedId) {
+    const p = (s.pawns || []).find((x) => x.id === selectedId);
+    if (p) renderDossier(p);
+    else deselectPawn();
+  }
 }
 
 // ---- animation loop ----
@@ -570,3 +816,12 @@ function connect() {
 resize();
 connect();
 requestAnimationFrame(frame);
+
+// ---- HUD event wiring ----
+loreBtn.addEventListener("click", toggleLore);
+dossierClose.addEventListener("click", deselectPawn);
+loreClose.addEventListener("click", () => loreEl.classList.add("hidden"));
+for (const t of loreEl.querySelectorAll(".tab")) {
+  t.addEventListener("click", () => setLoreTab(t.dataset.tab));
+}
+stage.addEventListener("click", () => deselectPawn());

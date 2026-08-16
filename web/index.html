@@ -7,19 +7,50 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="hud">
+    <button id="loreBtn" title="Lore archives">📖 <span class="lore-label">Lore</span></button>
+    <div id="hudCenter">
+      <span id="title">🌿 connecting…</span>
+      <div id="gauges">
+        <span class="gauge" id="gCampfire" title="Campfire"><b>🔥</b><span class="track"><span class="fill"></span></span></span>
+        <span class="gauge" id="gShelter" title="Shelter"><b>🏕️</b><span class="track"><span class="fill"></span></span></span>
+      </div>
+    </div>
+    <div id="stock">
+      <span class="chip" id="sWood">🪵 0</span>
+      <span class="chip" id="sFood">🍎 0</span>
+      <span class="chip" id="sStone">🪨 0</span>
+      <span class="chip" id="sFiber">🧶 0</span>
+      <span id="conn" class="off">○ offline</span>
+    </div>
+  </div>
+
   <div id="wrap">
     <div id="stage">
       <canvas id="island" width="1000" height="640"></canvas>
       <div id="sprites"></div>
       <div id="bubbles"></div>
       <div id="emotes"></div>
-      <div id="ticker" class="hidden"></div>
-    </div>
-    <div id="caption">
-      <span id="title">🌿 connecting…</span>
-      <span id="conn" class="off">○ offline</span>
+      <div id="log"></div>
     </div>
   </div>
+
+  <aside id="dossier" class="panel hidden">
+    <div class="panel-head"><b>👤 Dossier</b><button class="close" id="dossierClose" title="Close">✕</button></div>
+    <div id="dossierBody"></div>
+  </aside>
+
+  <aside id="lore" class="panel hidden">
+    <div class="panel-head"><b>📖 Lore Archives</b><button class="close" id="loreClose" title="Close">✕</button></div>
+    <div id="loreTabs">
+      <button class="tab active" data-tab="graveyard">🪦 Graves</button>
+      <button class="tab" data-tab="monument">🗿 Monolith</button>
+      <button class="tab" data-tab="chronicle">📜 Chronicle</button>
+      <button class="tab" data-tab="patches">⚙️ Patches</button>
+    </div>
+    <div id="loreBody"></div>
+  </aside>
+
   <script src="app.js"></script>
 </body>
 </html>

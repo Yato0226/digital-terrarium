@@ -125,10 +125,10 @@ Move all the heavy information out of Discord and onto the web screen:
 - [x] Tests: assert the extended snapshot shape (dossier fields, aggregate, lore payloads) in `tests/test_stage26.py`.
 
 #### Part 4b: Client HUD (`web/app.js` + `style.css` + `index.html`)
-- [ ] **Top Bar**: Live Season, Weather, Day/Night clock, Campfire %, Shelter %, and Wood/Food/Stone/Fiber resource stockpiles.
-- [ ] **Bottom Narrative Ticker**: Real-time scrolling feed of the AI Director's 2-sentence world summary and recent event logs.
-- [ ] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
-- [ ] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
+- [x] **Top Bar**: Live Season, Weather, Day/Night clock, Campfire %, Shelter %, and Wood/Food/Stone/Fiber resource stockpiles.
+- [x] **Bottom Narrative Ticker**: Real-time scrolling feed of the AI Director's 2-sentence world summary and recent event logs.
+- [x] **Click-to-Inspect Pawn Dossier**: Clicking any pawn highlights a glowing ring under their feet and opens a side card showing their health, energy, equipped tools, rucksack contents, active goals, and family lineage.
+- [x] **Lore Archives**: Dedicated tabs in the web client for browsing the Graveyard epitaphs, Monolith inscriptions, and Architect patch notes.
 
 ### Step 5: Cloudflare Tunnel & Discord Activity Embedding
 - [ ] Expose the diorama with a **Cloudflare Quick Tunnel**: `cloudflared tunnel --url http://localhost:8900` — no dashboard or account setup, the ad-hoc `*.trycloudflare.com` URL is live instantly.
