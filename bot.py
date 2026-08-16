@@ -591,6 +591,13 @@ async def shrine_cmd(ctx):
     await ctx.send(core.shrine_txt())
 
 
+@bot.command(name="totems")
+@is_god_channel()
+async def totems_cmd(ctx):
+    """!totems — carved wooden totems remembering the colony's landmarks."""
+    await ctx.send(core.totems_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

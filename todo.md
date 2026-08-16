@@ -86,8 +86,8 @@
 - [x] The colony builds small shrines and leaves food offerings at camp to appease the Creator.
 
 ### Step 21: Physical Folklore & Herbal Medicine
-- [ ] Artisans paint cave murals or carve wooden totems celebrating major historical events, giving future generations positive moodlets.
-- [ ] Foragers gather medicinal herbs from meadows to brew salves and nurse sick colonists back to health.
+- [x] Artisans paint cave murals or carve wooden totems celebrating major historical events, giving future generations positive moodlets.
+- [x] Foragers gather medicinal herbs from meadows to brew salves and nurse sick colonists back to health.
 
 ### Step 22: The Domino Effect (Total Interconnection)
 - [ ] Close the full causal loop:

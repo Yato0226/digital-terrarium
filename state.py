@@ -230,6 +230,8 @@ world_state = {
     "colony": {"name": "The Settlers", "earned": {}, "history": []},
     "taboos": [],
     "shrine": {"built": False, "offered": 0, "blessed": False, "blessings": 0},
+    "last_milestone": None,
+    "totems": [],
 }
 
 
@@ -288,6 +290,7 @@ def make_pawn(
             "damage_dealt": 0,
             "legends_slain": 0,
             "god_whispers": 0,
+            "salves": 0,
         },
         "title": None,
         "prophet": False,
@@ -331,6 +334,8 @@ def reset_world():
     world_state["colony"] = {"name": "The Settlers", "earned": {}, "history": []}
     world_state["taboos"] = []
     world_state["shrine"] = {"built": False, "offered": 0, "blessed": False, "blessings": 0}
+    world_state["last_milestone"] = None
+    world_state["totems"] = []
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -528,6 +533,8 @@ def load_state():
             "shrine",
             {"built": False, "offered": 0, "blessed": False, "blessings": 0},
         )
+        world_state.setdefault("last_milestone", None)
+        world_state.setdefault("totems", [])
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

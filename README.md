@@ -56,6 +56,7 @@ The model **never emits stat numbers** — the engine is the sole source of trut
 - **Seasonal cataclysms** — at a season change a trial may descend for 150 ticks: *The Long Winter* doubles the campfire's fuel appetite and drives the cold harder than any blizzard; *The Great Drought* dries the rivers (river forage fails) and doubles lightning and wildfire spread (`!cataclysm` shows the active trial)
 - **Dynamic colony identity & taboos** — the colony earns an evolving name from what it survives (survived The Long Winter → *The Hearthfolk*, wildfire → *The Ashen Kin*, famine → *The Famineborn*, a tradition → *The Kindred*); traumas seed cultural taboos, so a death in the Ruins makes low-bravery colonists refuse to set foot there (`!colony` / `!taboo` show both)
 - **The Voice in the Sky & camp shrines** — three god whispers (`!say`) to the same colonist make them a **Prophet** (🕊️): a spiritual leader who gains steady morale and can preach at camp to steady everyone on the tile; a fortified colony can raise a small shrine (Build) and leave food offerings (Interact `offer`) to appease the Creator — a Prophet's tithe counts double, and a full shrine blesses the whole colony and halves the next cataclysm's chance (`!shrine` shows all)
+- **Physical folklore & herbal medicine** — artisans carve wooden totems (Interact `carve a totem`, 2 wood) commemorating the colony's landmarks (survived cataclysms, slain legends, the Monolith, shrine blessings), stirring a *Proud* moodlet across the colony that keeps the memory alive for future generations (`!totems`); foragers gather herbs on meadow tiles (Interact `gather herbs`) into salves and brew them at camp (Interact `brew salve`/`heal`) to nurse the most-injured colonist on the tile back to health (+12 HP, clears frostbite)
 - **God interface** — spawn, edit, order, whisper, pause/resume, inspect wildlife, visitors & raiders, read the chronicle
 - **Milestone news hub** — Discord no longer broadcasts every tick. Embeds are reserved for high-impact moments: 📜 a new-era chronicle each season, 🪦 fallen-hero eulogies (tombstone inscription + cause of death), ⚙️ annual patch notes, and 🥷🔥🌊☠️ breaking crisis alerts (raids, wildfires, floods, miasma, extinction)
 - **Map renderer** — a pure-Python PNG renderer (no Pillow) draws the grid, pawns, and wildlife into the milestone embeds
@@ -115,6 +116,7 @@ python main.py
 | `!colony` | The colony's evolving name and the landmarks it survived |
 | `!taboo` | Cultural taboos born from the colony's traumas (e.g. fearing the Ruins) |
 | `!shrine` | The camp shrine's offerings, blessings, and the Voice's Prophet |
+| `!totems` | Carved wooden totems remembering the colony's landmarks |
 | `!recipes` | List all known blueprints (base + Architect-synthesized + ancient) |
 | `!quests` / `!prophecies` | View the world's active objectives and progress |
 | `!patchnotes` | Read the latest autonomous balance notes from the Architect |

@@ -897,6 +897,25 @@ def shrine_txt():
     return "\n".join(lines)
 
 
+def totems_txt():
+    """Carved wooden totems remembering the colony's landmarks, for `!totems`."""
+    totems = state.world_state.get("totems", [])
+    milestone = state.world_state.get("last_milestone")
+    lines = ["🪵 **Carved Totems**"]
+    if not totems:
+        lines.append("No totems yet — Interact \"carve a totem\" at camp (2 wood) after a landmark.")
+    else:
+        for t in totems:
+            lines.append(f"- A totem remembers {t['title']} (carved tick {t['carved_tick']}).")
+        lines.append(
+            f"Each one lifts a 'Proud of...' moodlet and keeps the memory alive "
+            f"({len(totems)}/{engine.TOTEM_MAX})."
+        )
+    if milestone:
+        lines.append(f"Next to commemorate: {milestone['title']} (tick {milestone['tick']}).")
+    return "\n".join(lines)
+
+
 def recipes_txt():
     """All known blueprints (base + synthesized), for `!recipes`."""
     recipes = engine._all_recipes()

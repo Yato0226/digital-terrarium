@@ -536,6 +536,9 @@ INTERACT_WORDS = {
               "devote", "consecrate", "give thanks", "thanksgiving"),
     "sermon": ("sermon", "preach", "bless", "testify", "exhort", "proselytiz",
                "lead prayer", "inspire the flock"),
+    "totem": ("totem", "mural", "paint", "sculpt", "commemorate", "memorial"),
+    "herb": ("herb", "salve", "brew", "medicine", "heal", "nurse", "treat",
+             "tend the sick"),
 }
 
 GOAL_MORALE = 15
@@ -854,6 +857,7 @@ def _slay_legend(animal, pawn, pawn_id):
             p["vitals"]["morale"] = _clamp(p["vitals"]["morale"] + LEGEND_SLAY_MORALE)
             p["moodlets"] = [m for m in p.get("moodlets", []) if m["name"] != "Legend Hunt"]
     pawn["counters"]["legends_slain"] = pawn["counters"].get("legends_slain", 0) + 1
+    _record_milestone(f"the slaying of {legend['name']}")
     events.add_event(
         "legend_slain",
         actor=pawn_id,
@@ -1717,6 +1721,18 @@ COLONY_NAME_PRIORITY = [  # first earned flag wins; tag strings double as flags
 ]
 TABOO_RUINS = "ruins"            # the colony learns to fear the Ruins after a death there
 RUINS_FEAR_BRAVERY = 3           # low-bravery pawns refuse to set foot on taboo tiles
+COLONY_FLAG_TITLES = {           # milestone titles carved into folklore totems
+    "many_deaths": "the lean season of grief",
+    "famine": "the Famine",
+    "long_winter": "the Long Winter",
+    "drought": "the Great Drought",
+    "miasma": "the Miasma",
+    "fire": "the Great Fire",
+    "flood": "the Great Flood",
+    KINDRED_TAG: "the Kindred way",
+    HUNTERS_TAG: "the Hunter's way",
+    FORESTERS_TAG: "the Forester's way",
+}
 
 # Stage 20 (Phase 5) the Voice in the Sky & camp shrines.
 PROPHET_WHISPERS = 3              # god whispers (!say) to earn the Prophet mantle
@@ -1733,6 +1749,15 @@ SHRINE_BLESSED_DELTA = 5
 SHRINE_BLESSED_TICKS = 15
 SHRINE_CATACLYSM_MULT = 0.5       # a consecrated shrine halves the cataclysm roll
 SHRINE_WARMTH = 1
+
+# Stage 21 (Phase 5) physical folklore & herbal medicine.
+TOTEM_WOOD = 2                    # wood a carved totem costs
+TOTEM_MAX = 3                     # standing totems cap
+TOTEM_MOODLET_DELTA = 5           # "Proud of <milestone>" moodlet value
+TOTEM_MOODLET_TICKS = 15
+SALVE_HEAL = 12                   # HP a herb salve restores
+SALVE_MORALE = 5
+MEADOW_TILE = "🫐"                # herbs grow in the meadows
 
 
 def apply_council(leader_pid, mandate):
@@ -2624,6 +2649,7 @@ def _do_build(pawn, pawn_id):
         ):
             monument["done"] = True
             state.pending_monument = True
+            _record_milestone("the raising of the Ancestral Monolith")
             _carve_rune(
                 "The Monolith Rises",
                 "The colony raised the Ancestral Monolith with wood and stone and blood.",
@@ -3300,6 +3326,7 @@ def _do_shrine_offering(pawn, pawn_id):
 
 def _shrine_blessing():
     """A full shrine earns a colony-wide blessing and calms the coming seasons."""
+    _record_milestone("the Creator's blessing")
     shrine = _shrine()
     shrine["offered"] = 0
     shrine["blessings"] += 1
@@ -3379,6 +3406,124 @@ def _do_pray(pawn, pawn_id):
     )
 
 
+def _carve_totem(pawn, pawn_id):
+    """Carve a wooden totem commemorating the colony's latest milestone.
+
+    Returns None when there's nothing to commemorate or the pawn isn't at
+    Camp, letting _do_interact fall back to the craft default.
+    """
+    totems = state.world_state.setdefault("totems", [])
+    if len(totems) >= TOTEM_MAX:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "totem_cap"},
+            description=f"{pawn['name']} has nowhere to raise another totem.",
+        )
+    milestone = state.world_state.get("last_milestone")
+    if not milestone:
+        return None
+    if _tile_at(*pawn["pos"]) != BUILD_TILE:
+        return None
+    if pawn["inventory"]["wood"] < TOTEM_WOOD:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "need_wood"},
+            description=f"{pawn['name']} doesn't have wood to carve a totem.",
+        )
+    pawn["inventory"]["wood"] -= TOTEM_WOOD
+    totems.append(
+        {
+            "id": f"totem_{len(totems)}",
+            "title": milestone["title"],
+            "carved_tick": state.world_state["tick"],
+        }
+    )
+    for p in state.world_state["pawns"].values():
+        if p["status"] == "active":
+            _add_moodlet(
+                p,
+                f"Proud of {milestone['title']}",
+                TOTEM_MOODLET_DELTA,
+                TOTEM_MOODLET_TICKS,
+            )
+    return events.add_event(
+        "totem",
+        actor=pawn_id,
+        data={"title": milestone["title"]},
+        description=(
+            f"{pawn['name']} carves a wooden totem to the memory of "
+            f"{milestone['title']} — future generations will remember."
+        ),
+    )
+
+
+def _gather_salve(pawn, pawn_id):
+    """Gather medicinal herbs on a meadow: +1 salve to nurse the injured.
+
+    Returns None off-meadow so _do_interact can try the camp-side brew.
+    """
+    if _tile_at(*pawn["pos"]) != MEADOW_TILE:
+        return None
+    pawn["counters"]["salves"] = pawn["counters"].get("salves", 0) + 1
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + SALVE_MORALE)
+    _gain_skill(pawn, "scouting")
+    _goal_nudge(pawn, 1, resource="fiber")
+    return events.add_event(
+        "gather_herbs",
+        actor=pawn_id,
+        data={"salves": pawn["counters"]["salves"]},
+        description=f"{pawn['name']} gathers medicinal herbs in the meadow.",
+    )
+
+
+def _use_salve(pawn, pawn_id):
+    """Brew and apply a salve to the most-injured colonist on the same tile.
+
+    Returns None away from Camp so _do_interact can fall back to the gather.
+    """
+    if _tile_at(*pawn["pos"]) != BUILD_TILE:
+        return None
+    if pawn["counters"].get("salves", 0) < 1:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "no_salve"},
+            description=f"{pawn['name']} has no herbs brewed into a salve yet.",
+        )
+    targ_id, target = None, None
+    for pid, p in state.world_state["pawns"].items():
+        if p["status"] not in ("active", "incapacitated"):
+            continue
+        if p["pos"] != pawn["pos"]:
+            continue
+        if target is None or p["vitals"]["hp"] < target["vitals"]["hp"]:
+            targ_id, target = pid, p
+    if target is None:
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "no_patient"},
+            description=f"{pawn['name']} has no one nearby to nurse.",
+        )
+    pawn["counters"]["salves"] -= 1
+    target["vitals"]["hp"] = _clamp(target["vitals"]["hp"] + SALVE_HEAL)
+    target["vitals"]["morale"] = _clamp(target["vitals"]["morale"] + SALVE_MORALE)
+    target["moodlets"] = [m for m in target.get("moodlets", []) if m["name"] != "Frostbitten"]
+    pawn["vitals"]["morale"] = _clamp(pawn["vitals"]["morale"] + SALVE_MORALE)
+    return events.add_event(
+        "salve",
+        actor=pawn_id,
+        target=targ_id,
+        data={"heal": SALVE_HEAL},
+        description=(
+            f"{pawn['name']} nurses {target['name']} back with a herb salve "
+            f"(+{SALVE_HEAL} HP)."
+        ),
+    )
+
+
 def _do_interact(pawn, pawn_id, flavor):
     """Free-form Interact: engine buckets any verb into safe, context effects."""
     if not _pay_cost(pawn, "Interact"):
@@ -3432,6 +3577,14 @@ def _do_interact(pawn, pawn_id, flavor):
             effects.append("tills a farm plot 🌾")
         else:
             effects.append("no soil to farm here")
+    elif _in_words(verb, INTERACT_WORDS["herb"]):
+        gathered = _gather_salve(pawn, pawn_id)
+        if gathered is not None:
+            return gathered
+        brewed = _use_salve(pawn, pawn_id)
+        if brewed is not None:
+            return brewed
+        effects.append("finds no herbs worth brewing here")
     elif _in_words(verb, INTERACT_WORDS["gather"]):
         tile = _tile_at(*pawn["pos"])
         if tile in FORAGE_TILES:
@@ -3465,6 +3618,11 @@ def _do_interact(pawn, pawn_id, flavor):
         else:
             effects.append("finds little here")
         _gain_skill(pawn, "scouting")
+    elif _in_words(verb, INTERACT_WORDS["totem"]):
+        carved = _carve_totem(pawn, pawn_id)
+        if carved is not None:
+            return carved
+        effects.append("no milestone to commemorate yet")
     elif _in_words(verb, INTERACT_WORDS["craft"]):
         if _tile_at(*pawn["pos"]) == BUILD_TILE and state.world_state["biome"]["shelter"] < 100:
             state.world_state["biome"]["shelter"] = _clamp(
@@ -3848,6 +4006,14 @@ def _cataclysm_kind():
     return (state.world_state["biome"].get("cataclysm") or {}).get("kind")
 
 
+def _record_milestone(title):
+    """The colony's most recent landmark, for artisans to carve into a totem."""
+    state.world_state["last_milestone"] = {
+        "title": title,
+        "tick": state.world_state["tick"],
+    }
+
+
 def _earn_colony_flag(flag):
     """Record that the colony has survived a landmark (fire, famine, a tradition...)."""
     colony = state.world_state.setdefault(
@@ -3855,6 +4021,7 @@ def _earn_colony_flag(flag):
     )
     if flag not in colony["earned"]:
         colony["earned"][flag] = state.world_state["tick"]
+        _record_milestone(COLONY_FLAG_TITLES.get(flag, flag))
 
 
 def _recompute_colony_name(result):
