@@ -58,14 +58,14 @@
 - [x] **Soft ground shadow**: blurred dark oval beneath the floating island for elevation + lighting.
 - [x] **Atmospheric background**: replace the pitch-black void with a deep gradient (e.g. midnight navy on a Winter Night), faint twinkling stars, and a distant mountain silhouette.
 
-### Step 7: Free Isometric RPG Asset Packs (CC0 / Public Domain)
-*No drawing from scratch — vendor proven packs locally so the client stays offline with zero runtime downloads.*
-- [ ] **Kenney's Isometric Landscape & Mini-Dungeon** (kenney.nl, public domain): grass tiles, snowy pine trees, stone rocks, water tiles, modular ruin walls → replace flat color diamonds + emoji glyphs.
-- [ ] **Kenney's Tiny Characters / Micro RPG**: 16×16 / 32×32 standing pawn sprites (lumberjack, scout, mage, villager) with idle + walking poses.
-- [ ] **Animal sprites**: wolf, bear, deer, rabbit sprites from the same/vetted packs.
-- [ ] **Animated campfire**: 4-frame campfire sprite so the camp center feels warm and alive.
-- [ ] **Optional extras** (OpenGameArt / CraftPix CC0): farm crops (wheat sprouts → ripe stalks), snow-covered winter pines, stone masonry.
-- [ ] **Attribution**: record pack names, sources, and CC0/Public-Domain license notes in `README.md`.
+### Step 7: Procedural Pixel-Art Sprites (supersedes the Kenney-pack plan — user chose procedural art)
+*Decision (plan.md): hand-authored pixel maps in JS drawn with nearest-neighbor scaling — keeps the "offline, zero runtime downloads, tiny" ethos; no external assets to vendor or attribute.*
+- [x] **`web/sprites.js` sprite factory + palettes**: `makeSprite(rows, palette)` rasterizes string grids to offscreen canvases; deterministic hashing for per-tile noise; `imageSmoothingEnabled=false` crisp scaling; exposed as `window.Sprites` (loaded before `app.js`).
+- [x] **Ground textures + object sprites**: coarse 28×14 textures (grass/water/rock/dirt/ash/scorch/farm) upscaled 6× and clipped to the iso diamond + pixel sprites — pine 🌲, rock pile 🪨, ruin wall 💀, tent 🏕️, campfire logs, farm sprouts 🌾, ash mound 🌫️, berry bush 🫐, lily pad 🌊 — cached per tile and rebuilt only when the grid changes.
+- [x] **Rewire `drawIsland()`**: pre-rendered tile sprites replace the colored diamonds + emoji glyphs; water shimmer, wildfire flame/glow, and the campfire flame (2-frame animated) stay live per-frame.
+- [ ] **Pawn sprites**: standing pixel characters (sex/elder/child + hue variants, idle/walk) — Part C.
+- [ ] **Fauna / visitor / raider sprites** + **4-frame animated campfire** — Part D.
+- [ ] **Attribution**: n/a (procedural, zero external assets — note this in `README.md`).
 
 ### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
 - [ ] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.

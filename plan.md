@@ -115,11 +115,21 @@
 - Commit msg: `Stage 6: diorama zoom, depth, shadow, atmosphere`.
 
 ### Part B — Pixel tile sprites (todo Step 7 first checkboxes)
-- [ ] `web/sprites.js` sprite factory + palettes.
-- [ ] Ground textures per tile type + object sprites: pine 🌲, rock pile 🪨, ruin
+- [x] `web/sprites.js` sprite factory + palettes.
+  **Done:** `makeSprite(rows, palette)` rasterizes string-grid sprites to offscreen
+  canvases; shared `SPRITE_PAL`; deterministic `hash2/hash3` for per-tile noise.
+- [x] Ground textures per tile type + object sprites: pine 🌲, rock pile 🪨, ruin
   wall 💀, tent 🏕️, farm 🌾, flame 🔥, ash 🌫️, water shimmer 🌊, berry meadow 🫐.
-- [ ] Rewire `drawIsland()` to draw pre-rendered tile sprites instead of colored
+  **Done:** coarse 28×14 ground canvases (grass/water/rock/dirt/ash/scorch/farm
+  palettes with per-type rules) upscaled 6× nearest-neighbour, diamond-clipped,
+  softly shaded; pixel sprites: pine, rock (programmatic rows), ruin wall, tent,
+  campfire logs, 2-frame flame, sprouts, berry bush, ash mound, lily pad. Camp tile
+  = tent + logs; flame stays live per-frame in app.js.
+- [x] Rewire `drawIsland()` to draw pre-rendered tile sprites instead of colored
   diamonds + emoji glyphs.
+  **Done:** `Sprites.getTile()` cache keyed by `type:x,y`, rebuilt only on grid
+  signature change; water shimmer + wildfire flame/glow + campfire flame remain
+  dynamic; `TILE_STYLE`/glyph loop removed.
 - Commit: `Stage 7: procedural pixel tile sprites`.
 
 ### Part C — Pawn sprites (todo Step 7 + Step 8 "standing sprites")

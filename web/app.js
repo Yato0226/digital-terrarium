@@ -26,17 +26,6 @@ const WALK_SECONDS = 4;
 const BUBBLE_DELAY = 4;
 const BUBBLE_LIFE = 8;
 
-const TILE_STYLE = {
-  "🌲": { fill: "#2e7d32", edge: "#1b5e20" },
-  "🌊": { fill: "#1e88e5", edge: "#0d47a1" },
-  "🫐": { fill: "#8bc34a", edge: "#558b2f" },
-  "🪨": { fill: "#9e9e9e", edge: "#616161" },
-  "💀": { fill: "#607d8b", edge: "#37474f" },
-  "🏕️": { fill: "#f9a825", edge: "#f57f17" },
-  "🔥": { fill: "#ef6c00", edge: "#bf360c" },
-  "🌫️": { fill: "#bcaaa4", edge: "#8d6e63" },
-};
-
 const VISITOR_EMOJI = { Merchant: "🧳", Wanderer: "🥾", Bard: "🎻" };
 
 const ACTION_EMOTE = {
@@ -99,6 +88,7 @@ let reconnectTimer = null;
 let selectedId = null;
 let lastSnapTick = -1;
 let lastLogTick = -1;
+let lastGridSig = null;
 let loreTab = "graveyard";
 
 // ---- small helpers ----
@@ -398,32 +388,26 @@ function drawIsland(now) {
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Tile diamonds.
+  // Pre-rendered pixel-art tile sprites (cached; rebuilt only when the grid changes).
+  const gridSig = grid.join("\n");
+  if (gridSig !== lastGridSig) {
+    lastGridSig = gridSig;
+    Sprites.resetTiles();
+  }
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
       const tile = grid[y][x];
-      const style = TILE_STYLE[tile] || { fill: "#8d6e63", edge: "#5d4037" };
       const c = iso(x, y);
-      ctx.beginPath();
-      diamond(c.x, c.y, TILE_W, TILE_H);
-      ctx.fillStyle = style.fill;
-      ctx.fill();
-      ctx.strokeStyle = style.edge;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      ctx.drawImage(Sprites.getTile(tile, x, y), c.x - TILE_W / 2, c.y - TILE_H / 2);
     }
   }
 
-  // Tile glyphs + living effects.
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  // Living effects over the tiles: water shimmer, wildfire glow + flame.
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
       const tile = grid[y][x];
       const c = iso(x, y);
       if (tile === "🌊") {
-        ctx.font = "32px serif";
-        ctx.fillText("🌊", c.x, c.y);
         ctx.fillStyle = "rgba(255,255,255,0.5)";
         for (let i = 0; i < 3; i++) {
           const phase = ((t / 900) * (0.6 + (x + y) * 0.06) + i * 0.33) % 1;
@@ -431,30 +415,15 @@ function drawIsland(now) {
           ctx.arc(c.x + (phase - 0.5) * 80, c.y + (i - 1) * 12, 3, 0, Math.PI * 2);
           ctx.fill();
         }
-        continue;
-      }
-      if (tile === "🔥") {
-        const a = 0.12 + 0.08 * Math.sin(t / 140 + x * 2);
-        const g = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, 56);
+      } else if (tile === "🔥") {
+        const a = 0.14 + 0.09 * Math.sin(t / 140 + x * 2);
+        const g = ctx.createRadialGradient(c.x, c.y - 4, 4, c.x, c.y - 4, 60);
         g.addColorStop(0, `rgba(255,120,40,${a})`);
         g.addColorStop(1, "rgba(255,120,40,0)");
         ctx.fillStyle = g;
-        ctx.fillRect(c.x - 56, c.y - 56, 112, 112);
-        ctx.font = "32px serif";
-        ctx.fillText("🔥", c.x, c.y);
-        continue;
+        ctx.fillRect(c.x - 60, c.y - 64, 120, 120);
+        Sprites.drawFlame(ctx, c.x, c.y + 30, t);
       }
-      if (tile === "🌲") {
-        ctx.save();
-        ctx.translate(c.x, c.y);
-        ctx.rotate(Math.sin(t / 1100 + x * 0.8 + y * 1.3) * 0.045);
-        ctx.font = "38px serif";
-        ctx.fillText("🌲", 0, 0);
-        ctx.restore();
-        continue;
-      }
-      ctx.font = "32px serif";
-      ctx.fillText(tile, c.x, c.y);
     }
   }
 
@@ -463,13 +432,12 @@ function drawIsland(now) {
   if (campfire > 0) {
     const camp = iso(2, 2);
     const flick = 0.55 + 0.2 * Math.sin(t / 90) + 0.1 * Math.sin(t / 47 + 2);
-    const g = ctx.createRadialGradient(camp.x + 20, camp.y - 14, 2, camp.x + 20, camp.y - 14, 48);
+    const g = ctx.createRadialGradient(camp.x, camp.y - 10, 2, camp.x, camp.y - 10, 54);
     g.addColorStop(0, `rgba(255,170,60,${0.5 * flick})`);
     g.addColorStop(1, "rgba(255,120,30,0)");
     ctx.fillStyle = g;
-    ctx.fillRect(camp.x + 20 - 48, camp.y - 14 - 48, 96, 96);
-    ctx.font = "28px serif";
-    ctx.fillText("🔥", camp.x + 20, camp.y - 14);
+    ctx.fillRect(camp.x - 54, camp.y - 64, 108, 108);
+    Sprites.drawFlame(ctx, camp.x, camp.y + 26, t);
     spawnSmoke(camp.x + 14, camp.y - 18);
   }
 
