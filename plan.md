@@ -147,18 +147,18 @@ All slices are pixel boxes into `Serene_Village_16x16.png` (304×720 = 19×45 ti
 
 ## Parts to implement (one commit each; tick todo.md per part)
 
-### Part A — Vendor assets + atlas + contact sheet (todo Step 12 new)
-- [ ] Copy `Serene_Village_16x16.png`, `campfire.png`, `water_waves.png` →
-  `web/assets/` (done, uncommitted).
-- [ ] `web/assets/ATTRIBUTION.md` — LimeZu, Serene Village revamped, CC-BY 4.0,
+### Part A — Vendor assets + atlas + contact sheet ✅ (committed)
+- [x] Copy `Serene_Village_16x16.png`, `campfire.png`, `water_waves.png` →
+  `web/assets/`.
+- [x] `web/assets/ATTRIBUTION.md` — LimeZu, Serene Village revamped, CC-BY 4.0,
   link + date.
-- [ ] `web/atlas.js` — image loader, tile slicer, tile→coord table (best-guess
-  mapping; corrected after user eyeballs the contact sheet).
-- [ ] `web/atlas.html` — labeled contact sheet of all 19×45 master tiles +
+- [x] `web/atlas.js` — image loader, tile slicer, tile→coord table (user-verified
+  mapping locked 2026-08-17 — see `web/TILES.md`).
+- [x] `web/atlas.html` — labeled contact sheet of all 19×45 master tiles +
   campfire/water frames (dev tool; also serves as the user's PNG reference).
-- [ ] Client credit: small line in `atlas.html` footer + `README.md` attribution
+- [x] Client credit: credit line in `atlas.html` footer + `README.md` attribution
   section + `paper.txt` §credits.
-- Commit: `Stage 12: vendor Serene Village tileset + tile atlas`.
+- Commit: `Stage 12: vendor Serene Village tileset + tile atlas`. ✅
 
 ### Part B — Top-down terrain renderer (todo Step 12)
 - [ ] Replace iso geometry with top-down (`TILE=128`, map centered, `top(x,y)`).
