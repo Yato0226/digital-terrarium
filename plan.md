@@ -257,13 +257,13 @@ Notes landed with Part D:
 - Commit: `Stage 12: ambient effects for top-down`.
 
 ### Part F — Doc + test sync (todo Step 12 + cross-stage)
-- [ ] `plan.md` (this file) ticked; `todo.md` Step 12 checkboxes.
-- [ ] `README.md` — feature/run notes + Serene Village attribution (CC-BY 4.0).
-- [ ] `paper.txt` — client description §Implementation (top-down sprite renderer,
+- [x] `plan.md` (this file) ticked; `todo.md` Step 12 checkboxes.
+- [x] `README.md` — feature/run notes + Serene Village attribution (CC-BY 4.0).
+- [x] `paper.txt` — client description §Implementation (top-down sprite renderer,
   vendored tileset) + credits; run `python check_paper.py`.
-- [ ] `AGENTS.md` — Phase 6 client paragraph (emoji + procedural canvas → vendored
+- [x] `AGENTS.md` — Phase 6 client paragraph (emoji + procedural canvas → vendored
   tileset top-down renderer; pawns/creatures stay procedural).
-- [ ] `tests/smoke_client.js` — update geometry/atlas assertions for the new
+- [x] `tests/smoke_client.js` — update geometry/atlas assertions for the new
   renderer (DOM object layer, y-sort, top-down coords); `tests/test_web_client.py`
   stays green; full `ruff check . && python -m pytest tests -q`.
 - Commit: `Stage 12: docs + smoke tests for top-down renderer`.

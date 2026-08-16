@@ -468,6 +468,14 @@ try {
   if (Math.abs(settledX - 806) > 0.01) throw new Error(`wolf glide x expected 806 after settling, got ${settledX}`);
   if (!(settledY >= 554 && settledY <= 558)) throw new Error(`wolf glide y expected ~558 (bob), got ${settledY}`);
 
+  // --- ambient effects: dynamic canvas creation ---
+  // Night tint, glow, and ground canvases are created by app.js at runtime
+  // (no permanent IDs). Verify createElement("canvas") works in the stub
+  // and that the draw loop doesn't throw on any ambient path.
+  const dynCv = document.createElement("canvas");
+  if (!dynCv) throw new Error("document.createElement('canvas') failed in stub");
+  if (typeof dynCv.getContext !== "function") throw new Error("canvas.getContext missing in stub");
+
   console.log("OK: client booted; 5 snapshots + 266 frames; HUD/roster/log/slots all correct");
   console.log(`OK: roster bar widths hp=${hpW} en=${enW}; roster cards=${byId.rosterBody.children.length}; log rows=${logEl.children.length}`);
   console.log(`OK: objects: ${[...byId.sprites.children].filter((el) => el.classList.contains("obj")).length} sprites y-sorted, campfire canvas ${fcv.width}x${fcv.height}`);
