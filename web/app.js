@@ -65,9 +65,16 @@ const VITAL_LABEL = {
   hp: "❤️ Health", energy: "⚡ Energy", hunger: "🍖 Hunger",
   warmth: "🔥 Warmth", morale: "😊 Morale",
 };
+// Log lines that read as AI-Director narrative prose (LLM-written world beats)
+// rather than dry mechanical actions.
+const NARRATIVE_TYPES = new Set([
+  "world", "chronicle", "patch", "monument_complete", "legend",
+  "tradition", "season", "feast", "council",
+]);
 
 // ---- DOM refs ----
 const stage = document.getElementById("stage");
+const hud = document.getElementById("hud");
 const canvas = document.getElementById("island");
 const ctx = canvas.getContext("2d");
 const spritesEl = document.getElementById("sprites");
@@ -91,6 +98,10 @@ const dossierClose = document.getElementById("dossierClose");
 const loreEl = document.getElementById("lore");
 const loreBody = document.getElementById("loreBody");
 const loreClose = document.getElementById("loreClose");
+const rosterBtn = document.getElementById("rosterBtn");
+const rosterEl = document.getElementById("roster");
+const rosterBody = document.getElementById("rosterBody");
+const rosterClose = document.getElementById("rosterClose");
 
 // ---- live state ----
 let snap = null;
@@ -105,6 +116,8 @@ let lastSnapTick = -1;
 let lastLogTick = -1;
 let lastGridSig = null;
 let loreTab = "graveyard";
+let rosterSig = null;
+const rosterCards = new Map();  // pawn id -> roster card element
 
 // ---- small helpers ----
 function iso(x, y) {
@@ -705,7 +718,7 @@ function addEmotes(s) {
   }
 }
 
-// ---- HUD: top bar, narrative log, dossier, lore ----
+// ---- HUD: top bar, roster drawer, narrative log, dossier, lore ----
 function updateHud(s) {
   const phase = s.day ? "Day" : "Night";
   titleEl.textContent =
@@ -717,6 +730,83 @@ function updateHud(s) {
   const b = s.biome || {};
   setGauge(gCampfire, "Campfire", b.campfire);
   setGauge(gShelter, "Shelter", b.shelter);
+  // Winter frost: icy edging on the banner + the stage's top/bottom rim.
+  const winter = String(s.season || "").toLowerCase().includes("winter");
+  hud.classList.toggle("frost", winter);
+  stage.classList.toggle("frost", winter);
+}
+
+function actionLabel(p) {
+  const a = p.action;
+  if (!a) return "idle";
+  if (a === "Move") return `🚶 ${p.direction || ""}`.trim();
+  if (a === "Attack") return `⚔️ ${esc(p.target || "")}`;
+  if (a === "Interact") return `✨ ${esc(p.flavor || "interact")}`;
+  return `${ACTION_EMOTE[a] || "•"} ${a}`;
+}
+
+// ---- right-side colonist roster drawer ----
+function updateRoster(s) {
+  const pawns = s.pawns || [];
+  const sig = pawns.map((p) => `${p.id}:${p.sex}:${p.elder ? 1 : 0}:${p.child ? 1 : 0}`).join("|");
+  if (rosterSig !== sig) {
+    rosterSig = sig;
+    rosterBody.textContent = "";
+    rosterCards.clear();
+    for (const p of pawns) {
+      const card = makeRosterCard(p);
+      rosterCards.set(p.id, card);
+      rosterBody.appendChild(card);
+    }
+  }
+  // Refresh vitals + action each tick without rebuilding the DOM.
+  for (const p of pawns) {
+    const card = rosterCards.get(p.id);
+    if (!card) continue;
+    const v = p.vitals || {};
+    card.querySelector(".r-hp").style.width = clampPct(v.hp) + "%";
+    card.querySelector(".r-en").style.width = clampPct(v.energy) + "%";
+    card.querySelector(".r-act").textContent = actionLabel(p);
+    card.classList.toggle("bad", p.status !== "active");
+    card.classList.toggle("sel", p.id === selectedId);
+  }
+}
+
+function clampPct(v) {
+  return Math.max(0, Math.min(100, Math.round(v ?? 0)));
+}
+
+function makeRosterCard(p) {
+  const card = document.createElement("div");
+  card.className = "r-card";
+  card.dataset.id = p.id;
+  const cv = document.createElement("canvas");
+  cv.className = "r-port";
+  cv.width = 26;
+  cv.height = 39;
+  const hue = Sprites.hueFromName(p.name);
+  const src = Sprites.makePawnSprite(p.sex, p.elder, p.child, hue, (hue + 150) % 360, 0, 0);
+  const g = cv.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.drawImage(src, 1, 1, 24, 36);
+  const info = document.createElement("div");
+  info.className = "r-info";
+  const name = document.createElement("div");
+  name.className = "r-name";
+  name.textContent = p.title ? `${p.name} ${p.title}` : p.name;
+  const hp = document.createElement("div");
+  hp.className = "r-bar";
+  hp.innerHTML = `<i class="hp"></i>`;
+  const en = document.createElement("div");
+  en.className = "r-bar";
+  en.innerHTML = `<i class="en"></i>`;
+  const act = document.createElement("div");
+  act.className = "r-act";
+  act.textContent = actionLabel(p);
+  info.append(name, hp, en, act);
+  card.append(cv, info);
+  card.addEventListener("click", () => selectPawn(p.id));
+  return card;
 }
 
 function setGauge(el, name, val) {
@@ -738,7 +828,7 @@ function updateLog(s) {
   lastLogTick = s.tick - 1;
   for (const ev of fresh) {
     const row = document.createElement("div");
-    row.className = "log-row";
+    row.className = "log-row" + (NARRATIVE_TYPES.has(ev.type) ? " narrative" : "");
     const em = document.createElement("span");
     em.className = "log-emoji";
     em.textContent = EMOTE_MAP[ev.type] || "•";
@@ -932,6 +1022,7 @@ function applySnapshot(s) {
   addBubbles(s);
   addEmotes(s);
   updateHud(s);
+  updateRoster(s);
   updateLog(s);
   if (selectedId) {
     const p = (s.pawns || []).find((x) => x.id === selectedId);
@@ -1043,4 +1134,6 @@ loreClose.addEventListener("click", () => loreEl.classList.add("hidden"));
 for (const t of loreEl.querySelectorAll(".tab")) {
   t.addEventListener("click", () => setLoreTab(t.dataset.tab));
 }
+rosterBtn.addEventListener("click", () => rosterEl.classList.toggle("hidden"));
+rosterClose.addEventListener("click", () => rosterEl.classList.add("hidden"));
 stage.addEventListener("click", () => deselectPawn());

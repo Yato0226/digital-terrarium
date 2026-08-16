@@ -74,9 +74,9 @@
 - [x] **Per-pawn bubbles**: speech, thought, and 💤 sleep icons float above the *individual* sprite (honoring the slot offset), not covering the whole tile.
 
 ### Step 9: Frame the Game — HUD Upgrade
-- [ ] **Top bar (world header)**: styled wooden/slate banner background; slightly larger resource icons with clear numbers + tooltips; subtle frost texture along the top/bottom edges in Winter.
-- [ ] **Right-side pawn roster drawer**: a clean sidebar with a mini card per colonist — portrait, name, mini health bar, energy bar, current action — at-a-glance status without squinting at the map.
-- [ ] **Bottom-left chronicle log**: RPG dialogue-parchment or dark-glass card styling; highlight the AI Director's world narrative with an accent color/italic, distinct from dry action lines like *"Fern moves W"*.
+- [x] **Top bar (world header)**: styled wooden/slate banner background; slightly larger resource icons with clear numbers + tooltips; subtle frost texture along the top/bottom edges in Winter.
+- [x] **Right-side pawn roster drawer**: a clean sidebar with a mini card per colonist — portrait, name, mini health bar, energy bar, current action — at-a-glance status without squinting at the map.
+- [x] **Bottom-left chronicle log**: RPG dialogue-parchment or dark-glass card styling; highlight the AI Director's world narrative with an accent color/italic, distinct from dry action lines like *"Fern moves W"*.
 
 ### Step 10: Ambient Visual Juice
 - [ ] **Drifting snow FX**: lightweight canvas particle layer dropping soft white snowflakes when it's Winter / Snow.

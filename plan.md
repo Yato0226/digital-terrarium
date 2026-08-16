@@ -186,12 +186,26 @@
 - Commit: `Stage 8: pawn slotting + per-pawn bubbles`.
 
 ### Part F — HUD framing (todo Step 9)
-- [ ] Top bar: wooden/slate banner, larger resource icons, tooltips, subtle winter
+- [x] Top bar: wooden/slate banner, larger resource icons, tooltips, subtle winter
   frost texture along edges when season=Winter.
-- [ ] Right-side roster drawer: mini card per colonist (portrait, name, health/
+  **Done:** `#hud` is now a wooden banner (plank-grain stripes + amber trim); the
+  stock chips gained `title` tooltips and sit slightly larger; a `.frost` class on
+  `#hud`/`#stage` (toggled in `updateHud` from the snapshot season) draws an icy
+  strip along the banner trim and frost rims at the stage's top/bottom edges.
+- [x] Right-side roster drawer: mini card per colonist (portrait, name, health/
   energy bars, current action).
-- [ ] Bottom log: parchment/dark-glass card; highlight AI Director narrative lines
+  **Done:** new `#roster` panel (👥 button in the HUD, ✕ to close, visible by
+  default). Each `.r-card` has a 26×39 pixel portrait rendered from
+  `Sprites.makePawnSprite` (downscaled 24×36, nearest-neighbour), name, two mini
+  bars (❤️ green / ⚡ amber) and the current action; cards are rebuilt only on
+  roster-identity change, vitals/action refresh in place; clicking a card
+  selects the pawn (`.sel` highlight) and opens the dossier.
+- [x] Bottom log: parchment/dark-glass card; highlight AI Director narrative lines
   distinct from dry action lines.
+  **Done:** `#log` restyled as a parchment-dark-glass card (amber border, warm
+  radial sheen). `NARRATIVE_TYPES` (`world`, `chronicle`, `patch`,
+  `monument_complete`, `legend`, `tradition`, `season`, `feast`, `council`)
+  rows get an amber left rail + italic parchment text via `.log-row.narrative`.
 - Commit: `Stage 9: HUD framing + roster drawer`.
 
 ### Part G — Ambient juice (todo Step 10)

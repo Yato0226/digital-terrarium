@@ -17,12 +17,13 @@
       </div>
     </div>
     <div id="stock">
-      <span class="chip" id="sWood">🪵 0</span>
-      <span class="chip" id="sFood">🍎 0</span>
-      <span class="chip" id="sStone">🪨 0</span>
-      <span class="chip" id="sFiber">🧶 0</span>
+      <span class="chip" id="sWood" title="Wood stockpile">🪵 0</span>
+      <span class="chip" id="sFood" title="Food stockpile">🍎 0</span>
+      <span class="chip" id="sStone" title="Stone (colony-wide rucksacks)">🪨 0</span>
+      <span class="chip" id="sFiber" title="Fiber (colony-wide rucksacks)">🧶 0</span>
       <span id="conn" class="off">○ offline</span>
     </div>
+    <button id="rosterBtn" title="Colonist roster">👥</button>
   </div>
 
   <div id="wrap">
@@ -38,6 +39,11 @@
   <aside id="dossier" class="panel hidden">
     <div class="panel-head"><b>👤 Dossier</b><button class="close" id="dossierClose" title="Close">✕</button></div>
     <div id="dossierBody"></div>
+  </aside>
+
+  <aside id="roster" class="panel">
+    <div class="panel-head"><b>👥 Colonists</b><button class="close" id="rosterClose" title="Close">✕</button></div>
+    <div id="rosterBody"></div>
   </aside>
 
   <aside id="lore" class="panel hidden">

@@ -290,10 +290,48 @@ body::before {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
-  background: linear-gradient(rgba(10, 14, 26, .9), rgba(10, 14, 26, .72));
-  border-bottom: 1px solid rgba(255,255,255,.1);
-  box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  padding: 9px 14px;
+  /* wooden banner: warm plank-grain stripes over a dark slate, amber trim */
+  background:
+    repeating-linear-gradient(90deg, rgba(130,90,50,.14) 0 2px, rgba(96,64,34,.07) 2px 19px, rgba(130,90,50,.1) 19px 21px),
+    linear-gradient(180deg, rgba(22, 26, 40, .95), rgba(12, 15, 26, .88));
+  border-bottom: 2px solid #8a6a44;
+  box-shadow: 0 5px 18px rgba(0,0,0,.5);
+  position: relative;
+}
+
+/* Winter frost: icy strip along the banner's bottom trim. */
+#hud.frost { border-bottom-color: #9fc2e0; }
+#hud.frost::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 4px;
+  background: linear-gradient(90deg,
+    rgba(210,230,255,.0), rgba(225,240,255,.5), rgba(210,230,255,.0));
+  opacity: .7;
+  pointer-events: none;
+}
+
+/* Frost rim at the stage's top/bottom edges during winter. */
+#stage.frost::before, #stage.frost::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30px;
+  pointer-events: none;
+  z-index: 45;
+}
+#stage.frost::before {
+  top: 0;
+  background: linear-gradient(180deg, rgba(200,225,255,.26), transparent);
+}
+#stage.frost::after {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(200,225,255,.26), transparent);
 }
 
 #loreBtn {
@@ -310,6 +348,20 @@ body::before {
 }
 #loreBtn:hover { background: rgba(255,255,255,.15); }
 #loreBtn .lore-label { margin-left: 4px; }
+
+#rosterBtn {
+  flex: none;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,.07);
+  color: #e8eefc;
+  font-size: 15px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background .15s;
+}
+#rosterBtn:hover { background: rgba(255,255,255,.15); }
+#rosterBtn.active { background: rgba(255,213,79,.18); }
 
 #hudCenter {
   flex: 1;
@@ -396,13 +448,16 @@ body::before {
   position: absolute;
   left: 16px;
   bottom: 14px;
-  width: 420px;
+  width: 430px;
   max-width: calc(100% - 32px);
-  background: rgba(10, 14, 26, .82);
-  border: 1px solid rgba(255,255,255,.12);
+  /* parchment-dark glass card */
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(255,224,178,.06), transparent 60%),
+    linear-gradient(180deg, rgba(30, 26, 20, .9), rgba(18, 15, 12, .88));
+  border: 1px solid rgba(255,215,160,.2);
   border-radius: 14px;
   padding: 8px 12px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  box-shadow: 0 8px 24px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,235,200,.08);
   z-index: 40;
 }
 #log:empty { display: none; }
@@ -418,6 +473,22 @@ body::before {
   animation: log-in .4s ease-out both;
 }
 .log-row + .log-row { border-top: 1px solid rgba(255,255,255,.06); }
+
+/* AI-Director narrative beats stand out from dry action lines. */
+.log-row.narrative {
+  background: rgba(255,214,150,.1);
+  border-left: 3px solid #e8b96a;
+  border-radius: 7px;
+  padding: 4px 8px;
+  margin: 3px 0;
+}
+.log-row.narrative + .log-row.narrative { border-top: none; }
+.log-row.narrative .log-text {
+  font-style: italic;
+  color: #ffe6bd;
+}
+.log-row.narrative .log-emoji { color: #ffd98a; }
+
 @keyframes log-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -470,6 +541,84 @@ body::before {
   padding: 12px 14px;
   overflow-y: auto;
   font-size: 12.5px;
+}
+
+/* ---- colonist roster drawer ---- */
+
+#roster {
+  width: 236px;
+  right: 10px;
+  top: 58px;
+  max-height: calc(100vh - 74px);
+  background: rgba(16, 18, 28, .92);
+  border: 1px solid rgba(255,255,255,.12);
+}
+#rosterBody {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.r-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.r-card:hover { background: rgba(255,255,255,.1); }
+.r-card.sel {
+  background: rgba(255,213,79,.12);
+  border-color: rgba(255,213,79,.5);
+}
+.r-card.bad { border-color: rgba(255,120,120,.35); }
+
+.r-port {
+  flex: none;
+  width: 26px;
+  height: 39px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.5));
+}
+
+.r-info { min-width: 0; flex: 1; }
+.r-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #f0f4ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.r-bar {
+  height: 3.5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.1);
+  margin-top: 3px;
+  overflow: hidden;
+}
+.r-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  width: 0;
+  transition: width .5s ease;
+}
+.r-bar i.hp { background: linear-gradient(90deg, #4caf50, #81c784); }
+.r-bar i.en { background: linear-gradient(90deg, #f9a825, #ffd54f); }
+.r-act {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #b9c4d8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- dossier ---- */
