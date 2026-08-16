@@ -1,0 +1,19 @@
+[Unit]
+Description=Cloudflare Tunnel for the terrarium web diorama
+After=network.target terrarium.service
+Requires=terrarium.service
+
+[Service]
+Type=simple
+# Runs a *named* tunnel defined in /etc/cloudflared/config.yml (created on the
+# LXC, never committed to the repo). A named tunnel gives a STABLE public URL
+# (your own subdomain, e.g. diorama.example.com) so the Discord Activity mapping
+# is set once and survives restarts — the same job ngrok's static domain did,
+# but Cloudflare actually proxies the WebSocket upgrade (ngrok's free HTTP/2
+# edge was stripping it, leaving the client stuck on "connecting…").
+ExecStart=/usr/local/bin/cloudflared tunnel run --config /etc/cloudflared/config.yml terrarium
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
