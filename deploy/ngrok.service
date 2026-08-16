@@ -7,7 +7,7 @@ Type=simple
 # Replace YOUR_ACTUAL_AUTHTOKEN_HERE with the dashboard authtoken.
 # Never commit a real token — this placeholder stays in the repo; the actual
 # value lives in the copy at /etc/systemd/system/ngrok.service on the LXC.
-ExecStart=/usr/bin/ngrok http 8900 --url=budget-universe-manila.ngrok-free.dev --authtoken=YOUR_ACTUAL_AUTHTOKEN_HERE
+ExecStart=/usr/local/bin/ngrok http 8900 --url=budget-universe-manila.ngrok-free.dev --authtoken=YOUR_ACTUAL_AUTHTOKEN_HERE
 Restart=always
 RestartSec=5s
 

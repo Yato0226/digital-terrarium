@@ -133,9 +133,9 @@ Move all the heavy information out of Discord and onto the web screen:
 ### Step 5: ngrok Tunnel & Discord Activity Embedding
 *Deployment step — everything below happens on the LXC (or in the Discord Developer Portal), not in the repo.*
 - [x] (Repo prep) Add `deploy/ngrok.service` (systemd, static domain `budget-universe-manila.ngrok-free.dev`, inline `--authtoken=` placeholder, runs as root).
-- [x] On the LXC: install ngrok to `/usr/bin/ngrok`, paste the dashboard authtoken into the unit's `ExecStart`, `cp deploy/ngrok.service /etc/systemd/system/` + `systemctl enable --now ngrok` (verified working — static domain never rotates, no re-mapping after restarts).
-- [ ] In the Discord Developer Portal: enable the app for Activities and paste `https://budget-universe-manila.ngrok-free.dev/` under **Activities / URL Mappings** (set once — the domain is stable).
-- [ ] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
+- [x] On the LXC: install ngrok to `/usr/local/bin/ngrok`, paste the dashboard authtoken into the unit's `ExecStart`, `cp deploy/ngrok.service /etc/systemd/system/` + `systemctl enable --now ngrok` (verified working — static domain never rotates, no re-mapping after restarts).
+- [x] In the Discord Developer Portal: enable the app for Activities and paste `https://budget-universe-manila.ngrok-free.dev/` under **Activities / URL Mappings** (set once — the domain is stable).
+- [x] Server members can now click the **Rocket Activity icon** in any Discord voice channel to launch the live floating terrarium right inside Discord!
 
 ---
 
