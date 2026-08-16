@@ -209,8 +209,15 @@
 - Commit: `Stage 9: HUD framing + roster drawer`.
 
 ### Part G — Ambient juice (todo Step 10)
-- [ ] Drifting snow FX when Winter/Snow.
-- [ ] Night campfire glow across tiles around camp while forest stays shadowed.
+- [x] Drifting snow FX when Winter/Snow.
+  **Done:** dedicated `snow` particle array (capped ~130, ~3 spawned/frame) with a
+  gentle sway + per-flake twinkle; `snowing` derives from season/weather in
+  `applySnapshot` and clears the array when it stops; drawn in front of everything
+  after the night tint.
+- [x] Night campfire glow across tiles around camp while forest stays shadowed.
+  **Done:** the night tint stays, but the campfire glow is now two screen-blended
+  warm pools with a flicker term — a wide 210px falloff (keeps the outer forest in
+  shadow) plus a bright 98px pool that lights camp and its immediate neighbours.
 - [x] Named legendary beasts render as menacing dark wolf/bear.
   **Done (early, with Part D):** named wildlife gets the `dark` palette variant
   in `makeCreatureSprite`.

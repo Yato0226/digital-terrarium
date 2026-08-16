@@ -79,14 +79,14 @@
 - [x] **Bottom-left chronicle log**: RPG dialogue-parchment or dark-glass card styling; highlight the AI Director's world narrative with an accent color/italic, distinct from dry action lines like *"Fern moves W"*.
 
 ### Step 10: Ambient Visual Juice
-- [ ] **Drifting snow FX**: lightweight canvas particle layer dropping soft white snowflakes when it's Winter / Snow.
-- [ ] **Night campfire glow**: warm soft orange radial glow on the tiles immediately around the camp while the outer forest stays in shadow.
+- [x] **Drifting snow FX**: lightweight canvas particle layer dropping soft white snowflakes when it's Winter / Snow.
+- [x] **Night campfire glow**: warm soft orange radial glow on the tiles immediately around the camp while the outer forest stays in shadow.
 - [x] **Named legendary beasts**: named predators (e.g. *The Grey Terror* from the log) render as a menacing dark sprite (dark palette variant of their species) distinct from normal wildlife — landed with Part D.
 
 ### Cross-stage verification (each part: implement → test → commit)
-- [ ] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
-- [ ] `node --check web/app.js` on touched client JS.
-- [ ] Keep `README.md` (feature/run notes) and `paper.txt` (client description in §Implementation) in sync in the same part/commit.
+- [x] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
+- [x] `node --check web/app.js` on touched client JS.
+- [x] Keep `README.md` (feature/run notes) and `paper.txt` (client description in §Implementation) in sync in the same part/commit.
 - [ ] Live sanity check after the pass: open `https://budget-universe-manila.ngrok-free.dev/` (or the Rocket Activity in a voice channel) and confirm the zoom, sprites, slotting, HUD, and snow/glow all render.
 
 ---

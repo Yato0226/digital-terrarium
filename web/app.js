@@ -110,6 +110,8 @@ const pawns = new Map();       // id -> pawn record
 const creatures = new Map();   // "type:id" -> creature record
 const bubbles = new Map();     // key -> {el, rec, kind}
 const particles = [];
+const snow = [];          // drifting snowflakes (Winter / snow weather)
+let snowing = false;
 let reconnectTimer = null;
 let selectedId = null;
 let lastSnapTick = -1;
@@ -167,6 +169,25 @@ function spawnSmoke(cx, cy) {
     max: 2000 + Math.random() * 1200,
     seed: Math.random() * 7,
   });
+}
+
+function spawnSnow() {
+  if (snow.length >= 130) return;
+  snow.push({
+    x: Math.random() * STAGE_W,
+    y: -8 - Math.random() * 50,
+    vx: (Math.random() - 0.5) * 0.5,
+    vy: 0.5 + Math.random() * 0.9,
+    size: 1 + Math.random() * 2.2,
+    seed: Math.random() * 7,
+    sway: 0.25 + Math.random() * 0.7,
+  });
+}
+
+function isSnowing(s) {
+  const season = String((s && s.season) || "").toLowerCase();
+  const weather = String((s && s.weather) || "").toLowerCase();
+  return season.includes("winter") || weather.includes("snow");
 }
 
 // ---- resize ----
@@ -480,11 +501,40 @@ function drawIsland(now) {
     ctx.fillRect(0, 0, STAGE_W, STAGE_H);
     if (campfire > 0) {
       const camp = iso(2, 2);
-      const ng = ctx.createRadialGradient(camp.x, camp.y, 10, camp.x, camp.y, 170);
-      ng.addColorStop(0, "rgba(255,150,50,0.18)");
+      const flick = 0.75 + 0.25 * Math.sin(t / 150) * Math.sin(t / 61);
+      // Screen-blend warm pools over the dark tint: a wide falloff keeps the
+      // outer forest in shadow while a bright ring lights camp + neighbours.
+      ctx.globalCompositeOperation = "screen";
+      const wg = ctx.createRadialGradient(camp.x, camp.y, 30, camp.x, camp.y, 210);
+      wg.addColorStop(0, `rgba(255,160,60,${0.13 * flick})`);
+      wg.addColorStop(1, "rgba(255,150,50,0)");
+      ctx.fillStyle = wg;
+      ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+      const ng = ctx.createRadialGradient(camp.x, camp.y, 8, camp.x, camp.y, 98);
+      ng.addColorStop(0, `rgba(255,180,80,${0.3 * flick})`);
       ng.addColorStop(1, "rgba(255,150,50,0)");
       ctx.fillStyle = ng;
       ctx.fillRect(0, 0, STAGE_W, STAGE_H);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }
+
+  // Drifting snow: a soft particle veil in front of everything (Winter / snow).
+  if (snowing) {
+    for (let i = 0; i < 3; i++) spawnSnow();
+    for (let i = snow.length - 1; i >= 0; i--) {
+      const f = snow[i];
+      f.x += f.vx + Math.sin(t / 420 + f.seed) * f.sway;
+      f.y += f.vy;
+      if (f.y > STAGE_H + 6) {
+        f.y = -8;
+        f.x = Math.random() * STAGE_W;
+      }
+      const tw = 0.5 + 0.5 * Math.sin(t / 300 + f.seed * 3);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(235,242,255,${0.3 + 0.35 * tw})`;
+      ctx.fill();
     }
   }
 }
@@ -1017,6 +1067,8 @@ function renderLore(tab) {
 function applySnapshot(s) {
   snap = s;
   snapTime = performance.now();
+  snowing = isSnowing(s);
+  if (!snowing) snow.length = 0;
   syncPawns(s);
   syncCreatures(s);
   addBubbles(s);
