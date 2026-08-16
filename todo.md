@@ -78,8 +78,8 @@
 *Goal: Connect all systems into a self-sustaining, emergent civilization saga.*
 
 ### Step 19: Dynamic Colony Identity & Taboos
-- [ ] The colony earns an evolving community name based on what it survives (*The Hearthfolk*, *The Ashen Kin*).
-- [ ] Emergent cultural taboos develop naturally (e.g. fearing the Ruins after casualties, causing low-bravery pawns to avoid those tiles).
+- [x] The colony earns an evolving community name based on what it survives (*The Hearthfolk*, *The Ashen Kin*).
+- [x] Emergent cultural taboos develop naturally (e.g. fearing the Ruins after casualties, causing low-bravery pawns to avoid those tiles).
 
 ### Step 20: The Voice in the Sky & Camp Shrines
 - [ ] Colonists who receive frequent God whispers (`!say`) become spiritual leaders or "Prophets."

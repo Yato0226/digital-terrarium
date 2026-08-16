@@ -561,6 +561,20 @@ async def cataclysm_cmd(ctx):
     await ctx.send(core.cataclysm_txt())
 
 
+@bot.command(name="colony")
+@is_god_channel()
+async def colony_cmd(ctx):
+    """!colony — the colony's evolving identity and the landmarks it survived."""
+    await ctx.send(core.colony_txt())
+
+
+@bot.command(name="taboo")
+@is_god_channel()
+async def taboo_cmd(ctx):
+    """!taboo — cultural taboos born from the colony's traumas."""
+    await ctx.send(core.taboo_txt())
+
+
 @bot.command(name="monument")
 @is_god_channel()
 async def monument_cmd(ctx):

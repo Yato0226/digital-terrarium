@@ -124,7 +124,7 @@ def post_to_discord(data):
         ev["description"] for ev in state.world_state["history"][-3:]
     )
     embed = {
-        "title": f"🌿 Terrarium Tick #{state.world_state['tick']}",
+        "title": f"🌿 {colony_name()} — Tick #{state.world_state['tick']}",
         "description": data.world_event,
         "fields": fields[:25],
         "footer": {"text": footer_text},
@@ -827,6 +827,50 @@ def cataclysm_txt():
         f"⚠️ **{cataclysm['name']}** rages — ends in ~{remaining} ticks.\n"
         f"Effects: {effects}."
     )
+
+
+def colony_name():
+    colony = state.world_state.get("colony", {})
+    return colony.get("name", engine.DEFAULT_COLONY_NAME)
+
+
+def colony_txt():
+    """The colony's evolving identity and the landmarks it survived, for `!colony`."""
+    colony = state.world_state.get("colony", {})
+    name = colony.get("name", engine.DEFAULT_COLONY_NAME)
+    lines = [f"🏘️ **{name}**"]
+    if colony.get("history"):
+        lines.append("Formerly: " + ", ".join(colony["history"]) + ".")
+    earned = colony.get("earned", {})
+    if earned:
+        lines.append("The colony has survived and been shaped by:")
+        labels = {
+            "fire": "wildfire",
+            "flood": "a great flood",
+            "famine": "famine",
+            "long_winter": "The Long Winter",
+            "drought": "The Great Drought",
+            "miasma": "the toxic miasma",
+            "many_deaths": "heavy losses",
+        }
+        for flag, tick in sorted(earned.items(), key=lambda kv: kv[1]):
+            label = labels.get(flag, flag)
+            lines.append(f"- {label} (tick {tick})")
+    else:
+        lines.append("The colony has not yet faced any great trial.")
+    return "\n".join(lines)
+
+
+def taboo_txt():
+    """Emergent cultural taboos born from trauma, for `!taboo`."""
+    taboos = state.world_state.get("taboos", [])
+    if not taboos:
+        return "No taboos yet — the colony fears nothing but the dark."
+    lines = ["🚫 **Cultural taboos:**"]
+    for t in taboos:
+        lines.append(f"- {t['name']}: {t['reason']} (since tick {t['since_tick']})")
+        lines.append("  Low-bravery colonists refuse to set foot on that ground.")
+    return "\n".join(lines)
 
 
 def recipes_txt():

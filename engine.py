@@ -46,6 +46,7 @@ FEASIBILITY_REASONS = {
     "pacifist",
     "flooded",
     "drought",
+    "taboo",
 }
 
 GRID_SIZE = state.GRID_SIZE
@@ -1158,6 +1159,7 @@ def _ignite(x, y):
         "burn": FIRE_TICKS,
         "regrow_to": regrow_to,
     }
+    _earn_colony_flag("fire")
     return True
 
 
@@ -1695,6 +1697,23 @@ CATACLYMS = {
     "drought": {"name": "The Great Drought", "seasons": ("Summer", "Spring"), "ticks": DROUGHT_TICKS},
 }
 
+# Stage 19 (Phase 5) dynamic colony identity & emergent taboos.
+DEFAULT_COLONY_NAME = "The Settlers"
+COLONY_NAME_PRIORITY = [  # first earned flag wins; tag strings double as flags
+    ("many_deaths", "The Undying"),
+    ("famine", "The Famineborn"),
+    ("long_winter", "The Hearthfolk"),
+    ("drought", "The Emberless"),
+    ("miasma", "The Blightborn"),
+    ("fire", "The Ashen Kin"),
+    ("flood", "The Riverborn"),
+    (KINDRED_TAG, "The Kindred"),
+    (HUNTERS_TAG, "The Hunters"),
+    (FORESTERS_TAG, "The Foresters"),
+]
+TABOO_RUINS = "ruins"            # the colony learns to fear the Ruins after a death there
+RUINS_FEAR_BRAVERY = 3           # low-bravery pawns refuse to set foot on taboo tiles
+
 
 def apply_council(leader_pid, mandate):
     """The annual council names a leader and issues a one-sentence Colony Mandate.
@@ -2147,7 +2166,7 @@ def _do_rest(pawn, pawn_id):
     )
 
 
-def _do_move(pawn, pawn_id, direction):
+def _do_move(pawn, pawn_id, direction, god=False):
     if not direction or direction not in DIRS:
         return events.add_event(
             "failed",
@@ -2171,6 +2190,16 @@ def _do_move(pawn, pawn_id, direction):
             actor=pawn_id,
             data={"reason": "off_grid", "direction": direction},
             description=f"{pawn['name']} finds the edge of the world and stops.",
+        )
+    if not god and _taboo_blocks(pawn, [nx, ny]):
+        return events.add_event(
+            "failed",
+            actor=pawn_id,
+            data={"reason": "taboo", "direction": direction},
+            description=(
+                f"{pawn['name']} shies away from the ruins — the colony has "
+                f"learned to fear that place."
+            ),
         )
     pawn["pos"] = [nx, ny]
     return events.add_event(
@@ -3654,6 +3683,50 @@ def _cataclysm_kind():
     return (state.world_state["biome"].get("cataclysm") or {}).get("kind")
 
 
+def _earn_colony_flag(flag):
+    """Record that the colony has survived a landmark (fire, famine, a tradition...)."""
+    colony = state.world_state.setdefault(
+        "colony", {"name": DEFAULT_COLONY_NAME, "earned": {}, "history": []}
+    )
+    if flag not in colony["earned"]:
+        colony["earned"][flag] = state.world_state["tick"]
+
+
+def _recompute_colony_name(result):
+    """Rebrand the colony when its earned history changes (The Ashen Kin, The Kindred...)."""
+    colony = state.world_state.setdefault(
+        "colony", {"name": DEFAULT_COLONY_NAME, "earned": {}, "history": []}
+    )
+    new_name = DEFAULT_COLONY_NAME
+    for flag, name in COLONY_NAME_PRIORITY:
+        if flag in colony["earned"]:
+            new_name = name
+            break
+    if new_name != colony["name"]:
+        colony["history"].append(colony["name"])
+        colony["name"] = new_name
+        result.append(
+            events.add_event(
+                "colony_renamed",
+                data={"name": new_name},
+                description=f"The colony has earned a new name: {new_name}.",
+            )
+        )
+
+
+def _taboo_blocks(pawn, pos):
+    """A low-bravery colonist refuses to set foot on a tile the colony has tabooed."""
+    taboos = state.world_state.get("taboos", [])
+    if not taboos:
+        return False
+    if pawn["skills"].get("bravery", 5) > RUINS_FEAR_BRAVERY:
+        return False
+    for t in taboos:
+        if t["name"] == TABOO_RUINS and _tile_at(*pos) == RUIN_TILE:
+            return True
+    return False
+
+
 def _feed_campfire():
     biome = state.world_state["biome"]
     if biome["campfire"] <= 0:
@@ -4011,12 +4084,37 @@ def _kill(pawn_id, pawn, cause):
     pawn["status"] = "dead"
     pawn["vitals"]["hp"] = 0
     del state.world_state["pawns"][pawn_id]
-    return events.add_event(
+
+    if cause == "starvation":
+        _earn_colony_flag("famine")
+    if len(state.world_state["graveyard"]) >= 3:
+        _earn_colony_flag("many_deaths")
+
+    ev = events.add_event(
         "death",
         actor=pawn_id,
         data={"cause": cause},
         description=f"{pawn['name']} has fallen — {cause}.",
     )
+    taboos = state.world_state.setdefault("taboos", [])
+    if (
+        _tile_at(*pawn["pos"]) == RUIN_TILE
+        and not any(t["name"] == TABOO_RUINS for t in taboos)
+    ):
+        taboos.append(
+            {
+                "name": TABOO_RUINS,
+                "reason": f"{pawn['name']} died among the ruins",
+                "since_tick": state.world_state["tick"],
+            }
+        )
+        ev["description"] += " The colony has learned to fear the ruins."
+        events.add_event(
+            "taboo",
+            data={"name": TABOO_RUINS},
+            description="The colony has learned to fear the ruins.",
+        )
+    return ev
 
 
 def _seasonal_feast():
@@ -4090,6 +4188,7 @@ def _evaluate_tradition():
     else:
         return None
     traditions["tag"] = tag
+    _earn_colony_flag(tag)
     _carve_rune(f"The {tag} tradition is born", f"The colony's way of life is sealed: {tag}.")
     return events.add_event(
         "tradition",
@@ -4169,6 +4268,7 @@ def tick_environment():
     cataclysm = biome.get("cataclysm")
     if cataclysm and state.world_state["tick"] >= cataclysm["ends_tick"]:
         biome["cataclysm"] = None
+        _earn_colony_flag(cataclysm["kind"])
         result.append(
             events.add_event(
                 "cataclysm_end",
@@ -4334,6 +4434,7 @@ def tick_environment():
         and random.random() < flood_chance
     ):
         flooded = _trigger_flood()
+        _earn_colony_flag("flood")
         result.append(
             events.add_event(
                 "flood",
@@ -4392,6 +4493,7 @@ def tick_environment():
         result += _tick_miasma()
         biome["miasma"] -= 1
         if biome["miasma"] <= 0:
+            _earn_colony_flag("miasma")
             result.append(
                 events.add_event("miasma_clear", description="The toxic spores disperse.")
             )
@@ -4491,6 +4593,7 @@ def tick_environment():
     _update_titles()
     result += _drain_runes()
     _sync_legend_hunt()
+    _recompute_colony_name(result)
     return result
 
 
@@ -4596,7 +4699,7 @@ def resolve_actions(intents):
                 else:
                     state.failed_intents.pop(pawn_id, None)
         elif action == "Move":
-            ev = _do_move(pawn, pawn_id, target)
+            ev = _do_move(pawn, pawn_id, target, is_god_order)
             resulting.append(ev)
             if not is_god_order:
                 reason = ev.get("data", {}).get("reason")
@@ -4679,4 +4782,5 @@ def resolve_actions(intents):
         resulting.append(mapped_ev)
 
     resulting += _drain_runes()
+    _recompute_colony_name(resulting)
     return resulting

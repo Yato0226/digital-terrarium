@@ -73,12 +73,17 @@ def next_pawn_id():
 
 
 def next_wild_id():
+    """Monotonic wild id: never reuse an id freed by despawn/escape."""
     nums = [
         int(w["id"].split("_")[1])
         for w in world_state["wildlife"]
         if w["id"].startswith("wild_")
     ]
-    return f"wild_{max(nums, default=0) + 1}"
+    high = max(nums, default=0)
+    count = world_state.get("wild_count", 0)
+    n = max(high, count) + 1
+    world_state["wild_count"] = n
+    return f"wild_{n}"
 
 
 def next_visitor_id():
@@ -204,6 +209,7 @@ world_state = {
     "grid": [row[:] for row in DEFAULT_GRID],
     "pawns": {},
     "wildlife": [],
+    "wild_count": 0,
     "chronicle": [],
     "heirlooms": [],
     "adoptions": {},
@@ -221,6 +227,8 @@ world_state = {
     "legends": [],
     "expeditions": [],
     "perimeter_mapped": False,
+    "colony": {"name": "The Settlers", "earned": {}, "history": []},
+    "taboos": [],
 }
 
 
@@ -298,6 +306,7 @@ def reset_world():
     world_state["graveyard"] = []
     world_state["grid"] = [row[:] for row in DEFAULT_GRID]
     world_state["wildlife"] = []
+    world_state["wild_count"] = 0
     world_state["chronicle"] = []
     world_state["lore"] = []
     world_state["heirlooms"] = []
@@ -316,6 +325,8 @@ def reset_world():
     world_state["legends"] = []
     world_state["expeditions"] = []
     world_state["perimeter_mapped"] = False
+    world_state["colony"] = {"name": "The Settlers", "earned": {}, "history": []}
+    world_state["taboos"] = []
     pending_chronicle = None
     pending_monument = None
     pending_runes = []
@@ -469,6 +480,10 @@ def load_state():
         world_state.setdefault("graveyard", [])
         world_state.setdefault("grid", [row[:] for row in DEFAULT_GRID])
         world_state.setdefault("wildlife", [])
+        world_state["wild_count"] = max(
+            [int(w["id"].split("_")[1]) for w in world_state["wildlife"] if w["id"].startswith("wild_")],
+            default=0,
+        )
         if "chronicle" in loaded:
             world_state["chronicle"] = loaded["chronicle"][-MAX_CHRONICLE:]
         else:
@@ -499,6 +514,10 @@ def load_state():
         world_state.setdefault("legends", [])
         world_state.setdefault("expeditions", [])
         world_state.setdefault("perimeter_mapped", False)
+        world_state.setdefault(
+            "colony", {"name": "The Settlers", "earned": {}, "history": []}
+        )
+        world_state.setdefault("taboos", [])
         monument = world_state.setdefault(
             "monument", {"wood": 0, "stone": 0, "done": False, "inscription": None}
         )

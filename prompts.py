@@ -79,6 +79,7 @@ Rules:
 - The outer rim of the world is wrapped in mist (🌫) until Scouts map it — an unmapped edge hides the wood you'll need, so send Scouts to the rim to reveal it.
 - Two colonists at the map's edge can use Expedition to pack rations and leave the grid together for 15-20 ticks, returning with rare loot, exotic seeds (new farm plots), a tamed companion, or battle scars — but never send your only workers off the map together.
 - Seasonal cataclysms may descend (see the ⚠️ line): The Long Winter (150 ticks) doubles the campfire's wood appetite and drives the cold harsher than any blizzard; The Great Drought (150 ticks) dries the rivers so river foraging fails and wildfire danger spikes. Survive by stockpiling, crafting Warm Coats, and keeping the fire fed.
+- The colony has an evolving identity (see the 🏘️ line) — surviving wildfire, famine, floods, cataclysms, or founding a way of life renames the colony (The Ashen Kin, The Hearthfolk, The Kindred...). Traumas can also seed taboos (see the Taboo line): low-bravery colonists refuse to set foot on a place where kin have died, so don't order cowards into the ruins.
 - The biome has seasons, weather, a shared campfire and shelter. Chop and Forage deplete the forest; in Winter nothing regrows and warmth is critical. The colony can build a Granary (stops Summer food spoilage) and fortify a Palisade (keeps predators away).
 - Once the camp is fully fortified (shelter and campfire at 100, granary built, palisade maxed), Build raises the Ancestral Monolith — a great work of 20 wood + 15 stone, 5 of each per Build action. Completed, it permanently anchors colony morale (never below 10) and warms everyone near the Camp.
 - Farming: on a Meadow (🫐) tile, Interact with "till soil" / "plant seeds" / "farm" to convert it into a Farm Plot (🌾). It grows over 20 ticks in Spring/Summer (dormant in Winter); when ripe, Interact with "harvest" / "farm" to reap 15 food + 5 fiber — a guaranteed yield that does not deplete the wild food stock.
@@ -374,14 +375,28 @@ def build_prompt():
             f"is in trial. Endure and adapt: gather, insulate, and keep the campfire fed.\n\n"
         )
 
+    colony = state.world_state.get("colony", {})
+    colony_name = colony.get("name", engine.DEFAULT_COLONY_NAME)
+    identity_line = f"🏘️ Colony: **{colony_name}**"
+    if colony.get("history"):
+        identity_line += f" (formerly {', '.join(colony['history'])})"
+    identity_line += "\n\n"
+
+    taboo_txt = ""
+    for t in state.world_state.get("taboos", []):
+        taboo_txt += (
+            f"Taboo: the colony fears {t['reason']} — low-bravery colonists "
+            f"refuse to set foot there.\n"
+        )
+
     return f"""
-{council_txt}{legend_txt}{cataclysm_txt}Recent terrarium history: {history}
+{identity_line}{council_txt}{legend_txt}{cataclysm_txt}Recent terrarium history: {history}
 
 Biome: {biome_line}{fallen_line}
 {memory_txt}
 
 Tradition: {tradition_txt}
-
+{taboo_txt}
 Lore (recovered from {engine.SUNKEN_TRIBE}'s ruins):
 {lore_txt}
 
