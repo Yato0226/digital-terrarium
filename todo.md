@@ -65,7 +65,7 @@
 - [x] **Rewire `drawIsland()`**: pre-rendered tile sprites replace the colored diamonds + emoji glyphs; water shimmer, wildfire flame/glow, and the campfire flame (2-frame animated) stay live per-frame.
 - [x] **Pawn sprites**: standing pixel characters (sex/elder/child + hue variants, idle/walk) — Part C.
 - [x] **Fauna / visitor / raider sprites** + **4-frame animated campfire** — Part D.
-- [ ] **Attribution**: n/a (procedural, zero external assets — note this in `README.md`).
+- [x] **Attribution**: n/a (procedural, zero external assets — documented in `README.md` §Assets & attribution: *"All other client art (pawns, creatures, visitors, raiders, UI) is original procedural pixel art from `web/sprites.js` — no external assets, no runtime downloads."*).
 
 ### Step 8: Fix the Stacked-Pawn Blob & Clean Up the Sprites
 - [x] **Isometric slotting**: multi-pawn tiles arrange in a tiny triangle/diamond formation inside the tile (top-left, bottom-right, top-right…) instead of one overlapping blob at the same pixel.
@@ -91,7 +91,7 @@
 - [x] **Vendor assets + attribution**: copy `Serene_Village_16x16.png`, `campfire.png`, `water_waves.png` → `web/assets/`; `web/assets/ATTRIBUTION.md` (LimeZu, CC-BY 4.0, source link, date); credit line in `atlas.html` footer.
 - [x] **`web/atlas.js` tile atlas**: image loader + named slice table (`Atlas.slice`/`Atlas.scaled`/`Atlas.ground`/frame strips) with all user-verified pixel boxes — trees, bush, flowers, cottage, rocks, ruins, dirt, water+shore, fences, path, well (two-part).
 - [x] **`web/atlas.html` contact sheet**: labeled 19×45 master-sheet grid + campfire/water frames (dev tool + user reference).
-- [ ] **`README.md` + `paper.txt` attribution**: Serene Village credit line + client-description update (same part/commit as the code).
+- [x] **`README.md` + `paper.txt` attribution**: Serene Village credit line + client-description update. `README.md` §Assets & attribution and `paper.txt` §Credits both credit LimeZu CC-BY 4.0; client descriptions in both files already read "top-down" + "vendored LimeZu Serene Village terrain tiles" (the iso→top-down wording shift shipped with Stage 12 Part F).
 - [x] **Part B — top-down terrain renderer**: replace iso geometry with `TILE=128` top-down (`top(x,y)`), rewrite `drawIsland()` → `drawWorld()` (backdrop + board frame + vendored ground + shore transitions + farm/ash/scorch + seasonal tint), 14-frame water animation. *(Bank lips are procedural — the pack's sand "coast band" is a diagonal beach, not axis-aligned river banks; `Atlas.ground()` caches 16×16 tiles internally, no separate grid-signature cache.)*
 - [x] **Part C — standing objects + y-sort**: DOM object layer (trees/bush/rocks/ruins/cottage+campfire/well/fences), y-sorted z-index by footprint, wildfire flame/glow. *(New module `web/objects.js`; depth-z is a bounded `4 + round((anchorY−150)/20)` band that stays below the z-40 HUD panels; layer defers until `Atlas.ready`.)*
 - [x] **Part D — pawns/creatures top-down**: tile-center anchors, compact slot offsets, walk interpolation/action bobs/emotes/badges/hover pills preserved, creature per-tile slots + 1.2s glide, creature contact shadow. *(Creature slots mirror pawns: stable `slotOffset(i)` per tile by sorted `dom` key; glide reuses the pawn walk pattern with `CREATURE_GLIDE=1.2` and `easeInOut`; first-appearance records land directly without glide; smoke test stubs `performance.now()` for deterministic timing, asserts slot uniqueness + glide mid-walk + settling at target.)*
@@ -102,7 +102,7 @@
 - [x] Commit per checkbox above, one `todo.md` tick per part; run `ruff check . && python -m pytest tests -q` after each part (Python unchanged — suite must stay green).
 - [x] `node --check web/app.js` on touched client JS.
 - [x] Keep `README.md` (feature/run notes) and `paper.txt` (client description in §Implementation) in sync in the same part/commit.
-- [ ] Live sanity check after the pass: open `https://budget-universe-manila.ngrok-free.dev/` (or the Rocket Activity in a voice channel) and confirm the zoom, sprites, slotting, HUD, and snow/glow all render.
+- [ ] Live sanity check after the pass: open `https://budget-universe-manila.ngrok-free.dev/` (or the Rocket Activity in a voice channel) and confirm the zoom, sprites, slotting, HUD, and snow/glow all render. *(Manual browser check — deferred: the ngrok free-tier static domain rotates on the LXC reboot/packet-loss, so the URL may no longer resolve; re-verify once the tunnel is re-pinned or test via a local `http://<host>:8900/` instance.)*
 
 ---
 
