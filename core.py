@@ -1130,19 +1130,12 @@ async def run_tick():
     patch_record = None
     if dead_tick % engine.PATCH_INTERVAL == 0:
         patch_record = await _run_architect()
-    council_record = None
     if dead_tick % engine.COUNCIL_INTERVAL == 0:
-        council_record = await _run_council()
+        await _run_council()
     state.save_state()
-    milestone = (
-        _is_milestone_tick(tick_events)
-        or bool(pending_season)
-        or bool(pending_monument)
-        or bool(patch_record)
-        or bool(council_record)
-    )
-    if milestone:
-        await asyncio.to_thread(post_to_discord, data)
+    # The full state embed posts every tick to the Discord webhook (the web
+    # diorama gets its own per-tick snapshot via feed.broadcast above).
+    await asyncio.to_thread(post_to_discord, data)
     await asyncio.to_thread(post_crisis, tick_events)
     if patch_record:
         await asyncio.to_thread(post_patch_notes, patch_record)
