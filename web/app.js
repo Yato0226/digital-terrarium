@@ -32,6 +32,11 @@ const MAX_ZOOM = 1.6;
 const ZOOM_MIN = 0.4, ZOOM_MAX = 2.5;
 let view = { zoom: 1, panX: 0, panY: 0 };
 
+// Debug overlay (text-only diagnosis when the URL has ?debug=1): labels every
+// tile with its (x,y) grid coord + ground type so black-tile bugs can be
+// reported by coordinate without a screenshot.
+const DEBUG = new URLSearchParams(location.search).get("debug") === "1";
+
 const WALK_SECONDS = 4;
 const CREATURE_GLIDE = 1.2; // seconds for a creature to glide between tiles
 const BUBBLE_DELAY = 4;
