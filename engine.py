@@ -3891,6 +3891,7 @@ def _do_mate(pawn, pawn_id, target):
             description="The colony is large enough — no new life is welcomed.",
         )
     female = pawn if pawn["sex"] == "F" else tpawn
+    male = pawn if pawn["sex"] == "M" else tpawn
     if female.get("starving_ticks", 0) > 0:
         return events.add_event(
             "failed",
@@ -3923,7 +3924,7 @@ def _do_mate(pawn, pawn_id, target):
         tpawn["partners"].append(pawn_id)
     if random.random() < CONCEPTION_CHANCE:
         female["pregnant_ticks"] = PREGNANCY_TICKS
-        female["partner_id"] = pawn_id
+        female["partner_id"] = male["id"]
         return events.add_event(
             "mate",
             actor=pawn_id,

@@ -883,6 +883,22 @@ def test_conception_pins_father(monkeypatch):
     assert pawn("pawn_2")["partner_id"] == "pawn_1"
 
 
+def test_conception_pins_father_when_female_acts(monkeypatch):
+    # Regression: when the FEMALE pawn is the Mate actor, the father must be the
+    # male partner, not the mother herself (bug: partner_id was set to pawn_id).
+    monkeypatch.setattr(random, "random", lambda: 0.0)
+    p2, p1 = pawn("pawn_2"), pawn("pawn_1")
+    p2["relationships"]["pawn_1"] = 30
+    p1["relationships"]["pawn_2"] = 30
+    engine.resolve_actions({"pawn_2": ("Mate", "pawn_1")})
+    assert p2["partner_id"] == "pawn_1"
+    p2["pregnant_ticks"] = 1  # skip the wait, force birth on next tick
+    engine.tick_environment()
+    kids = [p for p in state.world_state["pawns"].values() if p.get("mother_id") == "pawn_2"]
+    assert len(kids) == 1
+    assert kids[0]["father_id"] == "pawn_1"
+
+
 def test_mate_success_records_partners():
     pawn("pawn_1")["relationships"]["pawn_2"] = 30
     pawn("pawn_2")["relationships"]["pawn_1"] = 30
