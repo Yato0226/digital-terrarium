@@ -28,6 +28,10 @@ const ORIGIN_Y = 430;   // board centre y
 const FRAME = 34;       // wooden board frame thickness around the map
 const MAX_ZOOM = 1.6;
 
+// ---- camera: pan + zoom over the 5x5 board (client-only) ----
+const ZOOM_MIN = 0.4, ZOOM_MAX = 2.5;
+let view = { zoom: 1, panX: 0, panY: 0 };
+
 const WALK_SECONDS = 4;
 const CREATURE_GLIDE = 1.2; // seconds for a creature to glide between tiles
 const BUBBLE_DELAY = 4;
@@ -138,6 +142,27 @@ function tileXY(x, y) {
   };
 }
 
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/** Apply the camera pan/zoom to the DOM sprite + emote layers (share the
+ *  canvas coordinate space, so they stay aligned with the canvas board). */
+function applyView() {
+  const t = `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`;
+  spritesEl.style.transformOrigin = "0 0";
+  spritesEl.style.transform = t;
+  emoteLayer.style.transformOrigin = "0 0";
+  emoteLayer.style.transform = t;
+}
+
+/** Keep the board centre comfortably within the stage viewport. */
+function clampPan() {
+  const cx = view.panX + ORIGIN_X * view.zoom;
+  const cy = view.panY + ORIGIN_Y * view.zoom;
+  const minX = 220, maxX = STAGE_W - 220, minY = 150, maxY = STAGE_H - 120;
+  view.panX -= (cx - clamp(cx, minX, maxX));
+  view.panY -= (cy - clamp(cy, minY, maxY));
+}
+
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
@@ -201,6 +226,43 @@ function resize() {
   stage.style.transform = `scale(${scale})`;
 }
 window.addEventListener("resize", resize);
+
+// ---- camera: wheel zoom (cursor-anchored) + drag-to-pan ----
+let drag = null;
+let suppressClick = false;   // set briefly after a drag so it doesn't count as a select
+stage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const rect = stage.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / (rect.width / STAGE_W);
+  const my = (e.clientY - rect.top) / (rect.height / STAGE_H);
+  const nz = clamp(view.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), ZOOM_MIN, ZOOM_MAX);
+  view.panX = mx - (mx - view.panX) * (nz / view.zoom);
+  view.panY = my - (my - view.panY) * (nz / view.zoom);
+  view.zoom = nz;
+  clampPan();
+}, { passive: false });
+
+stage.addEventListener("mousedown", (e) => {
+  if (e.target.closest(".panel") || e.target.closest("#zoomCtl")) return;
+  drag = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY, moved: false };
+});
+window.addEventListener("mousemove", (e) => {
+  if (!drag) return;
+  const rect = stage.getBoundingClientRect();
+  const dx = (e.clientX - drag.x) / (rect.width / STAGE_W);
+  const dy = (e.clientY - drag.y) / (rect.height / STAGE_H);
+  if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
+  view.panX = drag.px + dx;
+  view.panY = drag.py + dy;
+  clampPan();
+});
+window.addEventListener("mouseup", () => {
+  if (drag && drag.moved) {
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 60);
+  }
+  drag = null;
+});
 
 // ---- atmospheric background helpers ----
 function skyColors(season, day) {
@@ -377,6 +439,11 @@ function drawWorld(now) {
     ctx.fill();
   }
 
+  // --- board (frame + ground + effects) under the camera transform ---
+  ctx.save();
+  ctx.translate(view.panX, view.panY);
+  ctx.scale(view.zoom, view.zoom);
+
   // --- wooden board frame: the diorama sits on a tabletop ---
   const m = mapBounds();
   const f = { x: m.x - FRAME, y: m.y - FRAME, w: m.w + FRAME * 2, h: m.h + FRAME * 2 };
@@ -467,6 +534,9 @@ function drawWorld(now) {
     ctx.fillStyle = tint;
     ctx.fillRect(m.x, m.y, m.w, m.h);
   }
+
+  // (board-space drawing ends here; restore before screen-space overlays)
+  ctx.restore();
 
   // Night tint (lighter — the sky itself is already dark).
   if (snap.day === 0) {
@@ -602,6 +672,7 @@ function syncPawns(s) {
       };
       pawns.set(p.id, rec);
       rec.el.addEventListener("click", (ev) => {
+        if (suppressClick) return;
         ev.stopPropagation();
         selectPawn(p.id);
       });
@@ -1145,6 +1216,7 @@ function applySnapshot(s) {
 
 // ---- animation loop ----
 function frame(now) {
+  applyView();
   if (snap) {
     const elapsed = (now - snapTime) / 1000;
     for (const rec of pawns.values()) {
@@ -1187,8 +1259,9 @@ function frame(now) {
       }
       rec.el.style.left = x + "px";
       rec.el.style.top = y + "px";
-      // Y-sort against the standing-object layer (bounded depth band).
-      rec.el.style.zIndex = String(Objects.depthZ(y));
+      // Pawns ride a z-band just above the standing-object layer (objects 4..~32)
+      // so they're never hidden behind trees/rocks, but still below the HUD (z 40).
+      rec.el.style.zIndex = String(33 + Math.min(5, Math.max(0, Objects.depthZ(y) - 4)));
     }
     for (const rec of creatures.values()) {
       const bob = Math.abs(Math.sin(now / 700 + rec.phase)) * 3;
@@ -1206,7 +1279,7 @@ function frame(now) {
       }
       rec.el.style.left = cx + "px";
       rec.el.style.top = cy - bob + "px";
-      rec.el.style.zIndex = String(Objects.depthZ(cy));
+      rec.el.style.zIndex = String(33 + Math.min(5, Math.max(0, Objects.depthZ(cy) - 4)));
     }
     Objects.tick(now);
     drawWorld(now);
@@ -1259,4 +1332,16 @@ for (const t of loreEl.querySelectorAll(".tab")) {
 }
 rosterBtn.addEventListener("click", () => rosterEl.classList.toggle("hidden"));
 rosterClose.addEventListener("click", () => rosterEl.classList.add("hidden"));
-stage.addEventListener("click", () => deselectPawn());
+stage.addEventListener("click", () => { if (!suppressClick) deselectPawn(); });
+
+// ---- zoom control buttons ----
+const zoomInBtn = document.getElementById("zoomIn");
+const zoomOutBtn = document.getElementById("zoomOut");
+const zoomResetBtn = document.getElementById("zoomReset");
+function zoomBy(f) {
+  view.zoom = clamp(view.zoom * f, ZOOM_MIN, ZOOM_MAX);
+  clampPan();
+}
+zoomInBtn.addEventListener("click", () => zoomBy(1.2));
+zoomOutBtn.addEventListener("click", () => zoomBy(1 / 1.2));
+zoomResetBtn.addEventListener("click", () => { view.zoom = 1; view.panX = 0; view.panY = 0; });

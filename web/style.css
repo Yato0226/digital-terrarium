@@ -761,6 +761,31 @@ body::before {
   color: #8fa0bd;
   margin-bottom: 4px;
 }
+
+/* ---- camera zoom controls ---- */
+#zoomCtl {
+  position: fixed;
+  right: 14px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 60;
+}
+#zoomCtl button {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  line-height: 1;
+  border: 1px solid #6e4f33;
+  background: rgba(34,26,18,.8);
+  color: #e9d8b8;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+#zoomCtl button:hover { background: #3b2a1c; color: #fff; }
+}
 .kv { display: flex; gap: 6px; flex-wrap: wrap; }
 .kv span {
   background: rgba(255,255,255,.07);
