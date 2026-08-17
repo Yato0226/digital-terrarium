@@ -156,9 +156,11 @@
   }
 
   function dirtCanvas(x, y) {
-    // dirt strip is 12×48; use a 16×16 window seeded per tile
+    // dirt strip is 12×48; use a 12×16 window seeded per tile.
+    // Cap the seed at 32 so (y + 16) never exceeds the 48px strip height
+    // (seeds 33–35 would read out of bounds and leave the tile transparent).
     const cv = makeCanvas(16, 16);
-    const seed = Math.floor(noise(x, y) * 36); // 0..35 → pick a 12×16 window
+    const seed = Math.floor(noise(x, y) * 33); // 0..32
     const src = images.master;
     const ctx = cv.getContext("2d");
     ctx.imageSmoothingEnabled = false;
