@@ -287,6 +287,27 @@ async def order(ctx, pawn_id: str, action: str, target: str = None):
         await ctx.send(f"🗣️ Order locked in: **{pawn['name']}** must {action}{tgt}.")
 
 
+@bot.command(name="directive")
+@is_god_channel()
+async def directive(ctx, *, text: str = None):
+    """!directive <text> — inject a system-wide directive into the LLM prompt (guides every pawn each tick until cleared). `!directive clear` removes it; `!directive` shows the current one."""
+    if text is None:
+        cur = state.god_directive
+        await ctx.send(
+            f"📣 Current directive: “{cur}”" if cur
+            else "📣 No active directive. Use `!directive <text>` to set one."
+        )
+        return
+    if text.strip().lower() in ("clear", "off", "stop", "none"):
+        state.god_directive = None
+        await ctx.send("📣 Directive cleared.")
+        return
+    state.god_directive = text.strip()
+    await ctx.send(
+        f"📣 Directive set: “{state.god_directive}” — it guides the colony each tick until cleared."
+    )
+
+
 @bot.command(name="say")
 @is_god_channel()
 async def say(ctx, pawn_id: str, *, instruction: str):
@@ -777,6 +798,7 @@ async def reset(ctx):
         state.reset_world()
         state.god_orders.clear()
         state.god_whispers.clear()
+        state.god_directive = None
         state.save_state()
     core.pause_event.set()
     feed.forget_positions()

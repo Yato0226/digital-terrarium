@@ -351,6 +351,14 @@ def build_prompt():
     if hint_lines:
         hint_block = "\n\nDirector notes:\n" + "\n".join(hint_lines)
 
+    directive_block = ""
+    if state.god_directive:
+        directive_block = (
+            "\n\nTHE CREATOR'S DIRECTIVE (system-wide guidance for every pawn):\n"
+            f"- {state.god_directive}\n"
+            "Weave this guidance into each pawn's decisions this tick."
+        )
+
     lore_lines = [f"- {frag['text']}" for frag in state.world_state.get("lore", [])]
     lore_txt = "\n".join(lore_lines) if lore_lines else "nothing recovered yet"
 
@@ -445,6 +453,7 @@ Raiders:
 Current status:
 {pawn_status}
 {creator_block}
+{directive_block}
 {hint_block}
 
 Decide what each pawn does this tick.

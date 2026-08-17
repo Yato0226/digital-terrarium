@@ -123,6 +123,7 @@ alias update='cd /opt/terrarium && git pull origin main && chown -R terrarium:te
 | `!god <name\|pawn_id> <stat> <value>` | Set vitals / sex / wood / food / stone / fiber, or `revive` |
 | `!order <name\|pawn_id> <action> [target]` | Enforce an action next tick (Move takes `N/S/E/W`; Mate takes a bonded partner) |
 | `!say <name\|pawn_id> <text>` | Whisper to a pawn in the prompt (+15 morale) |
+| `!directive <text>` | Inject a system-wide directive into the LLM prompt — guides every pawn each tick until cleared (`!directive clear`) |
 | `!graveyard` | List the fallen with epitaphs |
 | `!bio <name\|pawn_id>` | 3-sentence biography (living) or obituary (fallen) woven from a pawn's life log |
 | `!list` | List all pawns with full stats for easy targeting |

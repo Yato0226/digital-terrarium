@@ -9,6 +9,7 @@ MAX_HISTORY = 10
 # Transient god effects (not persisted).
 god_orders = {}    # pawn_id -> {"action": str, "target": str | None}
 god_whispers = {}  # pawn_id -> str
+god_directive = None  # str | None — system-wide directive injected into the LLM prompt
 
 # Transient director feedback (not persisted): pawn_id -> {"action", "reason", "count"}.
 # Consecutive failed intents after a feasibility reason; prompts build_prompt into hints.
